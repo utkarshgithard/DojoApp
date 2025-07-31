@@ -1,0 +1,181 @@
+import { useState } from 'react';
+import API from '../api/axios';
+import { useDarkMode } from '../context/DarkModeContext';
+
+const weekdays = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+const hours = Array.from({ length: 12 }, (_, i) => i + 1); // 1–12
+const minutes = ['00', '15', '30', '45'];
+const meridiems = ['AM', 'PM'];
+
+function WeeklyScheduleSetup() {
+  const { darkMode } = useDarkMode();
+
+  const [schedule, setSchedule] = useState(
+    weekdays.reduce((acc, day) => {
+      acc[day] = [{
+        subject: '',
+        startHour: '9',
+        startMinute: '00',
+        startMeridiem: 'AM',
+        endHour: '10',
+        endMinute: '00',
+        endMeridiem: 'AM'
+      }];
+      return acc;
+    }, {})
+  );
+
+  const handleChange = (day, index, field, value) => {
+    const updated = [...schedule[day]];
+    updated[index][field] = value;
+    setSchedule({ ...schedule, [day]: updated });
+  };
+
+  const addClass = (day) => {
+    setSchedule({
+      ...schedule,
+      [day]: [
+        ...schedule[day],
+        {
+          subject: '',
+          startHour: '9',
+          startMinute: '00',
+          startMeridiem: 'AM',
+          endHour: '10',
+          endMinute: '00',
+          endMeridiem: 'AM'
+        }
+      ]
+    });
+  };
+
+  const removeClass = (day, index) => {
+    const updated = [...schedule[day]];
+    updated.splice(index, 1);
+    setSchedule({ ...schedule, [day]: updated });
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+
+    const formattedSchedule = {};
+    for (const day of weekdays) {
+      const validClasses = schedule[day]
+        .filter(cls => cls.subject.trim() !== '')
+        .map(cls => {
+          const start = `${cls.startHour}:${cls.startMinute} ${cls.startMeridiem}`;
+          const end = `${cls.endHour}:${cls.endMinute} ${cls.endMeridiem}`;
+          return {
+            subject: cls.subject,
+            time: `${start} - ${end}`
+          };
+        });
+      if (validClasses.length > 0) {
+        formattedSchedule[day] = validClasses;
+      }
+    }
+
+    try {
+      await API.post('/schedule', { schedule: formattedSchedule });
+      alert('✅ Schedule saved (only filled days)!');
+    } catch (err) {
+      alert('❌ Failed to save schedule.');
+    }
+  };
+
+  return (
+    <div
+      className={`relative min-h-screen transition duration-300 ${darkMode ? 'bg-gray-900 text-white' : 'bg-gray-100 text-black'}`}
+    >
+      <div className="absolute inset-0 bg-opacity-10 backdrop-blur-sm"></div>
+
+      <div className="relative z-10 max-w-5xl mx-auto p-6">
+        <h1 className="text-3xl font-bold text-center text-blue-700 dark:text-blue-400 mb-6">
+          📅 Weekly Class Schedule
+        </h1>
+
+        <form onSubmit={handleSubmit} className="space-y-6">
+          {weekdays.map((day) => (
+            <div
+              key={day}
+              className={`p-4 rounded-xl border ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-blue-100 shadow'}`}
+            >
+              <h3 className="capitalize font-semibold text-blue-700 dark:text-blue-300 mb-3">{day}</h3>
+
+              {schedule[day].map((item, idx) => (
+                <div key={idx} className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4 items-center">
+                  {/* Subject */}
+                  <input
+                    type="text"
+                    placeholder="Subject name"
+                    value={item.subject}
+                    onChange={(e) => handleChange(day, idx, 'subject', e.target.value)}
+                    className={`p-2 rounded border w-full ${darkMode ? 'bg-gray-700 text-white border-gray-600' : ''}`}
+                  />
+
+                  {/* Start Time */}
+                  <div className="flex gap-1">
+                    <select value={item.startHour} onChange={(e) => handleChange(day, idx, 'startHour', e.target.value)} className={`border p-2 rounded ${darkMode ? 'bg-gray-700 text-white border-gray-600' : ''}`}>
+                      {hours.map(h => <option key={h} value={h}>{h}</option>)}
+                    </select>
+                    <select value={item.startMinute} onChange={(e) => handleChange(day, idx, 'startMinute', e.target.value)} className={`border p-2 rounded ${darkMode ? 'bg-gray-700 text-white border-gray-600' : ''}`}>
+                      {minutes.map(m => <option key={m} value={m}>{m}</option>)}
+                    </select>
+                    <select value={item.startMeridiem} onChange={(e) => handleChange(day, idx, 'startMeridiem', e.target.value)} className={`border p-2 rounded ${darkMode ? 'bg-gray-700 text-white border-gray-600' : ''}`}>
+                      {meridiems.map(m => <option key={m} value={m}>{m}</option>)}
+                    </select>
+                  </div>
+
+                  {/* End Time */}
+                  <div className="flex gap-1">
+                    <select value={item.endHour} onChange={(e) => handleChange(day, idx, 'endHour', e.target.value)} className={`border p-2 rounded ${darkMode ? 'bg-gray-700 text-white border-gray-600' : ''}`}>
+                      {hours.map(h => <option key={h} value={h}>{h}</option>)}
+                    </select>
+                    <select value={item.endMinute} onChange={(e) => handleChange(day, idx, 'endMinute', e.target.value)} className={`border p-2 rounded ${darkMode ? 'bg-gray-700 text-white border-gray-600' : ''}`}>
+                      {minutes.map(m => <option key={m} value={m}>{m}</option>)}
+                    </select>
+                    <select value={item.endMeridiem} onChange={(e) => handleChange(day, idx, 'endMeridiem', e.target.value)} className={`border p-2 rounded ${darkMode ? 'bg-gray-700 text-white border-gray-600' : ''}`}>
+                      {meridiems.map(m => <option key={m} value={m}>{m}</option>)}
+                    </select>
+                  </div>
+                </div>
+              ))}
+
+              {/* Add/Remove Buttons */}
+              <div className="flex justify-between items-center mt-2">
+                <button
+                  type="button"
+                  onClick={() => addClass(day)}
+                  className="text-sm text-blue-600 dark:text-blue-300 hover:underline"
+                >
+                  ➕ Add Another Class
+                </button>
+                {schedule[day].length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => removeClass(day, schedule[day].length - 1)}
+                    className="text-sm text-red-600 hover:underline"
+                  >
+                    🗑 Remove Last
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+
+          {/* Submit Button */}
+          <div className="text-center mt-6">
+            <button
+              type="submit"
+              className="bg-blue-700 text-white px-6 py-2 rounded-lg shadow hover:bg-blue-800 transition"
+            >
+              ✅ Save Weekly Schedule
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+export default WeeklyScheduleSetup;
