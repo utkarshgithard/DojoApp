@@ -16,6 +16,7 @@ function Register() {
       console.log(form)
       const res = await API.post('/auth/register', form);
       console.log(res)
+      login(res.data.verificationToken)
       alert("✅ Registered successfully! Please check your email to verify your account.");
       navigate('/verify');
       // login(res.data.verificationToken);

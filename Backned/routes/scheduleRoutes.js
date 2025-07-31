@@ -5,6 +5,7 @@ import { verifyToken } from '../middleware/authMiddleware.js';
 const scheduleRouter = express.Router();
 
 scheduleRouter.post('/', verifyToken, async (req, res) => {
+  console.log(req.userId)
   const { schedule: newSchedule } = req.body;
 
   try {

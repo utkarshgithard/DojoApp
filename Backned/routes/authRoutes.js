@@ -16,16 +16,16 @@ userRouter.post('/register', async (req, res) => {
     
     
     const hashed = await bcrypt.hash(password, 10);
-    const verificationToken = jwt.sign({ email }, process.env.JWT_SECRET, { expiresIn: '1d' });
 
     const user = new User({
       name,
       email,
       password: hashed,
       verified: false,
-      verificationToken // default is false
     });
     await user.save();
+    const verificationToken = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, { expiresIn: '1d' });
+
     
     // Send email
     await sendVerificationEmail(email, verificationToken);
@@ -50,7 +50,7 @@ userRouter.get('/verify-email/:token', async (req, res) => {
     console.log("hello")
     console.log(decoded)
     
-    const user = await User.findOne({ email: decoded.email });
+    const user = await User.findOne({ userId: decoded._id });
 
     if (!user) return res.status(400).send('Invalid token or user.');
 

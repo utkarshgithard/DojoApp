@@ -11,7 +11,7 @@ function VerifyEmail() {
     const verifyToken = async () => {
       try {
         const res = await API.get(`/auth/verify-email/${token}`);
-        setStatus('✅ Email verified successfully! Redirecting to login...');
+        setStatus('✅ Email verified successfully! Redirecting to Dashboard...');
         setTimeout(() => navigate('/dashboard'), 3000);
       } catch (err) {
         setStatus('❌ Invalid or expired token.');
