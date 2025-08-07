@@ -1,57 +1,80 @@
+// routes/attendanceRoutes.js
 import express from 'express';
-import Attendance from '../models/Attendance.js';
+import MarkedSubject from '../models/MarkedSubject.js';
 import { verifyToken } from '../middleware/authMiddleware.js';
+
 const attendanceRouter = express.Router();
-// Save or update attendance
+
+// POST: Mark attendance
+// attendanceRoutes.js
 attendanceRouter.post('/mark', verifyToken, async (req, res) => {
-  const { date, status } = req.body;
+  const { date, status } = req.body; // status is array of { subject, status }
+  const userId = req.userId;
 
-  try {
-    const existing = await Attendance.findOne({ userId: req.userId, date });
-
-    if (existing) {
-      existing.status = status; // replace for the date
-      await existing.save();
-      return res.json({ message: '✅ Attendance updated.' });
-    }
-
-    await Attendance.create({ userId: req.userId, date, status });
-    res.status(201).json({ message: '✅ Attendance saved.' });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: '❌ Error saving attendance' });
+  if (!Array.isArray(status) || status.length === 0) {
+    return res.status(400).json({ error: 'No status data provided' });
   }
-});
 
-attendanceRouter.get('/summary', verifyToken, async (req, res) => {
   try {
-    const records = await Attendance.find({ userId: req.userId });
+    // Find existing attendance for user & date
+    let attendanceRecord = await MarkedSubject.findOne({ userId, date });
 
-    const subjectSummary = {};
-
-    for (const record of records) {
-      for (const item of record.status) {
-        const subject = item.subject;
-
-        if (!subjectSummary[subject]) {
-          subjectSummary[subject] = {
-            attended: 0,
-            missed: 0,
-            cancelled: 0
-          };
-        }
-
-        const status = item.attendance;
-        if (['attended', 'missed', 'cancelled'].includes(status)) {
-          subjectSummary[subject][status]++;
+    if (!attendanceRecord) {
+      // Create new if doesn't exist
+      attendanceRecord = new MarkedSubject({
+        userId,
+        date,
+        subjects: status.map(item => ({
+          subject: item.subject,
+          status: item.status
+        }))
+      });
+    } else {
+      // Update existing attendance for that date
+      for (const item of status) {
+        // Check if subject already exists in array, update status or add
+        const existingSubj = attendanceRecord.subjects.find(s => s.subject === item.subject);
+        if (existingSubj) {
+          existingSubj.status = item.status;
+        } else {
+          attendanceRecord.subjects.push({
+            subject: item.subject,
+            status: item.status
+          });
         }
       }
     }
 
+    await attendanceRecord.save();
+
+    res.json({ message: '✅ Attendance marked successfully' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: '❌ Failed to mark attendance' });
+  }
+});
+
+
+
+
+attendanceRouter.get('/summary', verifyToken, async (req, res) => {
+  try {
+    const records = await MarkedSubject.find({ userId: req.userId });
+    console.log(records)
+    let subjectSummary = []
+
+    if(!records[0]){
+      subjectSummary = []
+    }
+    else{
+      subjectSummary = records[0].subjects
+    }
+    
+
     res.json({ summary: subjectSummary });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ message: '❌ Error fetching subject-wise summary' });
+    res.status(500).json({ message: '❌ Error fetching summary' });
   }
 });
 

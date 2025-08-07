@@ -1,74 +1,59 @@
+// routes/subjectRouter.js
 import express from 'express';
 import Subject from '../models/Subject.js';
+import MarkedSubject from '../models/MarkedSubject.js'; // assuming this is your attendance model
 import { verifyToken } from '../middleware/authMiddleware.js';
 
 const subjectRouter = express.Router();
 
-// 🔐 Protect all routes
-subjectRouter.use(verifyToken);
-
-// ➕ Create new subject
-subjectRouter.post('/', async (req, res) => {
-  const { name } = req.body;
-
+// GET /subject?date=YYYY-MM-DD
+subjectRouter.get('/', verifyToken, async (req, res) => {
   try {
-    const subject = new Subject({
-      name,
-      userId: req.userId,
-      logs: [],
-    });
-    await subject.save();
-    res.status(201).json(subject);
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to create subject' });
-  }
-});
+    const { date } = req.query;
 
-// 📥 Get all subjects for user
-subjectRouter.get('/', async (req, res) => {
-  try {
-    const subjects = await Subject.find({ userId: req.userId });
+    if (!date) {
+      return res.status(400).json({ message: 'Date is required in query' });
+    }
 
-    const enriched = subjects.map(subject => {
-      const total = subject.logs.length;
-      const attended = subject.logs.filter(log => log.status === 'attended').length;
-      const missed = total - attended;
-      const percentage = total === 0 ? 0 : (attended / total) * 100;
-      const suggestion =
-        percentage >= 75
-          ? `✅ Safe to skip ${Math.floor((attended * 100 - 75 * total) / 75)} class(es)`
-          : `⚠️ Attend more classes`;
+    const userId = req.userId;
+    const dayName = new Date(date).toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
 
-      return {
-        ...subject._doc,
-        total,
-        attended,
-        missed,
-        percentage: percentage.toFixed(1),
-        suggestion,
-      };
+    // 1. Get all subjects scheduled for today for this user
+    const subjects = await Subject.find({
+      userId,
+      day: dayName
     });
 
-    res.status(200).json(enriched);
+    // 2. Get all marked subjects (attendance) for that day
+    const attendanceRecords = await MarkedSubject.find({
+      userId,
+      date
+    });
+
+    const markedSubjects = attendanceRecords.map(record => ({
+      subject: record.subjects,
+      time: record.time,
+      status: record.status
+    }));
+
+    // 3. Get subject names of marked subjects
+    const markedSet = new Set(attendanceRecords.map(record => record.subject));
+
+    const unmarkedSubjects = subjects
+      .filter(subject => !markedSet.has(subject.name))
+      .map(subject => ({
+        _id: subject._id,
+        subject: subject.name,
+        time: subject.time
+      }));
+
+    res.status(200).json({
+      unmarkedSubjects,
+      markedSubjects
+    });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch subjects' });
-  }
-});
-
-// ➕ Add log (attended/missed) to a subject
-subjectRouter.post('/:id/log', async (req, res) => {
-  const { date, status } = req.body;
-
-  try {
-    const subject = await Subject.findOne({ _id: req.params.id, userId: req.userId });
-    if (!subject) return res.status(404).json({ error: 'Subject not found' });
-
-    subject.logs.push({ date, status });
-    await subject.save();
-
-    res.status(200).json(subject);
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to add log' });
+    console.error('Error fetching subjects for today:', err);
+    res.status(500).json({ message: 'Server Error' });
   }
 });
 

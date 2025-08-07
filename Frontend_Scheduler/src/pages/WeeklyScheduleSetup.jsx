@@ -1,181 +1,191 @@
-import { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import API from '../api/axios';
+import moment from 'moment';
+import Swal from 'sweetalert2';
 import { useDarkMode } from '../context/DarkModeContext';
 
-const weekdays = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
-const hours = Array.from({ length: 12 }, (_, i) => i + 1); // 1–12
-const minutes = ['00', '15', '30', '45'];
-const meridiems = ['AM', 'PM'];
+const Dashboard = () => {
 
-function WeeklyScheduleSetup() {
   const { darkMode } = useDarkMode();
 
-  const [schedule, setSchedule] = useState(
-    weekdays.reduce((acc, day) => {
-      acc[day] = [{
-        subject: '',
-        startHour: '9',
-        startMinute: '00',
-        startMeridiem: 'AM',
-        endHour: '10',
-        endMinute: '00',
-        endMeridiem: 'AM'
-      }];
-      return acc;
-    }, {})
-  );
+  const [unmarkedSubjects, setUnmarkedSubjects] = useState([]);
+  const [markedSubjects, setMarkedSubjects] = useState([]);
+  const [summary, setSummary] = useState({ attended: 0, missed: 0, cancelled: 0 });
+  const [date, setDate] = useState(moment().format('YYYY-MM-DD'));
 
-  const handleChange = (day, index, field, value) => {
-    const updated = [...schedule[day]];
-    updated[index][field] = value;
-    setSchedule({ ...schedule, [day]: updated });
-  };
+  const fetchSubjects = async (latestMarkedSubjects = []) => {
+  try {
+    const res = await API.get(`/subject?date=${date}`);
+    const allSubjects = res.data.unmarkedSubjects || [];
 
-  const addClass = (day) => {
-    setSchedule({
-      ...schedule,
-      [day]: [
-        ...schedule[day],
-        {
-          subject: '',
-          startHour: '9',
-          startMinute: '00',
-          startMeridiem: 'AM',
-          endHour: '10',
-          endMinute: '00',
-          endMeridiem: 'AM'
-        }
-      ]
-    });
-  };
+    const filteredSubjects = allSubjects.filter(
+      (subject) =>
+        !latestMarkedSubjects.some(
+          (marked) =>
+            marked.subject.toLowerCase() === subject.subject.toLowerCase()
+        )
+    );
 
-  const removeClass = (day, index) => {
-    const updated = [...schedule[day]];
-    updated.splice(index, 1);
-    setSchedule({ ...schedule, [day]: updated });
-  };
+    setUnmarkedSubjects(filteredSubjects);
+  } catch (error) {
+    console.error("Error fetching subjects:", error);
+  }
+};
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-
-    const formattedSchedule = {};
-    for (const day of weekdays) {
-      const validClasses = schedule[day]
-        .filter(cls => cls.subject.trim() !== '')
-        .map(cls => {
-          const start = `${cls.startHour}:${cls.startMinute} ${cls.startMeridiem}`;
-          const end = `${cls.endHour}:${cls.endMinute} ${cls.endMeridiem}`;
-          return {
-            subject: cls.subject,
-            time: `${start} - ${end}`
-          };
-        });
-      if (validClasses.length > 0) {
-        formattedSchedule[day] = validClasses;
-      }
-    }
-
+  const fetchSummary = async () => {
     try {
-      await API.post('/schedule', { schedule: formattedSchedule });
-      alert('✅ Schedule saved (only filled days)!');
-    } catch (err) {
-      alert('❌ Failed to save schedule.');
+      const res = await API.get(`/attendance/summary`);
+      const summaryArray = res.data.summary;
+      setMarkedSubjects(summaryArray)
+      await fetchSubjects(summaryArray);
+    } catch (error) {
+      console.error("Error fetching summary:", error);
     }
   };
+
+ useEffect(() => {
+  fetchSummary();
+}, [date]);
+
+
+  const handleAttendance = async (subject, status) => {
+  try {
+    // Confirm before marking attendance
+    const result = await Swal.fire({
+      title: `Mark "${subject.subjectName || subject.subject}" as "${status}"?`,
+      text: "This action cannot be undone.",
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: 'Yes',
+      cancelButtonText: 'No',
+    });
+
+    if (!result.isConfirmed) return;
+
+    // Call API to mark attendance
+    await API.post('/attendance/mark', {
+      date,
+      status: [{
+        subject: subject.subjectName || subject.subject,  // use subject name as string
+        status  // attendance status: 'attended', 'missed', or 'cancelled'
+      }]
+    });
+
+    // Remove subject from unmarkedSubjects immediately
+    setUnmarkedSubjects(prev => prev.filter(s => s._id !== subject._id));
+
+    // Add subject to markedSubjects with status
+    setMarkedSubjects(prev => [...prev, { ...subject, status }]);
+
+    Swal.fire('Success', 'Attendance marked successfully.', 'success');
+
+  } catch (error) {
+    console.error("Error marking attendance:", error);
+    Swal.fire('Error', 'Could not mark attendance.', 'error');
+  }
+};
 
   return (
-    <div
-      className={`relative min-h-screen transition duration-300 ${darkMode ? 'bg-gray-900 text-white' : 'bg-gray-100 text-black'}`}
-    >
-      <div className="absolute inset-0 bg-opacity-10 backdrop-blur-sm"></div>
+    <div className="p-4">
+      <div className="text-2xl font-bold mb-4">Dashboard</div>
 
-      <div className="relative z-10 max-w-5xl mx-auto p-6">
-        <h1 className="text-3xl font-bold text-center text-blue-700 dark:text-blue-400 mb-6">
-          📅 Weekly Class Schedule
-        </h1>
+      {/* Date Picker */}
+      <input
+        type="date"
+        value={date}
+        onChange={(e) => setDate(e.target.value)}
+        className="mb-4 p-2 border rounded"
+      />
 
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {weekdays.map((day) => (
+      {/* Unmarked Subjects */}
+      <div>
+        <h2 className="text-xl font-semibold mb-2">Today’s Classes</h2>
+        {unmarkedSubjects.length === 0 ? (
+          <p>No classes scheduled for today.</p>
+        ) : (
+          unmarkedSubjects.map(subject => (
             <div
-              key={day}
-              className={`p-4 rounded-xl border ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-blue-100 shadow'}`}
+              key={subject._id}
+              className="border rounded p-3 my-2 shadow-md flex justify-between items-center"
             >
-              <h3 className="capitalize font-semibold text-blue-700 dark:text-blue-300 mb-3">{day}</h3>
-
-              {schedule[day].map((item, idx) => (
-                <div key={idx} className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4 items-center">
-                  {/* Subject */}
-                  <input
-                    type="text"
-                    placeholder="Subject name"
-                    value={item.subject}
-                    onChange={(e) => handleChange(day, idx, 'subject', e.target.value)}
-                    className={`p-2 rounded border w-full ${darkMode ? 'bg-gray-700 text-white border-gray-600' : ''}`}
-                  />
-
-                  {/* Start Time */}
-                  <div className="flex gap-1">
-                    <select value={item.startHour} onChange={(e) => handleChange(day, idx, 'startHour', e.target.value)} className={`border p-2 rounded ${darkMode ? 'bg-gray-700 text-white border-gray-600' : ''}`}>
-                      {hours.map(h => <option key={h} value={h}>{h}</option>)}
-                    </select>
-                    <select value={item.startMinute} onChange={(e) => handleChange(day, idx, 'startMinute', e.target.value)} className={`border p-2 rounded ${darkMode ? 'bg-gray-700 text-white border-gray-600' : ''}`}>
-                      {minutes.map(m => <option key={m} value={m}>{m}</option>)}
-                    </select>
-                    <select value={item.startMeridiem} onChange={(e) => handleChange(day, idx, 'startMeridiem', e.target.value)} className={`border p-2 rounded ${darkMode ? 'bg-gray-700 text-white border-gray-600' : ''}`}>
-                      {meridiems.map(m => <option key={m} value={m}>{m}</option>)}
-                    </select>
-                  </div>
-
-                  {/* End Time */}
-                  <div className="flex gap-1">
-                    <select value={item.endHour} onChange={(e) => handleChange(day, idx, 'endHour', e.target.value)} className={`border p-2 rounded ${darkMode ? 'bg-gray-700 text-white border-gray-600' : ''}`}>
-                      {hours.map(h => <option key={h} value={h}>{h}</option>)}
-                    </select>
-                    <select value={item.endMinute} onChange={(e) => handleChange(day, idx, 'endMinute', e.target.value)} className={`border p-2 rounded ${darkMode ? 'bg-gray-700 text-white border-gray-600' : ''}`}>
-                      {minutes.map(m => <option key={m} value={m}>{m}</option>)}
-                    </select>
-                    <select value={item.endMeridiem} onChange={(e) => handleChange(day, idx, 'endMeridiem', e.target.value)} className={`border p-2 rounded ${darkMode ? 'bg-gray-700 text-white border-gray-600' : ''}`}>
-                      {meridiems.map(m => <option key={m} value={m}>{m}</option>)}
-                    </select>
-                  </div>
-                </div>
-              ))}
-
-              {/* Add/Remove Buttons */}
-              <div className="flex justify-between items-center mt-2">
+              <div>
+                <p className="font-semibold text-lg">
+                  {subject.subjectName || subject.subject}
+                </p>
+                <p className="text-gray-600">{subject.time}</p>
+              </div>
+              <div className="space-x-2">
                 <button
-                  type="button"
-                  onClick={() => addClass(day)}
-                  className="text-sm text-blue-600 dark:text-blue-300 hover:underline"
+                  onClick={() => handleAttendance(subject, 'attended')}
+                  className="bg-green-500 text-white px-3 py-1 rounded"
                 >
-                  ➕ Add Another Class
+                  Attended
                 </button>
-                {schedule[day].length > 1 && (
-                  <button
-                    type="button"
-                    onClick={() => removeClass(day, schedule[day].length - 1)}
-                    className="text-sm text-red-600 hover:underline"
-                  >
-                    🗑 Remove Last
-                  </button>
-                )}
+                <button
+                  onClick={() => handleAttendance(subject, 'missed')}
+                  className="bg-red-500 text-white px-3 py-1 rounded"
+                >
+                  Missed
+                </button>
+                <button
+                  onClick={() => handleAttendance(subject, 'cancelled')}
+                  className="bg-gray-500 text-white px-3 py-1 rounded"
+                >
+                  Cancelled
+                </button>
               </div>
             </div>
-          ))}
+          ))
+        )}
+      </div>
 
-          {/* Submit Button */}
-          <div className="text-center mt-6">
-            <button
-              type="submit"
-              className="bg-blue-700 text-white px-6 py-2 rounded-lg shadow hover:bg-blue-800 transition"
+      {/* Marked Subjects */}
+      <div className="mt-6">
+        <h2 className="text-xl font-semibold mb-2">Marked Attendance</h2>
+        {markedSubjects.length === 0 ? (
+          <p>No attendance marked yet.</p>
+        ) : (
+          markedSubjects.map(subject => (
+            <div
+              key={subject._id}
+              className="border p-3 my-2 rounded shadow-sm flex justify-between items-center"
             >
-              ✅ Save Weekly Schedule
-            </button>
+              <div>
+                <p className="font-semibold">{subject.subject}</p>
+                <p className="text-gray-500">{subject.time}</p>
+              </div>
+              <span className={`px-3 py-1 rounded-full text-white ${
+                subject.status === 'attended' ? 'bg-green-500' :
+                subject.status === 'missed' ? 'bg-red-500' :
+                'bg-gray-500'
+              }`}>
+                {subject.status}
+              </span>
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* Summary Section */}
+      <div className="mt-8">
+        <h2 className="text-xl font-bold mb-2">Attendance Summary</h2>
+        <div className="grid grid-cols-3 gap-4">
+          <div className="bg-green-100 p-4 rounded text-center">
+            <h3 className="text-green-700 text-lg">Attended</h3>
+            <p className="text-2xl font-bold">{summary.attended}</p>
           </div>
-        </form>
+          <div className="bg-red-100 p-4 rounded text-center">
+            <h3 className="text-red-700 text-lg">Missed</h3>
+            <p className="text-2xl font-bold">{summary.missed}</p>
+          </div>
+          <div className="bg-gray-100 p-4 rounded text-center">
+            <h3 className="text-gray-700 text-lg">Cancelled</h3>
+            <p className="text-2xl font-bold">{summary.cancelled}</p>
+          </div>
+        </div>
       </div>
     </div>
   );
-}
+};
 
-export default WeeklyScheduleSetup;
+export default Dashboard;  

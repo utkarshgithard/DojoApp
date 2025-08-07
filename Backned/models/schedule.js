@@ -1,24 +1,32 @@
 import mongoose from "mongoose";
+
 const scheduleSchema = new mongoose.Schema({
   userId: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    required: true,
-    unique: true,
+    ref: "User",
+    required: true
   },
   schedule: {
-    monday: [{
-      subject: String,
-      time: String, // Example: "10:00 AM - 11:00 AM"
-    }],
-    tuesday: [{ subject: String, time: String }],
-    wednesday: [{ subject: String, time: String }],
-    thursday: [{ subject: String, time: String }],
-    friday: [{ subject: String, time: String }],
-    saturday: [{ subject: String, time: String }],
-    sunday: [{ subject: String, time: String }]
+    monday: [{ type: mongoose.Schema.Types.ObjectId, ref: "Subject" }],
+    tuesday: [{ type: mongoose.Schema.Types.ObjectId, ref: "Subject" }],
+    wednesday: [{ type: mongoose.Schema.Types.ObjectId, ref: "Subject" }],
+    thursday: [{ type: mongoose.Schema.Types.ObjectId, ref: "Subject" }],
+    friday: [{ type: mongoose.Schema.Types.ObjectId, ref: "Subject" }],
+    saturday: [{ type: mongoose.Schema.Types.ObjectId, ref: "Subject" }],
+    sunday: [{ type: mongoose.Schema.Types.ObjectId, ref: "Subject" }]
+  },
+  marked: {
+    type: Map,
+    of: [
+      {
+        subject: { type: mongoose.Schema.Types.ObjectId, ref: "Subject" },
+        status: { type: String, enum: ["attended", "missed", "cancelled"], required: true },
+        userId: { type: mongoose.Schema.Types.ObjectId, ref: "User" }
+      }
+    ]
   }
-}, { timestamps: true });
+});
 
+const Schedule = mongoose.model("Schedule", scheduleSchema);
 
-export default mongoose.model('Schedule', scheduleSchema);
+export default Schedule;

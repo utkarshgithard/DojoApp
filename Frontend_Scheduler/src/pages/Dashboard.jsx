@@ -1,161 +1,183 @@
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import API from '../api/axios';
+import moment from 'moment';
+import Swal from 'sweetalert2';
 import { useDarkMode } from '../context/DarkModeContext';
 
-function Dashboard() {
+const Dashboard = () => {
   const { darkMode } = useDarkMode();
 
-  const [subjectsToday, setSubjectsToday] = useState([]);
-  const [dayName, setDayName] = useState('');
-  const [attendance, setAttendance] = useState({});
-  const [date, setDate] = useState('');
-  const [subjectSummary, setSubjectSummary] = useState({});
+  const [unmarkedSubjects, setUnmarkedSubjects] = useState([]);
+  const [markedSubjects, setMarkedSubjects] = useState([]);
+  const [summary, setSummary] = useState({ attended: 0, missed: 0, cancelled: 0 });
+  const [date, setDate] = useState(moment().format('YYYY-MM-DD'));
 
-  useEffect(() => {
-    const fetchTodaySchedule = async () => {
-      try {
-        const res = await API.get('/schedule/today');
-        setSubjectsToday(res.data.subjects);
-        setDayName(res.data.day);
+  const fetchSubjects = async (latestMarkedSubjects = []) => {
+    try {
+      const res = await API.get(`/subject?date=${date}`);
+      const allSubjects = res.data.unmarkedSubjects || [];
 
-        const today = new Date();
-        const formatted = today.toISOString().split('T')[0];
-        setDate(formatted);
-      } catch (err) {
-        console.error(err);
-        setSubjectsToday([]);
-      }
-    };
+      const filteredSubjects = allSubjects.filter(
+        (subject) =>
+          !latestMarkedSubjects.some(
+            (marked) =>
+              marked.subject.toLowerCase() === subject.subject.toLowerCase()
+          )
+      );
 
-    const fetchSummary = async () => {
-      try {
-        const res = await API.get('/attendance/summary');
-        setSubjectSummary(res.data.summary);
-      } catch (err) {
-        console.error(err);
-      }
-    };
-
-    fetchTodaySchedule();
-    fetchSummary();
-  }, []);
-
-  const handleChange = (index, value) => {
-    setAttendance((prev) => ({
-      ...prev,
-      [index]: value
-    }));
+      setUnmarkedSubjects(filteredSubjects);
+    } catch (error) {
+      console.error("Error fetching subjects:", error);
+    }
   };
 
-  const handleSave = async () => {
-    const status = subjectsToday.map((item, index) => ({
-      subject: item.subject,
-      time: item.time,
-      attendance: attendance[index] || 'attended'
-    }));
-
+  const fetchSummary = async () => {
     try {
-      const res = await API.post('/attendance/mark', { date, status });
-      alert(res.data.message);
-    } catch (err) {
-      console.error(err);
-      alert('❌ Failed to save attendance.');
+      const res = await API.get(`/attendance/summary`);
+      const summaryArray = res.data.summary;
+      setMarkedSubjects(summaryArray);
+      await fetchSubjects(summaryArray);
+    } catch (error) {
+      console.error("Error fetching summary:", error);
+    }
+  };
+
+  useEffect(() => {
+    fetchSummary();
+  }, [date]);
+
+  const handleAttendance = async (subject, status) => {
+    try {
+      const result = await Swal.fire({
+        title: `Mark "${subject.subjectName || subject.subject}" as "${status}"?`,
+        text: "This action cannot be undone.",
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: 'Yes',
+        cancelButtonText: 'No',
+      });
+
+      if (!result.isConfirmed) return;
+
+      await API.post('/attendance/mark', {
+        date,
+        status: [{
+          subject: subject.subjectName || subject.subject,
+          status
+        }]
+      });
+
+      setUnmarkedSubjects(prev => prev.filter(s => s._id !== subject._id));
+      setMarkedSubjects(prev => [...prev, { ...subject, status }]);
+
+      Swal.fire('Success', 'Attendance marked successfully.', 'success');
+    } catch (error) {
+      console.error("Error marking attendance:", error);
+      Swal.fire('Error', 'Could not mark attendance.', 'error');
     }
   };
 
   return (
-    <div className={`min-h-screen p-6 transition-colors duration-300 ${darkMode ? 'bg-black text-white' : 'bg-white text-black'}`}>
-      <h1 className="text-4xl font-bold text-left mb-8 tracking-tight ">
-         Attendance Dashboard
-      </h1>
+    <div className={`p-4 min-h-screen transition-colors duration-300 ${darkMode ? 'dark bg-gray-900 text-white' : 'bg-white text-black'}`}>
+      <div className="text-2xl font-bold mb-4">Dashboard</div>
 
-      {/* Schedule Section */}
-      <div className={`max-w-3xl mx-auto rounded-lg p-6 border ${darkMode ? 'bg-gray-900 border-gray-800' : 'bg-gray-50 border-gray-200'}`}>
-        <h2 className="text-2xl font-semibold capitalize mb-6">
-          Today’s Schedule ({dayName || '—'})
-        </h2>
+      {/* Date Picker */}
+      <input
+        type="date"
+        value={date}
+        onChange={(e) => setDate(e.target.value)}
+        className="mb-4 p-2 border rounded bg-white dark:bg-gray-800 dark:border-gray-600 dark:text-white"
+      />
 
-        {subjectsToday.length === 0 ? (
-          <p className="text-gray-500 text-center text-lg">No classes today.</p>
+      {/* Unmarked Subjects */}
+      <div>
+        <h2 className="text-xl font-semibold mb-2">Today’s Classes</h2>
+        {unmarkedSubjects.length === 0 ? (
+          <p>No classes scheduled for today.</p>
         ) : (
-          <div className="space-y-4">
-            {subjectsToday.map((item, index) => (
-              <div
-                key={index}
-                className={`p-4 rounded-lg border flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 transition-all duration-200 hover:bg-gray-100 dark:hover:bg-gray-800 ${
-                  darkMode ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-200'
-                }`}
-              >
-                <div>
-                  <p className="font-medium text-lg">{item.subject}</p>
-                  <p className="text-sm text-gray-500">{item.time}</p>
-                </div>
-                <div className="flex gap-4">
-                  {['attended', 'missed', 'cancelled'].map((status) => (
-                    <label key={status} className="text-sm flex items-center gap-2 capitalize cursor-pointer">
-                      <input
-                        type="radio"
-                        name={`attendance-${index}`}
-                        value={status}
-                        checked={attendance[index] === status}
-                        onChange={() => handleChange(index, status)}
-                        className="w-4 h-4 text-black focus:ring-black dark:text-white dark:focus:ring-white"
-                      />
-                      <span>{status}</span>
-                    </label>
-                  ))}
-                </div>
+          unmarkedSubjects.map(subject => (
+            <div
+              key={subject._id}
+              className="border rounded p-3 my-2 shadow-md flex justify-between items-center dark:bg-gray-800 dark:border-gray-600"
+            >
+              <div>
+                <p className="font-semibold text-lg">
+                  {subject.subjectName || subject.subject}
+                </p>
+                <p className="text-gray-600 dark:text-gray-400">{subject.time}</p>
               </div>
-            ))}
-
-            <div className="text-center mt-6">
-              <button
-                onClick={handleSave}
-                className="bg-black text-white dark:bg-white dark:text-black px-8 py-2 rounded-lg hover:bg-gray-800 dark:hover:bg-gray-200 transition-all duration-200"
-              >
-                ✅ Save
-              </button>
+              <div className="space-x-2">
+                <button
+                  onClick={() => handleAttendance(subject, 'attended')}
+                  className="bg-green-500 text-white px-3 py-1 rounded"
+                >
+                  Attended
+                </button>
+                <button
+                  onClick={() => handleAttendance(subject, 'missed')}
+                  className="bg-red-500 text-white px-3 py-1 rounded"
+                >
+                  Missed
+                </button>
+                <button
+                  onClick={() => handleAttendance(subject, 'cancelled')}
+                  className="bg-gray-500 text-white px-3 py-1 rounded"
+                >
+                  Cancelled
+                </button>
+              </div>
             </div>
-          </div>
+          ))
+        )}
+      </div>
+
+      {/* Marked Subjects */}
+      <div className="mt-6">
+        <h2 className="text-xl font-semibold mb-2">Marked Attendance</h2>
+        {markedSubjects.length === 0 ? (
+          <p>No attendance marked yet.</p>
+        ) : (
+          markedSubjects.map(subject => (
+            <div
+              key={subject._id}
+              className="border p-3 my-2 rounded shadow-sm flex justify-between items-center dark:bg-gray-800 dark:border-gray-600"
+            >
+              <div>
+                <p className="font-semibold">{subject.subject}</p>
+                <p className="text-gray-500 dark:text-gray-400">{subject.time}</p>
+              </div>
+              <span className={`px-3 py-1 rounded-full text-white ${
+                subject.status === 'attended' ? 'bg-green-500' :
+                subject.status === 'missed' ? 'bg-red-500' :
+                'bg-gray-500'
+              }`}>
+                {subject.status}
+              </span>
+            </div>
+          ))
         )}
       </div>
 
       {/* Summary Section */}
-      <div className={`max-w-4xl mx-auto mt-8 rounded-lg p-6 border ${darkMode ? 'bg-gray-900 border-gray-800' : 'bg-gray-50 border-gray-200'}`}>
-        <h2 className="text-2xl font-semibold mb-6">Attendance Summary</h2>
-
-        {Object.keys(subjectSummary).length === 0 ? (
-          <p className="text-gray-500 text-center text-lg">No attendance data.</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full border text-center rounded-lg">
-              <thead className={`${darkMode ? 'bg-gray-800 text-white' : 'bg-gray-200 text-black'}`}>
-                <tr>
-                  <th className="p-3 border">Subject</th>
-                  <th className="p-3 border">Attended ✅</th>
-                  <th className="p-3 border">Missed ❌</th>
-                  <th className="p-3 border">Cancelled 🚫</th>
-                </tr>
-              </thead>
-              <tbody>
-                {Object.entries(subjectSummary).map(([subject, stats], index) => (
-                  <tr
-                    key={index}
-                    className={`border-t ${darkMode ? 'hover:bg-gray-800' : 'hover:bg-gray-100'}`}
-                  >
-                    <td className="p-3 border font-medium">{subject}</td>
-                    <td className="p-3 border">{stats.attended}</td>
-                    <td className="p-3 border">{stats.missed}</td>
-                    <td className="p-3 border">{stats.cancelled}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+      <div className="mt-8">
+        <h2 className="text-xl font-bold mb-2">Attendance Summary</h2>
+        <div className="grid grid-cols-3 gap-4">
+          <div className="bg-green-100 dark:bg-green-900 p-4 rounded text-center">
+            <h3 className="text-green-700 dark:text-green-300 text-lg">Attended</h3>
+            <p className="text-2xl font-bold text-green-900 dark:text-green-100">{summary.attended}</p>
           </div>
-        )}
+          <div className="bg-red-100 dark:bg-red-900 p-4 rounded text-center">
+            <h3 className="text-red-700 dark:text-red-300 text-lg">Missed</h3>
+            <p className="text-2xl font-bold text-red-900 dark:text-red-100">{summary.missed}</p>
+          </div>
+          <div className="bg-gray-100 dark:bg-gray-800 p-4 rounded text-center">
+            <h3 className="text-gray-700 dark:text-gray-300 text-lg">Cancelled</h3>
+            <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{summary.cancelled}</p>
+          </div>
+        </div>
       </div>
     </div>
   );
-}
+};
 
 export default Dashboard;
