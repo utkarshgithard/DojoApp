@@ -14,9 +14,10 @@ const Dashboard = () => {
 
   const fetchSubjects = async (latestMarkedSubjects = []) => {
     try {
+      
       const res = await API.get(`/subject?date=${date}`);
       const allSubjects = res.data.unmarkedSubjects || [];
-
+      console.log(allSubjects)
       const filteredSubjects = allSubjects.filter(
         (subject) =>
           !latestMarkedSubjects.some(
@@ -33,8 +34,9 @@ const Dashboard = () => {
 
   const fetchSummary = async () => {
     try {
-      const res = await API.get(`/attendance/summary`);
+      const res = await API.get(`/attendance/summary?date=${date}`);
       const summaryArray = res.data.summary;
+      console.log(summaryArray)
       setMarkedSubjects(summaryArray);
       await fetchSubjects(summaryArray);
     } catch (error) {

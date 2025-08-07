@@ -10,7 +10,7 @@ const subjectRouter = express.Router();
 subjectRouter.get('/', verifyToken, async (req, res) => {
   try {
     const { date } = req.query;
-
+    console.log(date)
     if (!date) {
       return res.status(400).json({ message: 'Date is required in query' });
     }
@@ -37,7 +37,7 @@ subjectRouter.get('/', verifyToken, async (req, res) => {
     }));
 
     // 3. Get subject names of marked subjects
-    const markedSet = new Set(attendanceRecords.map(record => record.subject));
+    const markedSet = new Set(attendanceRecords.map(record => record.subjects));
 
     const unmarkedSubjects = subjects
       .filter(subject => !markedSet.has(subject.name))

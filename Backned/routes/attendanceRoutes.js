@@ -2,7 +2,6 @@
 import express from 'express';
 import MarkedSubject from '../models/MarkedSubject.js';
 import { verifyToken } from '../middleware/authMiddleware.js';
-
 const attendanceRouter = express.Router();
 
 // POST: Mark attendance
@@ -59,7 +58,11 @@ attendanceRouter.post('/mark', verifyToken, async (req, res) => {
 
 attendanceRouter.get('/summary', verifyToken, async (req, res) => {
   try {
-    const records = await MarkedSubject.find({ userId: req.userId });
+    const {date} = req.query;
+    
+    const records = await MarkedSubject.find({ userId: req.userId,
+      date:date.toString()
+     });
     console.log(records)
     let subjectSummary = []
 
@@ -69,6 +72,7 @@ attendanceRouter.get('/summary', verifyToken, async (req, res) => {
     else{
       subjectSummary = records[0].subjects
     }
+
     
 
     res.json({ summary: subjectSummary });
