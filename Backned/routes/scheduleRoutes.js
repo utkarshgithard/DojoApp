@@ -86,4 +86,25 @@ scheduleRouter.get("/calender",  verifyToken , async (req, res) => {
   }
 });
 
+scheduleRouter.delete("/:subjectId/:day", async (req, res) => {
+  try {
+    const { subjectId, day } = req.params;
+
+    // 1. Remove from Subject collection
+    await Subject.findByIdAndDelete(subjectId);
+
+    // 2. Remove from Schedule collection (any user's schedule)
+    await Schedule.updateMany(
+      { [`schedule.${day}`]: subjectId },
+      { $pull: { [`schedule.${day}`]: subjectId } }
+    );
+
+    res.status(200).json({ message: "Subject deleted successfully" });
+  } catch (err) {
+    console.error("Error deleting subject:", err);
+    res.status(500).json({ message: "Server error", error: err.message });
+  }
+});
+
+
 export default scheduleRouter;

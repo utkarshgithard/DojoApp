@@ -92,12 +92,12 @@ function WeeklyScheduleSetup() {
 
 
   return (
-    <div className={`relative min-h-screen transition duration-300 ${darkMode ? 'bg-gray-900 text-white' : 'bg-gray-100 text-black'}`}>
+    <div className={`relative mt-[50px] min-h-screen transition duration-300 ${darkMode ? 'bg-gray-900 text-white' : 'bg-gray-100 text-black'}`}>
       <div className="absolute inset-0 bg-opacity-10 backdrop-blur-sm"></div>
 
       <div className="relative z-10 max-w-5xl mx-auto p-6">
         <h1 className="text-3xl font-bold text-center text-blue-700 dark:text-blue-400 mb-6">
-          📅 Weekly Class Schedule
+          Set Schedule
         </h1>
 
         <form onSubmit={handleSubmit} className="space-y-6">
