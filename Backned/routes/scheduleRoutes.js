@@ -57,12 +57,32 @@ scheduleRouter.post('/', verifyToken, async (req, res) => {
       existingSchedule.schedule[day].push(...subjectIds);
     }
 
+
     await existingSchedule.save();
 
     res.status(201).json({ message: '✅ Schedule and subjects saved successfully!' });
   } catch (err) {
     console.error('❌ Error saving schedule:', err);
     res.status(500).json({ message: 'Server error' });
+  }
+});
+
+scheduleRouter.get("/calender",  verifyToken , async (req, res) => {
+  try {
+    const  userId  = req.userId;
+
+    // Find schedule for the user
+    const scheduleDoc = await Schedule.findOne({ userId }).populate({
+      path: "schedule.monday schedule.tuesday schedule.wednesday schedule.thursday schedule.friday schedule.saturday schedule.sunday",
+      model: "Subject"
+    });
+
+    if (!scheduleDoc) return res.status(404).json({ message: "Schedule not found" });
+
+    res.json(scheduleDoc);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Server error" });
   }
 });
 

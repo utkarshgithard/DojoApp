@@ -10,6 +10,8 @@ import Register from "./pages/Register";
 import Login from "./pages/Login";
 import Verify from "./pages/Verify";
 import VerifyEmail from "./pages/VerifyEmail";
+import InternetStatus from "./components/InternetStatus";
+import ScheduleTable from "./pages/ScheduleTable";
 const noNavbarRoutes = ['/', '/login', '/register','/verify','/verify-email/:token'];
 
 function App() {
@@ -18,6 +20,7 @@ function App() {
 
   return (
       <>
+      <InternetStatus/>
       {!noNavbarRoutes.includes(location.pathname) && <Navbar />}
       <Routes>
         <Route path="/" element={<LandingPage />} />
@@ -29,6 +32,7 @@ function App() {
         <Route path="/schedule" element={<Schedule />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="/setup-schedule" element={<WeeklyScheduleSetup />} />
+        <Route path="/calender" element={<ScheduleTable/>}/>
       </Routes>
       </>
       

@@ -14,10 +14,8 @@ const Dashboard = () => {
 
   const fetchSubjects = async (latestMarkedSubjects = []) => {
     try {
-      
       const res = await API.get(`/subject?date=${date}`);
       const allSubjects = res.data.unmarkedSubjects || [];
-      console.log(allSubjects)
       const filteredSubjects = allSubjects.filter(
         (subject) =>
           !latestMarkedSubjects.some(
@@ -25,7 +23,6 @@ const Dashboard = () => {
               marked.subject.toLowerCase() === subject.subject.toLowerCase()
           )
       );
-
       setUnmarkedSubjects(filteredSubjects);
     } catch (error) {
       console.error("Error fetching subjects:", error);
@@ -36,7 +33,6 @@ const Dashboard = () => {
     try {
       const res = await API.get(`/attendance/summary?date=${date}`);
       const summaryArray = res.data.summary;
-      console.log(summaryArray)
       setMarkedSubjects(summaryArray);
       await fetchSubjects(summaryArray);
     } catch (error) {
@@ -80,101 +76,103 @@ const Dashboard = () => {
   };
 
   return (
-    <div className={`p-4 min-h-screen transition-colors duration-300 ${darkMode ? 'dark bg-gray-900 text-white' : 'bg-white text-black'}`}>
-      <div className="text-2xl font-bold mb-4">Dashboard</div>
+    <div className={`p-4 min-h-screen transition-colors duration-300 ${darkMode ? 'dark bg-black text-white' : 'bg-white text-black'} mt-14`}>
+      <div className="text-2xl font-bold mb-6">Dashboard</div>
 
       {/* Date Picker */}
       <input
         type="date"
         value={date}
         onChange={(e) => setDate(e.target.value)}
-        className="mb-4 p-2 border rounded bg-white dark:bg-gray-800 dark:border-gray-600 dark:text-white"
+        className="mb-6 p-2 border rounded bg-transparent dark:bg-transparent border-black dark:border-white text-black dark:text-white"
       />
 
       {/* Unmarked Subjects */}
-      <div>
-        <h2 className="text-xl font-semibold mb-2">Today’s Classes</h2>
+      <div className="mb-8">
+        <h2 className="text-xl font-semibold mb-4">Today’s Classes</h2>
         {unmarkedSubjects.length === 0 ? (
           <p>No classes scheduled for today.</p>
         ) : (
-          unmarkedSubjects.map(subject => (
-            <div
-              key={subject._id}
-              className="border rounded p-3 my-2 shadow-md flex justify-between items-center dark:bg-gray-800 dark:border-gray-600"
-            >
-              <div>
-                <p className="font-semibold text-lg">
-                  {subject.subjectName || subject.subject}
-                </p>
-                <p className="text-gray-600 dark:text-gray-400">{subject.time}</p>
+          <div className="space-y-4">
+            {unmarkedSubjects.map(subject => (
+              <div
+                key={subject._id}
+                className="border rounded-lg p-4 flex flex-col md:flex-row justify-between items-start md:items-center gap-3 dark:border-white border-black"
+              >
+                <div>
+                  <p className="font-semibold text-lg">{subject.subjectName || subject.subject}</p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">{subject.time}</p>
+                </div>
+                <div className="flex gap-2 flex-wrap">
+                  <button
+                    onClick={() => handleAttendance(subject, 'attended')}
+                    className="border border-black dark:border-white px-4 py-1 rounded hover:bg-black hover:text-white dark:hover:bg-white dark:hover:text-black transition"
+                  >
+                    Attended
+                  </button>
+                  <button
+                    onClick={() => handleAttendance(subject, 'missed')}
+                    className="border border-black dark:border-white px-4 py-1 rounded hover:bg-black hover:text-white dark:hover:bg-white dark:hover:text-black transition"
+                  >
+                    Missed
+                  </button>
+                  <button
+                    onClick={() => handleAttendance(subject, 'cancelled')}
+                    className="border border-black dark:border-white px-4 py-1 rounded hover:bg-black hover:text-white dark:hover:bg-white dark:hover:text-black transition"
+                  >
+                    Cancelled
+                  </button>
+                </div>
               </div>
-              <div className="space-x-2">
-                <button
-                  onClick={() => handleAttendance(subject, 'attended')}
-                  className="bg-green-500 text-white px-3 py-1 rounded"
-                >
-                  Attended
-                </button>
-                <button
-                  onClick={() => handleAttendance(subject, 'missed')}
-                  className="bg-red-500 text-white px-3 py-1 rounded"
-                >
-                  Missed
-                </button>
-                <button
-                  onClick={() => handleAttendance(subject, 'cancelled')}
-                  className="bg-gray-500 text-white px-3 py-1 rounded"
-                >
-                  Cancelled
-                </button>
-              </div>
-            </div>
-          ))
+            ))}
+          </div>
         )}
       </div>
 
       {/* Marked Subjects */}
-      <div className="mt-6">
-        <h2 className="text-xl font-semibold mb-2">Marked Attendance</h2>
+      <div className="mb-10">
+        <h2 className="text-xl font-semibold mb-4">Marked Attendance</h2>
         {markedSubjects.length === 0 ? (
           <p>No attendance marked yet.</p>
         ) : (
-          markedSubjects.map(subject => (
-            <div
-              key={subject._id}
-              className="border p-3 my-2 rounded shadow-sm flex justify-between items-center dark:bg-gray-800 dark:border-gray-600"
-            >
-              <div>
-                <p className="font-semibold">{subject.subject}</p>
-                <p className="text-gray-500 dark:text-gray-400">{subject.time}</p>
+          <div className="space-y-4">
+            {markedSubjects.map(subject => (
+              <div
+                key={subject._id}
+                className="border rounded-lg p-4 flex justify-between items-center dark:border-white border-black"
+              >
+                <div>
+                  <p className="font-semibold text-lg">{subject.subject}</p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">{subject.time}</p>
+                </div>
+                <span className={`px-4 py-1 rounded-full border text-sm uppercase ${
+                  subject.status === 'attended' ? 'border-green-500 text-green-600' :
+                  subject.status === 'missed' ? 'border-red-500 text-red-600' :
+                  'border-gray-500 text-gray-600'
+                }`}>
+                  {subject.status}
+                </span>
               </div>
-              <span className={`px-3 py-1 rounded-full text-white ${
-                subject.status === 'attended' ? 'bg-green-500' :
-                subject.status === 'missed' ? 'bg-red-500' :
-                'bg-gray-500'
-              }`}>
-                {subject.status}
-              </span>
-            </div>
-          ))
+            ))}
+          </div>
         )}
       </div>
 
       {/* Summary Section */}
-      <div className="mt-8">
-        <h2 className="text-xl font-bold mb-2">Attendance Summary</h2>
-        <div className="grid grid-cols-3 gap-4">
-          <div className="bg-green-100 dark:bg-green-900 p-4 rounded text-center">
-            <h3 className="text-green-700 dark:text-green-300 text-lg">Attended</h3>
-            <p className="text-2xl font-bold text-green-900 dark:text-green-100">{summary.attended}</p>
+      <div className="mt-10">
+        <h2 className="text-xl font-bold mb-4">Attendance Summary</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="border p-4 rounded text-center dark:border-white border-black">
+            <h3 className="text-lg mb-2">Attended</h3>
+            <p className="text-2xl font-bold">{summary.attended}</p>
           </div>
-          <div className="bg-red-100 dark:bg-red-900 p-4 rounded text-center">
-            <h3 className="text-red-700 dark:text-red-300 text-lg">Missed</h3>
-            <p className="text-2xl font-bold text-red-900 dark:text-red-100">{summary.missed}</p>
+          <div className="border p-4 rounded text-center dark:border-white border-black">
+            <h3 className="text-lg mb-2">Missed</h3>
+            <p className="text-2xl font-bold">{summary.missed}</p>
           </div>
-          <div className="bg-gray-100 dark:bg-gray-800 p-4 rounded text-center">
-            <h3 className="text-gray-700 dark:text-gray-300 text-lg">Cancelled</h3>
-            <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{summary.cancelled}</p>
+          <div className="border p-4 rounded text-center dark:border-white border-black">
+            <h3 className="text-lg mb-2">Cancelled</h3>
+            <p className="text-2xl font-bold">{summary.cancelled}</p>
           </div>
         </div>
       </div>
