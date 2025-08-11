@@ -66,32 +66,32 @@ const Navbar = () => {
           <div className="hidden md:flex items-center gap-6">
             <Link
               to="/dashboard"
-              className={`hover:text-gray-700 transition duration-200 text-lg ${
-                location.pathname === '/dashboard' ? 'text-gray-500 border-b-2 font-bold' : ''
+              className={`hover:text-emerald-500 transition duration-200 text-lg ${
+                location.pathname === '/dashboard' ? 'text-gray-500 border-b-2  dark:text-rose-400 font-bold' : ''
               }`}
             >
               Dashboard
             </Link>
             <Link
               to="/setup-schedule"
-              className={`hover:text-gray-700 transition duration-200 text-lg ${
-                location.pathname === '/setup-schedule' ? 'text-gray-500 border-b-2 font-bold' : ''
+              className={`hover:text-emerald-500 transition duration-200 text-lg ${
+                location.pathname === '/setup-schedule' ? 'text-gray-500 dark:text-rose-400 border-b-2 font-bold' : ''
               }`}
             >
               Schedule
             </Link>
             <Link
               to="/calender"
-              className={`hover:text-gray-700 transition duration-200 text-lg ${
-                location.pathname === '/settings' ? 'text-gray-500 border-b-2 font-bold' : ''
+              className={`hover:text-emerald-500  transition duration-200 text-lg ${
+                location.pathname === '/calender' ? 'text-gray-500 border-b-2  dark:text-rose-400 font-bold' : ''
               }`}
             >
               Calender
             </Link>
             <Link
               to="/settings"
-              className={`hover:text-gray-700 transition duration-200 text-lg ${
-                location.pathname === '/settings' ? 'text-gray-500 border-b-2 font-bold' : ''
+              className={`hover:text-emerald-500 transition duration-200 text-lg ${
+                location.pathname === '/settings' ? 'text-gray-500 border-b-2  dark:text-rose-400 font-bold' : ''
               }`}
             >
               Settings
@@ -125,7 +125,7 @@ const Navbar = () => {
             onClick={closeMenu}
             className={`block ${
               location.pathname === '/dashboard'
-                ? 'font-semibold text-gray-700 border-l-2 border-gray-500 px-2'
+                ? 'font-semibold text-gray-700 border-l-2 border-gray-500 px-2  dark:text-rose-400'
                 : 'hover:text-gray-300'
             } transition duration-200`}
           >
@@ -136,7 +136,7 @@ const Navbar = () => {
             onClick={closeMenu}
             className={`block ${
               location.pathname === '/setup-schedule'
-                ? 'text-gray-700 font-semibold border-l-2 border-gray-500 px-2'
+                ? 'text-gray-700 font-semibold border-l-2 border-gray-500 px-2  dark:text-rose-400'
                 : 'hover:text-gray-300'
             } transition duration-200`}
           >
@@ -147,7 +147,7 @@ const Navbar = () => {
             onClick={closeMenu}
             className={`block ${
               location.pathname === '/calender'
-                ? 'text-gray-700 font-semibold border-l-2 border-gray-500 px-2'
+                ? 'text-gray-700 font-semibold border-l-2 border-gray-500 px-2  dark:text-rose-400'
                 : 'hover:text-gray-300'
             } transition duration-200`}
           >
@@ -158,7 +158,7 @@ const Navbar = () => {
             onClick={closeMenu}
             className={`block ${
               location.pathname === '/settings'
-                ? 'text-gray-700 font-semibold border-l-2 border-gray-500 px-2'
+                ? 'text-gray-700 font-semibold border-l-2 border-gray-500 px-2  dark:text-rose-400'
                 : 'hover:text-gray-300'
             } transition duration-200`}
           >

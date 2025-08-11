@@ -39,11 +39,11 @@ const ScheduleTable = ({ userId }) => {
     }
   };
 
-  if (loading) return <p className="text-center mt-8">Loading schedule...</p>;
-  if (!schedule) return <p className="text-center mt-8">No schedule found.</p>;
+  if (loading) return <p className="text-center mt-60 text-xl">Loading schedule...</p>;
+  if (!schedule) return <p className="text-center mt-60 text-8xl">No schedule found.</p>;
 
   return (
-    <div className="max-w-4xl mx-auto mt-20 p-4 bg-white dark:bg-gray-900 rounded-lg shadow-md">
+    <div className=" mx-auto px-10 py-20 dark:bg-gray-900 rounded-lg shadow-md">
       {daysOfWeek.map(day => (
         <section key={day} className="mb-8">
           <h2 className="text-2xl font-semibold mb-4 border-b-2 border-blue-500 dark:border-blue-400 pb-1 text-gray-800 dark:text-gray-200">

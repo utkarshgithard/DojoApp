@@ -62,41 +62,41 @@ function WeeklyScheduleSetup() {
   };
 
   const handleSubmit = async (e) => {
-  e.preventDefault();
+    e.preventDefault();
 
-  const formattedSchedule = {};
-  for (const day of weekdays) {
-    const validClasses = schedule[day]
-      .filter(cls => cls.subject.trim() !== '')
-      .map(cls => ({
-        subjectName: cls.subject.trim(),
-        time: `${cls.startHour.toString().padStart(2, '0')}:${cls.startMinute} ${cls.startMeridiem} - ${cls.endHour.toString().padStart(2, '0')}:${cls.endMinute} ${cls.endMeridiem}`
-      }));
+    const formattedSchedule = {};
+    for (const day of weekdays) {
+      const validClasses = schedule[day]
+        .filter(cls => cls.subject.trim() !== '')
+        .map(cls => ({
+          subjectName: cls.subject.trim(),
+          time: `${cls.startHour.toString().padStart(2, '0')}:${cls.startMinute} ${cls.startMeridiem} - ${cls.endHour.toString().padStart(2, '0')}:${cls.endMinute} ${cls.endMeridiem}`
+        }));
 
-    if (validClasses.length > 0) {
-      if (!formattedSchedule[day]) {
-        formattedSchedule[day] = [];
+      if (validClasses.length > 0) {
+        if (!formattedSchedule[day]) {
+          formattedSchedule[day] = [];
+        }
+        formattedSchedule[day].push(...validClasses);
       }
-      formattedSchedule[day].push(...validClasses);
     }
-  }
 
-  try {
-    await API.post('/schedule', { weeklySchedule: formattedSchedule }); // Use 'weeklySchedule'
-    alert('✅ Schedule saved (subjects inserted)!');
-  } catch (err) {
-    alert('❌ Failed to save schedule.');
-    console.error(err);
-  }
-};
+    try {
+      await API.post('/schedule', { weeklySchedule: formattedSchedule }); // Use 'weeklySchedule'
+      alert('✅ Schedule saved (subjects inserted)!');
+    } catch (err) {
+      alert('❌ Failed to save schedule.');
+      console.error(err);
+    }
+  };
 
 
   return (
-    <div className={`relative mt-[50px] min-h-screen transition duration-300 ${darkMode ? 'bg-gray-900 text-white' : 'bg-gray-100 text-black'}`}>
+    <div className={`relative py-20 px-10 min-h-screen transition duration-300  ${darkMode ? 'dark bg-gray-800 text-white' : 'bg-white text-black'}`}>
       <div className="absolute inset-0 bg-opacity-10 backdrop-blur-sm"></div>
 
       <div className="relative z-10 max-w-5xl mx-auto p-6">
-        <h1 className="text-3xl font-bold text-center text-blue-700 dark:text-blue-400 mb-6">
+        <h1 className="text-3xl font-bold text-center  mb-6">
           Set Schedule
         </h1>
 
@@ -104,23 +104,27 @@ function WeeklyScheduleSetup() {
           {weekdays.map((day) => (
             <div
               key={day}
-              className={`p-4 rounded-xl border ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-blue-100 shadow'}`}
+              className={`p-4 rounded-xl border-2 border-gray-400 text-md`}
             >
-              <h3 className="capitalize font-semibold text-blue-700 dark:text-blue-300 mb-3">{day}</h3>
+              <div className='flex justify-center'>
+                <h3 className="capitalize font-semibold text-2xl
+              mb-3">{day}</h3>
+              </div>
+
 
               {schedule[day].map((item, idx) => (
-                <div key={idx} className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4 items-center">
+                <div key={idx} className="grid justify-center grid-cols-1 md:grid-cols-3 gap-4 mb-4 items-center ">
                   {/* Subject */}
                   <input
                     type="text"
                     placeholder="Subject name"
                     value={item.subject}
                     onChange={(e) => handleChange(day, idx, 'subject', e.target.value)}
-                    className={`p-2 rounded border w-full ${darkMode ? 'bg-gray-700 text-white border-gray-600' : ''}`}
+                    className={`p-2 rounded border-2  border-gray-400 w-full ${darkMode ? 'bg-gray-700 text-white border-gray-600' : ''}`}
                   />
 
                   {/* Start Time */}
-                  <div className="flex gap-1">
+                  <div className="flex gap-2">
                     <select
                       value={item.startHour}
                       onChange={(e) => handleChange(day, idx, 'startHour', e.target.value)}
@@ -145,7 +149,7 @@ function WeeklyScheduleSetup() {
                   </div>
 
                   {/* End Time */}
-                  <div className="flex gap-1">
+                  <div className="flex gap-2">
                     <select
                       value={item.endHour}
                       onChange={(e) => handleChange(day, idx, 'endHour', e.target.value)}
@@ -176,9 +180,9 @@ function WeeklyScheduleSetup() {
                 <button
                   type="button"
                   onClick={() => addClass(day)}
-                  className="text-sm text-blue-600 dark:text-blue-300 hover:underline"
+                  className="text-md  dark:text-blue-300 hover:text-gray-600"
                 >
-                  ➕ Add Another Class
+                   Add Another Class
                 </button>
                 {schedule[day].length > 1 && (
                   <button

@@ -76,7 +76,7 @@ const Dashboard = () => {
   };
 
   return (
-    <div className={`p-4 min-h-screen transition-colors duration-300 ${darkMode ? 'dark bg-black text-white' : 'bg-white text-black'} mt-14`}>
+    <div className={`py-20 px-10 min-h-screen mx-auto  transition-colors duration-300 ${darkMode ? 'dark bg-gray-800 text-white' : 'bg-white text-black'} `}>
       <div className="text-2xl font-bold mb-6">Dashboard</div>
 
       {/* Date Picker */}
