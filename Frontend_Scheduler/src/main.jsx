@@ -5,12 +5,16 @@ import { DarkModeProvider } from './context/DarkModeContext';
 
 import App from './App.jsx'
 import AuthProvider from './context/authContext.jsx'
+import { AttendanceProvider } from './context/AttendanceContext.jsx';
 createRoot(document.getElementById('root')).render(
   <BrowserRouter>
-    <DarkModeProvider>
-      <AuthProvider>
-        <App />
-      </AuthProvider>
-    </DarkModeProvider>
+    <AttendanceProvider>
+      <DarkModeProvider>
+        <AuthProvider>
+          <App />
+        </AuthProvider>
+      </DarkModeProvider>
+    </AttendanceProvider>
+
   </BrowserRouter>,
 )

@@ -35,27 +35,47 @@ scheduleRouter.post('/', verifyToken, async (req, res) => {
 
     // Insert subjects and merge into schedule
     for (const day in weeklySchedule) {
-      const subjects = weeklySchedule[day];
-      const subjectIds = [];
+  const subjects = weeklySchedule[day];
+  const subjectIds = [];
 
-      for (const subject of subjects) {
-        const newSubject = new Subject({
-          name: subject.subjectName,   // Fixed here
-          time: subject.time,
-          day: [day],
-          userId,
-        });
-        await newSubject.save();
-        subjectIds.push(newSubject._id);
+  for (const subject of subjects) {
+
+     const normalizedName = subject.subjectName.trim().toUpperCase();
+    // Check if subject already exists for user with same name and time
+    let existingSubject = await Subject.findOne({
+      userId,
+      name: normalizedName,
+      time: subject.time,
+    });
+
+    if (existingSubject) {
+      // Add the day if not already included
+      if (!existingSubject.day.includes(day)) {
+        existingSubject.day.push(day);
+        await existingSubject.save();
       }
-
-      // Initialize the day if not already
-      if (!existingSchedule.schedule[day]) {
-        existingSchedule.schedule[day] = [];
-      }
-
-      existingSchedule.schedule[day].push(...subjectIds);
+      subjectIds.push(existingSubject._id);
+    } else {
+      // Create new subject if doesn't exist
+      const newSubject = new Subject({
+        name: normalizedName,
+        time: subject.time,
+        day: [day],
+        userId,
+      });
+      await newSubject.save();
+      subjectIds.push(newSubject._id);
     }
+  }
+
+  // Initialize the day if not already
+  if (!existingSchedule.schedule[day]) {
+    existingSchedule.schedule[day] = [];
+  }
+
+  existingSchedule.schedule[day].push(...subjectIds);
+}
+
 
 
     await existingSchedule.save();

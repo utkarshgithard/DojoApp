@@ -57,4 +57,50 @@ subjectRouter.get('/', verifyToken, async (req, res) => {
   }
 });
 
+subjectRouter.get('/stats', verifyToken, async (req, res) => {
+  try {
+    const userId = req.userId;
+
+    // Get all subjects currently existing for the user
+    const existingSubjects = await Subject.find({ userId }).select('name');
+    const subjectSet = new Set(
+      existingSubjects.map(s => s.name.trim().toUpperCase())
+    );
+    // Fetch all marked subjects for this user
+    // Fetch all marked subjects for this user
+    const records = await MarkedSubject.find({ userId });
+
+    const grouped = {};
+
+    records.forEach(record => {
+      record.subjects.forEach(s => {
+        const subjectName = s.subject.trim().toUpperCase(); // normalize
+
+        // Skip if this subject no longer exists
+        if (!subjectSet.has(subjectName)) return;
+
+        if (!grouped[subjectName]) {
+          grouped[subjectName] = {
+            subject: subjectName,
+            attended: 0,
+            missed: 0,
+            cancelled: 0
+          };
+        }
+
+        if (s.status === 'attended') grouped[subjectName].attended++;
+        if (s.status === 'missed') grouped[subjectName].missed++;
+        if (s.status === 'cancelled') grouped[subjectName].cancelled++;
+      });
+    });
+    res.json({ success: true, data: Object.values(grouped) });
+  }
+  catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+
+
 export default subjectRouter;
