@@ -170,7 +170,7 @@ export const AttendanceProvider = ({ children }) => {
             fetchSubjects,
             fetchSummary,
             handleAttendance, sessions, invites,
-      createSession, respondInvite, refreshSessions,loadExistingInvites,
+      createSession, respondInvite, refreshSessions,loadExistingInvites,setInvites
 
         }}>
             {children}
