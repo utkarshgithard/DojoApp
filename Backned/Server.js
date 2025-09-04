@@ -79,16 +79,16 @@ io.on('connection', async (socket) => {
     socket.on('sendInvite', async (inviteData) => {
       console.log("Sending invite from creator:", user.name)
       const { toUserId, sessionDetails } = inviteData;
-      
+
       try {
         // Ensure the session creator is marked as accepted participant
         const sessionId = sessionDetails._id;
         const session = await StudySession.findById(sessionId);
-        
+
         if (session) {
           // Check if creator is already in participants, if not add them
           const creatorExists = session.participants.some(p => String(p.user) === String(user._id));
-          
+
           if (!creatorExists) {
             session.participants.push({
               user: user._id,
@@ -102,8 +102,8 @@ io.on('connection', async (socket) => {
             // If creator exists but not accepted, make them accepted
             await StudySession.updateOne(
               { _id: sessionId, 'participants.user': user._id },
-              { 
-                $set: { 
+              {
+                $set: {
                   'participants.$.status': 'accepted',
                   'participants.$.respondedAt': new Date()
                 }
@@ -112,14 +112,14 @@ io.on('connection', async (socket) => {
             console.log(`✅ Updated creator ${user.name} status to accepted`);
           }
         }
-        
+
         // Send invite to the recipient
         io.to(toUserId).emit('receiveInvite', {
           from: user._id,
           name: user.name,
           sessionDetails
         });
-        
+
       } catch (error) {
         console.error('❌ Error processing invite:', error);
       }
@@ -157,14 +157,14 @@ io.on('connection', async (socket) => {
 
         // 5. Send session ready notification to all participants
         participantIds.forEach(uid => {
-          io.to(uid).emit('sessionScheduled', { 
-            sessionId, 
+          io.to(uid).emit('sessionScheduled', {
+            sessionId,
             roomId: sessionRoom,
             sessionDetails: session,
             message: 'Session is scheduled! You can now join.'
           });
         });
-        
+
         // 6. Notify inviter specifically about acceptance
         io.to(String(session.creator)).emit('inviteAccepted', {
           by: String(user._id),
@@ -186,34 +186,34 @@ io.on('connection', async (socket) => {
     socket.on('joinSession', async ({ sessionId }) => {
       try {
         console.log(`🔗 User ${user.name} attempting to join session ${sessionId}`);
-        
+
         // 1. Verify user is accepted participant
         const verification = await isAcceptedParticipant(sessionId, user._id);
         if (!verification.ok) {
-          return socket.emit('joinError', { 
-            message: verification.reason === 'not_found' ? 'Session not found' : 'Not authorized to join this session' 
+          return socket.emit('joinError', {
+            message: verification.reason === 'not_found' ? 'Session not found' : 'Not authorized to join this session'
           });
         }
 
         // 2. Check if session is in correct status
         if (verification.status !== 'scheduled' && verification.status !== 'in_progress') {
-          return socket.emit('joinError', { 
-            message: 'Session is not available for joining' 
+          return socket.emit('joinError', {
+            message: 'Session is not available for joining'
           });
         }
 
         const sessionRoom = `session_${sessionId}`;
-        
+
         // 3. Join the socket room
         socket.join(sessionRoom);
-        
+
         // 4. Update session status to in_progress if it's the first person joining
         const session = await StudySession.findById(sessionId);
         if (session.status === 'scheduled') {
           session.status = 'in_progress';
           session.actualStartTime = new Date();
           await session.save();
-          
+
           // Notify all participants that session has started
           io.to(sessionRoom).emit('sessionStarted', {
             sessionId,
@@ -230,15 +230,18 @@ io.on('connection', async (socket) => {
             sessionDetails: session
           });
         }
-        
+
         const activeSession = activeSessions.get(sessionId);
         activeSession.participants.add(String(user._id));
 
         // 6. Notify other participants that user has joined
+        // 6. Notify other participants that user has joined
         socket.to(sessionRoom).emit('userJoinedSession', {
+          sessionId: sessionId,
           userId: String(user._id),
-          name: user.name,
-          participantCount: activeSession.participants.size
+          userName: user.name, // Changed from 'name' to 'userName' to match frontend
+          participantCount: activeSession.participants.size,
+          sessionDetails: session // Include session details for frontend updates
         });
 
         // 7. Send confirmation to the joining user
@@ -271,25 +274,27 @@ io.on('connection', async (socket) => {
       try {
         const sessionRoom = `session_${sessionId}`;
         socket.leave(sessionRoom);
-        
+
         // Remove from active participants
         if (activeSessions.has(sessionId)) {
           const activeSession = activeSessions.get(sessionId);
           activeSession.participants.delete(String(user._id));
-          
+
           // Notify others that user left
-          io.to(sessionRoom).emit("userLeftSession", { 
-            userId: String(user._id), 
-            name: user.name,
-            participantCount: activeSession.participants.size
+          io.to(sessionRoom).emit("userLeftSession", {
+            sessionId: sessionId,
+            userId: String(user._id),
+            userName: user.name, // Changed from 'name' to 'userName' to match frontend
+            participantCount: activeSession.participants.size,
+            sessionDetails: activeSession.sessionDetails // Include session details
           });
 
           // If no participants left, clean up
           if (activeSession.participants.size === 0) {
             activeSessions.delete(sessionId);
-            
+
             // Optionally update session status back to scheduled if all leave
-            await StudySession.findByIdAndUpdate(sessionId, { 
+            await StudySession.findByIdAndUpdate(sessionId, {
               status: 'scheduled',
               $unset: { actualStartTime: 1 }
             });
@@ -298,7 +303,7 @@ io.on('connection', async (socket) => {
 
         socket.emit('sessionLeft', { sessionId });
         console.log(`👋 User ${user.name} left session ${sessionId}`);
-        
+
       } catch (error) {
         console.error('❌ Error leaving session:', error);
       }
@@ -309,10 +314,10 @@ io.on('connection', async (socket) => {
      */
     socket.on("sendChatMessage", async ({ sessionId, text }) => {
       if (!text || !text.trim()) return;
-      
+
       console.log("<----------SessionId-----------> ")
       console.log(sessionId)
-      
+
       try {
         // 1. Verify user is accepted participant and session is in progress
         const verification = await isAcceptedParticipant(sessionId, user._id);
@@ -428,15 +433,15 @@ io.on('connection', async (socket) => {
     // Handle disconnect - clean up active sessions
     socket.on('disconnect', () => {
       console.log(`❌ User disconnected: ${user.name}`);
-      
+
       // Clean up from all active sessions
       for (const [sessionId, activeSession] of activeSessions.entries()) {
         if (activeSession.participants.has(String(user._id))) {
           activeSession.participants.delete(String(user._id));
-          
+
           // Notify others in the session
-          io.to(`session_${sessionId}`).emit("userLeftSession", { 
-            userId: String(user._id), 
+          io.to(`session_${sessionId}`).emit("userLeftSession", {
+            userId: String(user._id),
             name: user.name,
             participantCount: activeSession.participants.size,
             reason: 'disconnected'

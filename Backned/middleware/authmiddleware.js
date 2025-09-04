@@ -20,7 +20,7 @@ export const verifyToken = async(req, res, next) => {
     req.user = user;
     next(); // proceed to the protected route
   } catch (err) {
-    return res.status(401).json({ error: 'Invalid or expired token' });
+    return res.status(401).json({ error: 'Invalid or expired token', success:false});
   }
 };
 

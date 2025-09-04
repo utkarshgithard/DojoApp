@@ -8,7 +8,6 @@ export default function SessionChat({ socket, session, isOpen, onClose }) {
   const typingTimeouts = useRef({});
 
   const sessionId = session?._id;
- 
 
   // auto-scroll
   const scrollToBottom = () => {
@@ -16,45 +15,57 @@ export default function SessionChat({ socket, session, isOpen, onClose }) {
     if (el) el.scrollTop = el.scrollHeight;
   };
 
-  // join/leave the room with lifecycle
+  // Load messages and handle socket events
   useEffect(() => {
     if (!socket || !isOpen || !sessionId) return;
-    socket.emit("joinSessionRoom", { room: `session_${sessionId}`  });
 
-    const onHistory = ({ sessionId: id, messages: msgs }) => {
-      if (id === sessionId) {
-        setMessages(msgs);
+    // Request messages from server when opening chat
+    socket.emit('getSessionMessages', { sessionId });
+
+    const onHistory = (data) => {
+      if (data.sessionId === sessionId) {
+        setMessages(data.messages || []);
         setTimeout(scrollToBottom, 0);
       }
     };
+
     const onNew = (msg) => {
-      console.log(msg)
+      console.log("New message received:", msg);
       setMessages(prev => [...prev, msg]);
       setTimeout(scrollToBottom, 0);
     };
-    const onTyping = ({ userId, name, isTyping }) => {
-      setTypingUsers(prev => ({ ...prev, [userId]: isTyping ? name : undefined }));
-      // clear typing indicator after 3s of inactivity per user
-      clearTimeout(typingTimeouts.current[userId]);
-      if (isTyping) {
-        typingTimeouts.current[userId] = setTimeout(() => {
-          setTypingUsers(prev => ({ ...prev, [userId]: undefined }));
+
+    const onTyping = (data) => {
+      setTypingUsers(prev => ({ 
+        ...prev, 
+        [data.userId]: data.isTyping ? data.name : undefined 
+      }));
+      
+      // Clear typing indicator after 3s of inactivity per user
+      clearTimeout(typingTimeouts.current[data.userId]);
+      if (data.isTyping) {
+        typingTimeouts.current[data.userId] = setTimeout(() => {
+          setTypingUsers(prev => ({ ...prev, [data.userId]: undefined }));
         }, 3000);
       }
     };
+
     const onError = (e) => console.warn("chatError:", e?.msg);
 
+    // Listen for events
     socket.on("sessionMessages", onHistory);
     socket.on("newChatMessage", onNew);
     socket.on("userTyping", onTyping);
     socket.on("chatError", onError);
 
     return () => {
-      socket.emit("leaveSessionRoom", { sessionId });
+      // Clean up event listeners
       socket.off("sessionMessages", onHistory);
       socket.off("newChatMessage", onNew);
       socket.off("userTyping", onTyping);
       socket.off("chatError", onError);
+      
+      // Clear all typing timeouts
       Object.values(typingTimeouts.current).forEach(clearTimeout);
     };
   }, [socket, isOpen, sessionId]);
@@ -62,7 +73,7 @@ export default function SessionChat({ socket, session, isOpen, onClose }) {
   const disabled = session?.status !== "in_progress";
 
   const send = () => {
-    if (!text.trim()) return;
+    if (!text.trim() || disabled) return;
     socket.emit("sendChatMessage", { sessionId, text });
     setText("");
     socket.emit("typing", { sessionId, isTyping: false });
@@ -102,12 +113,20 @@ export default function SessionChat({ socket, session, isOpen, onClose }) {
         </div>
 
         <div ref={listRef} className="h-72 overflow-y-auto rounded border dark:border-gray-700 p-2 bg-gray-50 dark:bg-gray-900">
-          {messages.map(m => (
-            <div key={m._id || m.ts} className="mb-2">
-              <div className="text-xs text-gray-500">{m.name} • {new Date(m.ts).toLocaleTimeString()}</div>
-              <div className="text-sm">{m.text}</div>
+          {messages.length === 0 ? (
+            <div className="text-center text-gray-500 py-4">
+              No messages yet. Start the conversation!
             </div>
-          ))}
+          ) : (
+            messages.map((m, index) => (
+              <div key={m._id || m.ts || index} className="mb-2">
+                <div className="text-xs text-gray-500">
+                  {m.name} • {new Date(m.ts).toLocaleTimeString()}
+                </div>
+                <div className="text-sm">{m.text}</div>
+              </div>
+            ))
+          )}
         </div>
 
         {/* typing indicator */}

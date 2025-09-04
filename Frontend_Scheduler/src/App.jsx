@@ -2,7 +2,7 @@ import { Routes, Route,useLocation } from "react-router-dom";
 import LandingPage from './pages/LandingPage';
 import Dashboard from './pages/Dashboard';
 import Schedule from './pages/Schedule';
-import Settings from './pages/Settings';
+import Settings from './pages/Settings.jsx';
 import Navbar from './components/Navbar';
 // import AuthPage from "./pages/AuthPage";
 import WeeklyScheduleSetup from "./pages/WeeklyScheduleSetup";

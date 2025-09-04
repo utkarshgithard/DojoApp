@@ -1,12 +1,14 @@
 import StudySession from "../models/StudySession.js";
+import { User } from "../models/User.js";
+
 
 export async function createSession(req, res) {
     const io = req.app.get("io");
     const { subject, date, time, duration, note = "", visibility = "private", invitedFriends = [] } = req.body;
     console.log("Creating session with invited friends:", invitedFriends);
-    
+
     const startAt = new Date(`${date}T${time}`);
-    
+
     // Prepare participants array - creator is automatically accepted
     const participants = [
         {
@@ -17,9 +19,14 @@ export async function createSession(req, res) {
         }
     ];
 
+    // Resolve friendCodes → userIds
+    const invitedUsers = await User.find({ friendCode: { $in: invitedFriends } }).select("_id name");
+    const invitedUserIds = invitedUsers.map(u => u._id);
+
+
     // Add invited friends with pending status
-    if (invitedFriends && invitedFriends.length > 0) {
-        invitedFriends.forEach(friendId => {
+    if (invitedUserIds && invitedUserIds.length > 0) {
+        invitedUserIds.forEach(friendId => {
             participants.push({
                 user: friendId,
                 status: 'invited', // Changed from default to 'invited'
@@ -36,16 +43,16 @@ export async function createSession(req, res) {
         note,
         visibility,
         participants,
-        status: invitedFriends.length > 0 ? 'pending' : 'scheduled', // If no invites, mark as scheduled
+        status: invitedUserIds.length > 0 ? 'pending' : 'scheduled', // If no invites, mark as scheduled
         messages: [] // Initialize messages array
     });
-    
+
     console.log("Created session:", doc);
     console.log("----consoling from controller------");
 
     // Emit realtime to invited users
-    if (invitedFriends.length > 0) {
-        invitedFriends.forEach(friendId => {
+    if (invitedUserIds.length > 0) {
+        invitedUserIds.forEach(friendId => {
             console.log(`📤 Emitting invite to user: ${friendId}`);
             const inviteData = {
                 _id: doc._id, // Important: include the session ID
@@ -81,10 +88,10 @@ export async function getMySessions(req, res) {
                 { "participants.user": req.userId },
             ],
         })
-        .populate('creator', 'name email')
-        .populate('participants.user', 'name email')
-        .sort({ startAt: 1 });
-        
+            .populate('creator', 'name email')
+            .populate('participants.user', 'name email')
+            .sort({ startAt: 1 });
+
         res.json(sessions);
     } catch (error) {
         console.error('Error fetching sessions:', error);
@@ -99,8 +106,8 @@ export async function getMyInvites(req, res) {
             "participants.status": "invited", // Changed from "invited" to match what we set
             status: "pending"
         })
-        .populate("creator", "name email")
-        .populate('participants.user', 'name email');
+            .populate("creator", "name email")
+            .populate('participants.user', 'name email');
 
         // Format for frontend compatibility
         const formattedInvites = invites.map(session => ({
@@ -120,7 +127,7 @@ export async function respondInvite(req, res) {
     const io = req.app.get("io");
     const { id } = req.params;                    // session id
     const { action } = req.body;                  // 'accept' | 'decline'
-    
+
     try {
         const newStatus = action === "accept" ? "accepted" : "declined";
 
@@ -142,13 +149,13 @@ export async function respondInvite(req, res) {
         // If accepted, check if we should mark session as scheduled
         if (action === "accept") {
             // Check if all participants have responded
-            const allResponded = session.participants.every(p => 
+            const allResponded = session.participants.every(p =>
                 p.status === "accepted" || p.status === "declined"
             );
-            
+
             // If at least one accepted (including creator who's auto-accepted), mark as scheduled
             const hasAccepted = session.participants.some(p => p.status === "accepted");
-            
+
             if (hasAccepted && session.status === "pending") {
                 session.status = "scheduled";
                 await session.save();
@@ -160,8 +167,8 @@ export async function respondInvite(req, res) {
                 .map(p => String(p.user._id || p.user));
 
             participantIds.forEach(uid => {
-                io.to(uid).emit('sessionScheduled', { 
-                    sessionId: session._id, 
+                io.to(uid).emit('sessionScheduled', {
+                    sessionId: session._id,
                     roomId: `session_${session._id}`,
                     sessionDetails: session,
                     message: 'Session is scheduled! You can now join.'
@@ -206,7 +213,7 @@ export async function cancelSession(req, res) {
             { $set: { status: "cancelled" } },
             { new: true }
         );
-        
+
         if (!session) {
             return res.status(404).json({ message: "Session not found or not authorized" });
         }
@@ -216,9 +223,9 @@ export async function cancelSession(req, res) {
             String(session.creator),
             ...session.participants.map(p => String(p.user))
         ];
-        
+
         notifyUsers.forEach(uid => {
-            io.to(uid).emit("session:cancelled", { 
+            io.to(uid).emit("session:cancelled", {
                 sessionId: id,
                 sessionDetails: session
             });
@@ -245,14 +252,14 @@ export async function joinSession(req, res) {
         }).populate('participants.user', 'name email');
 
         if (!session) {
-            return res.status(404).json({ 
-                message: "Session not found or you're not authorized to join" 
+            return res.status(404).json({
+                message: "Session not found or you're not authorized to join"
             });
         }
 
         if (session.status !== 'scheduled' && session.status !== 'in_progress') {
-            return res.status(400).json({ 
-                message: "Session is not available for joining" 
+            return res.status(400).json({
+                message: "Session is not available for joining"
             });
         }
 
@@ -276,8 +283,8 @@ export async function joinSession(req, res) {
             });
         });
 
-        res.json({ 
-            ok: true, 
+        res.json({
+            ok: true,
             session,
             message: 'Successfully joined session'
         });

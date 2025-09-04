@@ -6,6 +6,8 @@ const UserSchema = new mongoose.Schema({
   password: { type: String, required: true },
   createdAt: { type: Date, default: Date.now },
   verified: { type: Boolean, default: false },
+  friendCode: { type: String, unique: true }, // 6-digit unique code
+  friends: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
   verificationToken: String
 });
 
