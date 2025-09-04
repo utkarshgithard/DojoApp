@@ -2,7 +2,7 @@
 import express from 'express';
 import Schedule from '../models/schedule.js';
 import Subject from '../models/Subject.js';
-import { verifyToken } from '../middleware/authMiddleware.js';
+import { verifyToken } from '../middleware/authmiddleware.js';
 
 const scheduleRouter = express.Router();
 

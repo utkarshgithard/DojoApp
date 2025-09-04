@@ -5,7 +5,7 @@ import dotenv from 'dotenv';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import { verifySocketToken } from './middleware/authmiddleware.js';
-import { User } from './models/User.js';
+import { User } from './models/user.js';
 import StudySession from './models/StudySession.js';
 // Routes
 import userRouter from './routes/authRoutes.js';

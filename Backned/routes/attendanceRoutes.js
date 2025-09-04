@@ -1,7 +1,7 @@
 // routes/attendanceRoutes.js
 import express from 'express';
 import MarkedSubject from '../models/MarkedSubject.js';
-import { verifyToken } from '../middleware/authMiddleware.js';
+import { verifyToken } from '../middleware/authmiddleware.js';
 const attendanceRouter = express.Router();
 
 // POST: Mark attendance

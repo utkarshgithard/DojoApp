@@ -2,7 +2,7 @@
 import express from 'express';
 import Subject from '../models/Subject.js';
 import MarkedSubject from '../models/MarkedSubject.js'; // assuming this is your attendance model
-import { verifyToken } from '../middleware/authMiddleware.js';
+import { verifyToken } from '../middleware/authmiddleware.js';
 
 const subjectRouter = express.Router();
 

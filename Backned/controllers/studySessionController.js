@@ -1,5 +1,5 @@
 import StudySession from "../models/StudySession.js";
-import { User } from "../models/User.js";
+import { User } from "../models/user.js";
 
 
 export async function createSession(req, res) {

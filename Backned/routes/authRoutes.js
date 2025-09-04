@@ -1,9 +1,9 @@
 import express from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { User } from '../models/User.js';
+import { User } from '../models/user.js';
 import sendVerificationEmail from '../utils/sendVerificationEmail.js'
-import { verifyToken } from '../middleware/authMiddleware.js';
+import { verifyToken } from '../middleware/authmiddleware.js';
 import  generate6CharCode  from '../utils/generateCode.js';
 
 const userRouter = express.Router();
