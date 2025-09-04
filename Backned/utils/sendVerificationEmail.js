@@ -4,11 +4,11 @@ import dotenv from 'dotenv'
 
 dotenv.config();
 
-const FRONTEND_URL = (process.env.FRONTEND_URL || 'https://dojoapp-8.onrender.com').replace(/\/$/, ''); 
+const FRONTEND_URL = process.env.FRONTEND_URL || 'https://dojoapp-8.onrender.com'
 
 
 const sendVerificationEmail = async (userEmail, token) => {
-  const verificationLink = `${FRONTEND_URL}/verify-email/${token}`;
+  const verificationLink = `${FRONTEND_URL}/auth/verify-email/${token}`;
   console.log(process.env.SENDER_EMAIL);
   await transporter.sendMail({
     from: process.env.SENDER_EMAIL, // Use verified sender or Brevo domain
