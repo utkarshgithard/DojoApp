@@ -1,4 +1,4 @@
-import { verifySocketToken } from "../middleware/authMiddleware";
+import { verifySocketToken } from "../middleware/authmiddleware";
 
 export default function initSocket(io) {
   io.use((socket, next) => {

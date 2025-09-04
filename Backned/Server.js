@@ -44,7 +44,7 @@ const server = createServer(app);
 // Init Socket.io
 const io = new Server(server, {
   cors: {
-    origin: 'https://dojoapp-7.onrender.com/'||process.env.FRONTEND_URL,
+    origin: process.env.FRONTEND_URL||'https://dojoapp-7.onrender.com/',
     methods: ['GET', 'POST'],
   },
 });
