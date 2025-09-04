@@ -4,7 +4,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
-import { verifySocketToken } from './middleware/authMiddleware';
+import { verifySocketToken } from './middleware/authmiddleware';
 import { User } from './models/User.js';
 import StudySession from './models/StudySession.js';
 // Routes
