@@ -26,6 +26,9 @@ app.use('/api/subject', subjectRouter);
 app.use('/api/schedule', scheduleRouter);
 app.use('/api/attendance', attendanceRouter);
 app.use('/api/study-session', studySessionRouter);
+app.get('/',(req,res)=>{
+    res.send("Api Working.")
+})
 
 // MongoDB connection
 mongoose.connect(process.env.MONGO_URI, {
