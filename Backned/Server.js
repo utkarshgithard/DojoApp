@@ -44,7 +44,7 @@ const server = createServer(app);
 // Init Socket.io
 const io = new Server(server, {
   cors: {
-    origin: process.env.FRONTEND_URL||'https://dojoapp-8.onrender.com/',
+    origin: process.env.FRONTEND_URL||'https://dojo-app-ep5l.vercel.app/',
     methods: ['GET', 'POST'],
   },
 });
