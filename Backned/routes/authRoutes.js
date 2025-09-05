@@ -4,11 +4,22 @@ import jwt from 'jsonwebtoken';
 import { User } from '../models/user.js';
 import sendVerificationEmail from '../utils/sendVerificationEmail.js'
 import { verifyToken } from '../middleware/authmiddleware.js';
-import  generate6CharCode  from '../utils/generateCode.js';
+import generate6CharCode from '../utils/generateCode.js';
 
 const userRouter = express.Router();
 
 // Register Route
+
+userRouter.get('/userDetails', verifyToken, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId)
+    res.json({ user:user,success:true,message:"User Found" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to fetch user." });
+  }
+})
+
 userRouter.post('/register', async (req, res) => {
   const { name, email, password } = req.body;
 
@@ -60,7 +71,7 @@ userRouter.get("/friends-List", verifyToken, async (req, res) => {
   }
 });
 
-userRouter.post("/add",verifyToken, async (req, res) => {
+userRouter.post("/add", verifyToken, async (req, res) => {
   try {
     const { friendCode } = req.body;
     const userId = req.userId; // logged-in user
