@@ -2,7 +2,9 @@ import React, { useState } from 'react';
 import { io } from 'socket.io-client';
 import API from '../api/axios'; // your axios instance
 
-const socket = io('http://localhost:5000', {
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'https://dojoapp-8.onrender.com'
+
+const socket = io(`${BACKEND_URL}`, {
     auth: { token: localStorage.getItem('token') }
 });
 
