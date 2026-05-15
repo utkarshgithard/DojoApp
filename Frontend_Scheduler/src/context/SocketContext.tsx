@@ -2,26 +2,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { io, Socket } from 'socket.io-client';
 import Swal from 'sweetalert2';
-
-// --- Types ---
-
-interface Notification {
-  id: number;
-  type: 'join' | 'leave';
-  userName: string;
-  timestamp: Date;
-}
-
-interface SocketContextType {
-  socket: Socket | null;
-  joinedSessions: Set<string>;
-  setJoinedSessions: React.Dispatch<React.SetStateAction<Set<string>>>;
-  sessions: any[];
-  setSessions: React.Dispatch<React.SetStateAction<any[]>>;
-  userNotifications: Notification[];
-  clearNotification: (id: number) => void;
-  clearAllNotifications: () => void;
-}
+import { Notification, SocketContextType } from '@/lib/types';
 
 const SocketContext = createContext<SocketContextType | null>(null);
 

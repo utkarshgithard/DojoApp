@@ -26,7 +26,7 @@ const Navbar = () => {
 
   // Scroll detection logic
   useEffect(() => {
-    let timeout;
+    let timeout: NodeJS.Timeout;
     const controlNavbar = () => {
       if (window.scrollY < lastScrollY) {
         setShowNavbar(true); // scrolling up → show

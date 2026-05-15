@@ -4,16 +4,9 @@ import React, { useEffect, useState, useRef } from "react";
 import { Doughnut } from "react-chartjs-2";
 import { Chart as ChartJS, ArcElement, Tooltip, Legend } from "chart.js";
 import API from "@/lib/axios";
+import { SubjectStats as SubjectStat } from "@/lib/types";
 
 ChartJS.register(ArcElement, Tooltip, Legend);
-
-// Shape of each stat item returned by /subject/stats
-interface SubjectStat {
-    subject: string;
-    attended: number;
-    missed: number;
-    cancelled: number;
-}
 
 const SubjectStatsChart = () => {
     const [stats, setStats] = useState<SubjectStat[]>([]);

@@ -1,35 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { Socket } from "socket.io-client";
-
-// --- Types ---
-
-interface Message {
-  id: string;
-  sessionId: string;
-  userId: string;
-  name: string;
-  text: string;
-  ts: string | Date;
-}
-
-interface Session {
-  id: string;
-  subject?: string;
-  status?: string;
-  startAt?: string;
-}
-
-interface TypingUsers {
-  [userId: string]: string | undefined;
-}
-
-interface SessionChatProps {
-  socket: Socket | null;
-  session: Session | null;
-  isOpen: boolean;
-  onClose: () => void;
-}
+import { Message, StudySession, TypingUsers, SessionChatProps } from "@/lib/types";
 
 export default function SessionChat({ socket, session, isOpen, onClose }: SessionChatProps) {
   const [messages, setMessages] = useState<Message[]>([]);

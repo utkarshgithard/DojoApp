@@ -1,6 +1,8 @@
 "use client";
 import { useState,useEffect } from "react";
-export default function SessionStatus({ session }: { session: any }) {
+import { StudySession } from "@/lib/types";
+
+export default function SessionStatus({ session }: { session: StudySession }) {
   const [timeLeft, setTimeLeft] = useState("");
 
   useEffect(() => {

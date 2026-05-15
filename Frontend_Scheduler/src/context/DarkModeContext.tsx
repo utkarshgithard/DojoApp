@@ -1,10 +1,6 @@
 "use client";
 import React, { createContext, useContext, useState, useEffect } from 'react';
-
-interface DarkModeContextType {
-  darkMode: boolean;
-  toggleDarkMode: () => void;
-}
+import { DarkModeContextType } from '@/lib/types';
 
 const DarkModeContext = createContext<DarkModeContextType | undefined>(undefined);
 

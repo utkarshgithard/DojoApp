@@ -11,28 +11,7 @@ import { useAuth } from '@/context/authContext'; // FIX: corrected casing to mat
 import API from '@/lib/axios';
 import SessionStatus from '@/components/SessionStatus';
 import Swal from 'sweetalert2';
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-interface Invite {
-  id: string;
-  from: string;
-  name: string;
-  subject?: string;
-  startAt?: string;
-  invitedAt?: string;
-}
-
-interface Session {
-  id: string;
-  subject: string;
-  duration: number;
-  startAt: string;
-  status: string;
-  creatorId: string;
-  participants?: Array<{ userId?: string; user?: { id: string }; status: string }>;
-}
+import { DashboardInvite as Invite, StudySession as Session } from '@/lib/types';
 
 // ---------------------------------------------------------------------------
 // Dashboard

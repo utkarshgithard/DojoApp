@@ -4,33 +4,7 @@ import API from '@/lib/axios';
 import Swal from 'sweetalert2';
 import moment from 'moment';
 import { useSocket } from "./SocketContext";
-
-// --- Types ---
-
-interface Subject {
-  id: string;
-  subject: string;
-  subjectName?: string;
-  time?: string;
-  status?: string;
-}
-
-interface AttendanceContextType {
-  date: string;
-  setDate: React.Dispatch<React.SetStateAction<string>>;
-  unmarkedSubjects: Subject[];
-  markedSubjects: Subject[];
-  fetchSubjects: (latestMarkedSubjects?: Subject[]) => Promise<void>;
-  fetchFriends: () => Promise<void>;
-  friends: any[];
-  fetchSummary: () => Promise<void>;
-  handleAttendance: (subject: Subject, status: string) => Promise<void>;
-  sessions: any[];
-  setSessions: React.Dispatch<React.SetStateAction<any[]>>;
-  invites: any[];
-  loadExistingInvites: () => Promise<void>;
-  setInvites: React.Dispatch<React.SetStateAction<any[]>>;
-}
+import { Subject, AttendanceContextType } from '@/lib/types';
 
 const Ctx = createContext<AttendanceContextType | null>(null);
 export const useAttendance = () => useContext(Ctx);

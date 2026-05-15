@@ -1,4 +1,4 @@
-export function convertTo12Hour(time) {
+export function convertTo12Hour(time: string) {
   const [hour, minute] = time.split(':');
   let h = parseInt(hour);
   const suffix = h >= 12 ? 'PM' : 'AM';

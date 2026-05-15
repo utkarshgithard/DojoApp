@@ -77,7 +77,7 @@ const CreateStudySession = ({ socket, onClose }: { socket: any, onClose: () => v
                 type="number"
                 placeholder="Duration (minutes)"
                 value={duration}
-                onChange={e => setDuration(e.target.value)}
+                onChange={e => setDuration(Number(e.target.value))}
                 className="mb-2 w-full p-2 border rounded dark:bg-gray-700 dark:text-white"
             />
             <input

@@ -1,0 +1,215 @@
+import { Socket } from "socket.io-client";
+
+// Shared TypeScript types matching the PostgreSQL/Prisma backend models
+
+export interface User {
+  id: string;
+  name: string;
+  email: string;
+  verified: boolean;
+  friendCode: string;
+  createdAt: string;
+}
+
+export interface Friend {
+  id: string;
+  name: string;
+  email: string;
+  friendCode: string;
+}
+
+export interface Subject {
+  id: string;
+  subject: string;
+  subjectName?: string;
+  name?: string; // Legacy/Compat
+  time?: string;
+  days?: string[];
+  userId?: string;
+  status?: string;
+}
+
+export interface AttendanceEntry {
+  id: string;
+  subject: string;
+  status: 'attended' | 'missed' | 'cancelled';
+}
+
+export interface AttendanceRecord {
+  id: string;
+  userId: string;
+  date: string;
+  entries: AttendanceEntry[];
+}
+
+export type ParticipantStatus = 'invited' | 'accepted' | 'declined' | 'removed' | 'joined';
+export type SessionStatus = 'pending' | 'scheduled' | 'in_progress' | 'completed' | 'cancelled' | 'expired';
+export type Visibility = 'private' | 'friends';
+
+export interface Participant {
+  id: string;
+  sessionId: string;
+  userId: string;
+  status: ParticipantStatus;
+  invitedAt: string;
+  respondedAt?: string;
+  user?: {
+    id: string;
+    name: string;
+    email: string;
+  };
+}
+
+export interface Message {
+  id: string;
+  sessionId: string;
+  userId: string;
+  name: string;
+  text: string;
+  ts: string | Date;
+  // Socket.io legacy compat
+  _id?: string;
+}
+
+export interface StudySession {
+  id: string;
+  creatorId: string;
+  subject: string;
+  startAt: string;
+  duration: number;
+  note: string;
+  visibility: Visibility;
+  status: SessionStatus | string;
+  actualStartTime?: string;
+  createdAt: string;
+  updatedAt: string;
+  creator?: {
+    id: string;
+    name: string;
+    email: string;
+  };
+  participants: Participant[];
+  messages?: Message[];
+  // Socket.io legacy compat (_id = id)
+  _id?: string;
+}
+
+export interface ScheduleDay {
+  [day: string]: Subject[];
+}
+
+export interface ScheduleData {
+  id: string;
+  userId: string;
+  schedule: ScheduleDay;
+}
+
+export interface SubjectStats {
+  subject: string;
+  attended: number;
+  missed: number;
+  cancelled: number;
+}
+
+export interface ApiResponse<T = unknown> {
+  success?: boolean;
+  message?: string;
+  error?: string;
+  data?: T;
+}
+
+// Socket event payloads
+export interface SocketInvitePayload {
+  id: string; // session ID
+  from: string;
+  name: string;
+  sessionDetails: StudySession;
+  _id?: string;
+  subject?: string;
+  startAt?: string;
+  duration?: number;
+  invitedAt?: string;
+}
+
+export interface SocketSessionScheduledPayload {
+  sessionId: string;
+  roomId: string;
+  sessionDetails: StudySession;
+  message: string;
+}
+
+export interface CreateSessionPayload {
+  subject: string;
+  date: string;
+  time: string;
+  duration: number;
+  invitedFriends: string[];
+}
+
+// --- Context Types ---
+
+export interface DarkModeContextType {
+  darkMode: boolean;
+  toggleDarkMode: () => void;
+}
+
+export interface Notification {
+  id: number;
+  type: 'join' | 'leave';
+  userName: string;
+  timestamp: Date;
+}
+
+export interface SocketContextType {
+  socket: Socket | null;
+  joinedSessions: Set<string>;
+  setJoinedSessions: React.Dispatch<React.SetStateAction<Set<string>>>;
+  sessions: any[];
+  setSessions: React.Dispatch<React.SetStateAction<any[]>>;
+  userNotifications: Notification[];
+  clearNotification: (id: number) => void;
+  clearAllNotifications: () => void;
+}
+
+export interface AttendanceContextType {
+  date: string;
+  setDate: React.Dispatch<React.SetStateAction<string>>;
+  unmarkedSubjects: Subject[];
+  markedSubjects: Subject[];
+  fetchSubjects: (latestMarkedSubjects?: Subject[]) => Promise<void>;
+  fetchFriends: () => Promise<void>;
+  friends: any[];
+  fetchSummary: () => Promise<void>;
+  handleAttendance: (subject: Subject, status: string) => Promise<void>;
+  sessions: any[];
+  setSessions: React.Dispatch<React.SetStateAction<any[]>>;
+  invites: any[];
+  loadExistingInvites: () => Promise<void>;
+  setInvites: React.Dispatch<React.SetStateAction<any[]>>;
+}
+
+// --- Component Props & Local Types ---
+
+export interface TypingUsers {
+  [userId: string]: string | undefined;
+}
+
+export interface SessionChatProps {
+  socket: Socket | null;
+  session: StudySession | Partial<StudySession> | null;
+  isOpen: boolean;
+  onClose: () => void;
+}
+
+export interface DashboardInvite {
+  id: string;
+  from: string;
+  name: string;
+  subject?: string;
+  startAt?: string;
+  invitedAt?: string;
+}
+
+export interface DashboardSession extends StudySession {
+  // Can add extra fields if needed, but mostly uses StudySession
+}
