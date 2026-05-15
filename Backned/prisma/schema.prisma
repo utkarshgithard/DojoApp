@@ -1,0 +1,167 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                String    @id @default(uuid())
+  name              String
+  email             String    @unique
+  password          String
+  verified          Boolean   @default(false)
+  friendCode        String    @unique
+  verificationToken String?
+  bio               String?
+  department        String?
+  createdAt         DateTime  @default(now())
+
+  // Self-referential friends relationship
+  friends           UserFriend[] @relation("UserFriends")
+  friendOf          UserFriend[] @relation("FriendOf")
+
+  // Other relations
+  subjects            Subject[]
+  schedules           Schedule[]
+  attendanceRecords   AttendanceRecord[]
+  createdSessions     StudySession[]  @relation("SessionCreator")
+  participantIn       Participant[]
+  messages            Message[]
+}
+
+model UserFriend {
+  userId    String
+  friendId  String
+
+  user      User   @relation("UserFriends", fields: [userId], references: [id], onDelete: Cascade)
+  friend    User   @relation("FriendOf", fields: [friendId], references: [id], onDelete: Cascade)
+
+  @@id([userId, friendId])
+}
+
+model Subject {
+  id      String   @id @default(uuid())
+  name    String
+  time    String?
+  days    String[] // e.g. ["monday", "tuesday"]
+  userId  String
+
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scheduleEntries ScheduleEntry[]
+}
+
+model Schedule {
+  id     String @id @default(uuid())
+  userId String @unique
+
+  user    User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  entries ScheduleEntry[]
+}
+
+model ScheduleEntry {
+  id         String @id @default(uuid())
+  scheduleId String
+  subjectId  String
+  day        String // "monday", "tuesday", etc.
+
+  schedule Schedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  subject  Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+}
+
+model AttendanceRecord {
+  id        String   @id @default(uuid())
+  userId    String
+  date      String   // "YYYY-MM-DD"
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user    User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  entries AttendanceEntry[]
+
+  @@unique([userId, date])
+}
+
+model AttendanceEntry {
+  id                 String           @id @default(uuid())
+  attendanceRecordId String
+  subject            String
+  status             AttendanceStatus
+
+  record AttendanceRecord @relation(fields: [attendanceRecordId], references: [id], onDelete: Cascade)
+}
+
+enum AttendanceStatus {
+  attended
+  missed
+  cancelled
+}
+
+model StudySession {
+  id              String        @id @default(uuid())
+  creatorId       String
+  subject         String
+  startAt         DateTime
+  duration        Int           // minutes
+  note            String        @default("")
+  visibility      Visibility    @default(private)
+  status          SessionStatus @default(pending)
+  actualStartTime DateTime?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  creator      User          @relation("SessionCreator", fields: [creatorId], references: [id])
+  participants Participant[]
+  messages     Message[]
+}
+
+enum Visibility {
+  private
+  friends
+}
+
+enum SessionStatus {
+  pending
+  scheduled
+  in_progress
+  completed
+  cancelled
+}
+
+model Participant {
+  id          String            @id @default(uuid())
+  sessionId   String
+  userId      String
+  status      ParticipantStatus @default(invited)
+  invitedAt   DateTime          @default(now())
+  respondedAt DateTime?
+
+  session StudySession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  user    User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, userId])
+}
+
+enum ParticipantStatus {
+  invited
+  accepted
+  declined
+  removed
+}
+
+model Message {
+  id        String   @id @default(uuid())
+  sessionId String
+  userId    String
+  name      String
+  text      String
+  ts        DateTime @default(now())
+
+  session StudySession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  user    User         @relation(fields: [userId], references: [id])
+}
