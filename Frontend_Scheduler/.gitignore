@@ -11,8 +11,12 @@ lerna-debug.log*
 .env
 
 node_modules
+.next/
+out/
+build/
 dist
 dist-ssr
+.vercel
 *.local
 
 # Editor directories and files
