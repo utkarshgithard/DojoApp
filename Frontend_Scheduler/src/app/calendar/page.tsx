@@ -2,6 +2,9 @@
 
 import React, { useEffect, useState } from "react";
 import API from "@/lib/axios";
+import { useAuth } from "@/context/authContext";
+import { useAttendance } from "@/context/AttendanceContext";
+import { useRouter } from "next/navigation";
 
 const daysOfWeek = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
 
@@ -10,22 +13,15 @@ function capitalize(word: string) {
 }
 
 export default function CalendarPage() {
-  const [schedule, setSchedule] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-
-  const fetchCalendar = async () => {
-    try {
-      const res = await API.get("/schedule/calender");
-      setSchedule(res.data.schedule);
-    } catch (err) {
-      console.error(err);
-    }
-    setLoading(false);
-  };
+  const router = useRouter();
+  const { isAuthenticated, loading: authLoading } = useAuth() as any;
+  const { calendarData: schedule, setCalendarData: setSchedule, fetchSummary } = useAttendance() as any;
 
   useEffect(() => {
-    fetchCalendar();
-  }, []);
+    if (!authLoading && !isAuthenticated) {
+      router.push('/login');
+    }
+  }, [isAuthenticated, authLoading, router]);
 
   const handleDeleteSubject = async (subjectId: string, day: string) => {
     if (!window.confirm("Are you sure you want to delete this subject?")) return;
@@ -34,15 +30,15 @@ export default function CalendarPage() {
       await API.delete(`/schedule/${subjectId}/${day}`);
       setSchedule((prev: any) => ({
         ...prev,
-        [day]: prev[day].filter((sub: any) => sub._id !== subjectId)
+        [day]: prev[day].filter((sub: any) => (sub.id || sub._id) !== subjectId)
       }));
+      await fetchSummary();
     } catch (err) {
       console.error("Failed to delete subject:", err);
     }
   };
 
-  if (loading) return <p className="text-center mt-60 text-xl">Loading schedule...</p>;
-  if (!schedule) return <p className="text-center mt-60 text-2xl">No schedule found.</p>;
+  if (!schedule) return <p className="text-center mt-60 text-xl text-gray-500">Loading schedule...</p>;
 
   return (
     <div className="mx-auto px-10 py-20 min-h-screen dark:bg-gray-900 rounded-lg shadow-md">
@@ -55,16 +51,19 @@ export default function CalendarPage() {
 
           {schedule[day]?.length > 0 ? (
             <div className="flex flex-wrap gap-4">
-              {schedule[day].map((subject: any) => (
-                <div
-                  key={subject._id}
-                  className="flex items-center space-x-3 bg-blue-600 dark:bg-blue-700 text-white px-4 py-2 rounded-xl shadow hover:shadow-lg transition-all cursor-pointer hover:bg-red-500"
-                  onClick={() => handleDeleteSubject(subject._id, day)}
-                  title={`Click to delete ${subject.name}`}
-                >
-                  <span className="font-medium text-lg">{subject.name}</span>
-                </div>
-              ))}
+              {schedule[day].map((subject: any, idx: number) => {
+                const subjectId = subject.id || subject._id;
+                return (
+                  <div
+                    key={`${subjectId}-${idx}`}
+                    className="flex items-center space-x-3 bg-blue-600 dark:bg-blue-700 text-white px-4 py-2 rounded-xl shadow hover:shadow-lg transition-all cursor-pointer hover:bg-red-500"
+                    onClick={() => subjectId && handleDeleteSubject(subjectId, day)}
+                    title={`Click to delete ${subject.name || subject.subjectName || subject.subject}`}
+                  >
+                    <span className="font-medium text-lg">{subject.name || subject.subjectName || subject.subject}</span>
+                  </div>
+                );
+              })}
             </div>
           ) : (
             <p className="text-gray-500 dark:text-gray-400 italic">No subjects scheduled.</p>

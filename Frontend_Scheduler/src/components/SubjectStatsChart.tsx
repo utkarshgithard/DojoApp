@@ -1,29 +1,23 @@
 "use client";
 // SubjectStatsChart.jsx
-import React, { useEffect, useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { Doughnut } from "react-chartjs-2";
 import { Chart as ChartJS, ArcElement, Tooltip, Legend } from "chart.js";
-import API from "@/lib/axios";
+import { useAttendance } from "@/context/AttendanceContext";
 import { SubjectStats as SubjectStat } from "@/lib/types";
 
 ChartJS.register(ArcElement, Tooltip, Legend);
 
 const SubjectStatsChart = () => {
-    const [stats, setStats] = useState<SubjectStat[]>([]);
-    const [loading, setLoading] = useState(true);
+    const { subjectStats: stats } = useAttendance() as { subjectStats: SubjectStat[] };
     const [activeIndex, setActiveIndex] = useState<number | null>(null);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
+    const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        API.get("/subject/stats")
-            .then((res) => {
-                setStats(res.data.data);
-                setLoading(false);
-            })
-            .catch((err) => {
-                console.error("Error fetching stats:", err);
-                setLoading(false);
-            });
+        // Just a brief mock loading to ensure smooth transition
+        const timer = setTimeout(() => setLoading(false), 300);
+        return () => clearTimeout(timer);
     }, []);
 
     // Scroll functions for navigation buttons

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useContext } from 'react';
+import { useState, useContext, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useDarkMode } from '@/context/DarkModeContext';
 import { auth } from '@/lib/firebase';
@@ -10,11 +10,17 @@ import API from '@/lib/axios';
 
 export default function Login() {
   const { darkMode } = useDarkMode() as any;
-  const { login } = useContext(AuthContext) as any;
+  const { login, isAuthenticated, loading: authLoading } = useContext(AuthContext) as any;
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+
+  useEffect(() => {
+    if (!authLoading && isAuthenticated) {
+      router.push('/dashboard');
+    }
+  }, [isAuthenticated, authLoading, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -48,7 +54,7 @@ export default function Login() {
       const token = await user.getIdToken();
 
       // Sync with database
-      await API.post('/auth/sync', 
+      await API.post('/auth/sync',
         { name: user.displayName, email: user.email },
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -82,8 +88,8 @@ export default function Login() {
             onChange={(e) => setEmail(e.target.value)}
             required
           />
-          <button 
-            type="submit" 
+          <button
+            type="submit"
             disabled={loading || googleLoading}
             className="w-full bg-blue-600 text-white py-2 rounded font-semibold hover:bg-blue-700 disabled:opacity-50 transition duration-200"
           >
@@ -100,11 +106,10 @@ export default function Login() {
         <button
           onClick={handleGoogleSignIn}
           disabled={loading || googleLoading}
-          className={`w-full flex items-center justify-center gap-3 py-2 border rounded font-semibold transition duration-200 ${
-            darkMode 
-              ? 'bg-gray-800 border-gray-700 text-white hover:bg-gray-700' 
+          className={`w-full flex items-center justify-center gap-3 py-2 border rounded font-semibold transition duration-200 ${darkMode
+              ? 'bg-gray-800 border-gray-700 text-white hover:bg-gray-700'
               : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
-          } disabled:opacity-50`}
+            } disabled:opacity-50`}
         >
           {googleLoading ? (
             <div className="w-5 h-5 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin"></div>

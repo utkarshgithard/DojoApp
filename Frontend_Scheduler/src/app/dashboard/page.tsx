@@ -11,18 +11,26 @@ import { useAuth } from '@/context/authContext'; // FIX: corrected casing to mat
 import API from '@/lib/axios';
 import SessionStatus from '@/components/SessionStatus';
 import Swal from 'sweetalert2';
-import { DashboardInvite as Invite, StudySession as Session } from '@/lib/types';
+import { DashboardInvite as Invite, StudySession as Session, StudySession } from '@/lib/types';
+import { useRouter } from 'next/navigation';
 
 // ---------------------------------------------------------------------------
 // Dashboard
 // ---------------------------------------------------------------------------
 const Dashboard = () => {
+  const router = useRouter();
   const { darkMode } = useDarkMode() as any;
   const { date, setDate, unmarkedSubjects, markedSubjects, handleAttendance, invites, loadExistingInvites, setInvites, friends } = useAttendance() as any;
   const { socket, joinedSessions, setJoinedSessions, sessions, setSessions } = useSocket() as any;
 
   // FIX: userId from verified auth context — never decode JWT client-side
-  const { userId: currentUserId } = useAuth() as any;
+  const { userId: currentUserId, isAuthenticated, loading } = useAuth() as any;
+
+  useEffect(() => {
+    if (!loading && !isAuthenticated) {
+      router.push('/login');
+    }
+  }, [isAuthenticated, loading, router]);
 
   // UI state
   const [chatOpen, setChatOpen] = useState(false);

@@ -8,13 +8,21 @@ import { sendSignInLinkToEmail, GoogleAuthProvider, signInWithPopup } from 'fire
 import { AuthContext } from '@/context/authContext';
 import API from '@/lib/axios';
 
+import { useEffect } from 'react';
+
 export default function Register() {
   const { darkMode } = useDarkMode() as any;
-  const { login } = useContext(AuthContext) as any;
+  const { login, isAuthenticated, loading: authLoading } = useContext(AuthContext) as any;
   const router = useRouter();
   const [form, setForm] = useState({ name: '', email: '' });
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+
+  useEffect(() => {
+    if (!authLoading && isAuthenticated) {
+      router.push('/dashboard');
+    }
+  }, [isAuthenticated, authLoading, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

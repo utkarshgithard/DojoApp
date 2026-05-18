@@ -3,12 +3,17 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { auth } from '@/lib/firebase';
 import { onIdTokenChanged, signOut } from 'firebase/auth';
 
-export const AuthContext = createContext<any>(undefined);
+import { AuthContextType } from '@/lib/types';
+
+export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const AuthProvider = (props: { children: React.ReactNode }) => {
-  const [token, setToken] = useState<string | null>(null);
+  const [token, setToken] = useState<string | null>(() => {
+    if (typeof window !== 'undefined') return localStorage.getItem('token');
+    return null;
+  });
   const [userId, setUserId] = useState<string | null>(null);
-  const [mounted, setMounted] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const unsubscribe = onIdTokenChanged(auth, async (user) => {
@@ -22,7 +27,7 @@ const AuthProvider = (props: { children: React.ReactNode }) => {
         setUserId(null);
         localStorage.removeItem('token');
       }
-      setMounted(true);
+      setLoading(false);
     });
 
     return () => unsubscribe();
@@ -47,8 +52,9 @@ const AuthProvider = (props: { children: React.ReactNode }) => {
     userId,
     login,
     logout,
-    isAuthenticated
-  }), [token, userId, login, logout, isAuthenticated]);
+    isAuthenticated,
+    loading
+  }), [token, userId, login, logout, isAuthenticated, loading]);
 
   return (
     <AuthContext.Provider value={value}>

@@ -1,11 +1,14 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
-import { useDarkMode } from '@/context/DarkModeContext';
-import API from '@/lib/axios';
 import { useAuth } from '@/context/authContext';
+import { useRouter } from 'next/navigation';
+import React, { useEffect, useState } from "react";
+import API from "@/lib/axios";
+import { useDarkMode } from '@/context/DarkModeContext';
 
 export default function SettingsPage() {
+  const router = useRouter();
+  const { isAuthenticated, loading: authLoading } = useAuth() as any;
   const [details, setDetails] = useState<any>({});
   const { darkMode, toggleDarkMode } = useDarkMode() as any;
   const [activeTab, setActiveTab] = useState('profile');
@@ -30,8 +33,6 @@ export default function SettingsPage() {
     }
   });
 
-  const { isAuthenticated } = useAuth() as any;
-
   const fetchUser = async () => {
     try {
       const res = await API.get("/auth/userDetails");
@@ -51,10 +52,12 @@ export default function SettingsPage() {
   };
 
   useEffect(() => {
-    if (isAuthenticated) {
+    if (!authLoading && !isAuthenticated) {
+      router.push('/login');
+    } else if (isAuthenticated) {
       fetchUser();
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, authLoading, router]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const target = e.target as HTMLInputElement;

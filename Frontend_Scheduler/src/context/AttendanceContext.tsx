@@ -4,19 +4,41 @@ import API from '@/lib/axios';
 import Swal from 'sweetalert2';
 import moment from 'moment';
 import { useSocket } from "./SocketContext";
-import { Subject, AttendanceContextType } from '@/lib/types';
+import { useAuth } from "./authContext";
+import { Subject, AttendanceContextType, SubjectStats } from '@/lib/types';
 
 const Ctx = createContext<AttendanceContextType | null>(null);
 export const useAttendance = () => useContext(Ctx);
 
 export const AttendanceProvider = ({ children }: { children: React.ReactNode }) => {
   const socket = useSocket();
+  const { isAuthenticated } = useAuth();
   const [date, setDate] = useState(moment().format('YYYY-MM-DD'));
   const [unmarkedSubjects, setUnmarkedSubjects] = useState<Subject[]>([]);
   const [markedSubjects, setMarkedSubjects] = useState<Subject[]>([]);
   const [sessions, setSessions] = useState<any[]>([]);
   const [invites, setInvites] = useState<any[]>([]);
   const [friends, setFriends] = useState<any[]>([]);
+  const [subjectStats, setSubjectStats] = useState<SubjectStats[]>([]);
+  const [calendarData, setCalendarData] = useState<any>(null);
+
+  const fetchCalendarData = useCallback(async () => {
+    try {
+      const res = await API.get("/schedule/calender");
+      setCalendarData(res.data.schedule);
+    } catch (err) {
+      console.error("Error fetching calendar:", err);
+    }
+  }, []);
+
+  const fetchSubjectStats = useCallback(async () => {
+    try {
+      const res = await API.get("/subject/stats");
+      setSubjectStats(res.data.data);
+    } catch (err) {
+      console.error("Error fetching subject stats:", err);
+    }
+  }, []);
 
   const fetchFriends = useCallback(async () => {
     try {
@@ -98,12 +120,18 @@ export const AttendanceProvider = ({ children }: { children: React.ReactNode }) 
   }, [date, setUnmarkedSubjects, setMarkedSubjects]);
 
   useEffect(() => {
-    fetchSummary();
-  }, [fetchSummary]);
+    if (isAuthenticated) {
+      fetchSummary();
+      fetchSubjectStats();
+      fetchCalendarData();
+    }
+  }, [fetchSummary, fetchSubjectStats, fetchCalendarData, isAuthenticated]);
 
   useEffect(() => {
-    fetchFriends();
-  }, [fetchFriends]);
+    if (isAuthenticated) {
+      fetchFriends();
+    }
+  }, [fetchFriends, isAuthenticated]);
 
   return (
     <Ctx.Provider value={{
@@ -113,7 +141,9 @@ export const AttendanceProvider = ({ children }: { children: React.ReactNode }) 
       fetchSubjects, fetchFriends, friends,
       fetchSummary,
       handleAttendance, sessions, setSessions, invites,
-      loadExistingInvites, setInvites
+      loadExistingInvites, setInvites,
+      subjectStats, setSubjectStats, fetchSubjectStats,
+      calendarData, setCalendarData, fetchCalendarData
     }}>
       {children}
     </Ctx.Provider>

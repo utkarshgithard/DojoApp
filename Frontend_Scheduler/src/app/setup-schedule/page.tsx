@@ -1,8 +1,10 @@
 "use client";
-
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import API from '@/lib/axios';
 import { useDarkMode } from '@/context/DarkModeContext';
+import { useAuth } from '@/context/authContext';
+import { useAttendance } from '@/context/AttendanceContext';
+import { useRouter } from 'next/navigation';
 
 const weekdays = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
 const hours = Array.from({ length: 12 }, (_, i) => i + 1); // 1–12
@@ -10,7 +12,16 @@ const minutes = ['00', '15', '30', '45'];
 const meridiems = ['AM', 'PM'];
 
 export default function WeeklyScheduleSetup() {
+  const router = useRouter();
+  const { isAuthenticated, loading: authLoading } = useAuth() as any;
   const { darkMode } = useDarkMode() as any;
+  const { fetchCalendarData, fetchSummary } = useAttendance() as any;
+
+  useEffect(() => {
+    if (!authLoading && !isAuthenticated) {
+      router.push('/login');
+    }
+  }, [isAuthenticated, authLoading, router]);
 
   const [schedule, setSchedule] = useState<any>(
     weekdays.reduce((acc: any, day) => {
@@ -82,6 +93,8 @@ export default function WeeklyScheduleSetup() {
 
     try {
       await API.post('/schedule', { weeklySchedule: formattedSchedule });
+      await fetchCalendarData();
+      await fetchSummary();
       alert('✅ Schedule saved (subjects inserted)!');
     } catch (err) {
       alert('❌ Failed to save schedule.');

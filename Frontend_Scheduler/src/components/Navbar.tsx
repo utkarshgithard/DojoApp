@@ -2,7 +2,7 @@
 import React, { useState, useContext, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
-import { Moon, Sun, Menu, X } from 'lucide-react';
+import { Moon, Sun, Menu, X, UserCircle } from 'lucide-react';
 import { useDarkMode } from '@/context/DarkModeContext';
 import { AuthContext } from '@/context/authContext';
 
@@ -15,6 +15,11 @@ const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [showNavbar, setShowNavbar] = useState(true);
   const [lastScrollY, setLastScrollY] = useState(0);
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   const toggleMenu = () => setIsOpen(!isOpen);
   const closeMenu = () => setIsOpen(false);
@@ -99,13 +104,18 @@ const Navbar = () => {
               Settings
             </Link>
 
-            {isAuthenticated && (
-              <button
-                onClick={handleLogout}
-                className="bg-gray-800 hover:bg-gray-700 text-white px-4 py-1 rounded-full text-sm transition duration-200"
-              >
-                Logout
-              </button>
+            {isMounted && isAuthenticated && (
+              <div className="flex items-center gap-4 pl-2 border-l border-gray-300 dark:border-gray-700">
+                <Link href="/settings" className="hover:scale-110 transition duration-200">
+                  <UserCircle size={28} className={darkMode ? 'text-gray-200 hover:text-emerald-400' : 'text-gray-600 hover:text-emerald-500'} />
+                </Link>
+                <button
+                  onClick={handleLogout}
+                  className="bg-gray-800 hover:bg-gray-700 text-white px-4 py-1 rounded-full text-sm transition duration-200"
+                >
+                  Logout
+                </button>
+              </div>
             )}
           </div>
 
@@ -167,7 +177,7 @@ const Navbar = () => {
             Settings
           </Link>
 
-          {isAuthenticated && (
+          {isMounted && isAuthenticated && (
             <button
               onClick={() => {
                 handleLogout();

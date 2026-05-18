@@ -148,6 +148,15 @@ export interface CreateSessionPayload {
 
 // --- Context Types ---
 
+export interface AuthContextType {
+  token: string | null;
+  userId: string | null;
+  login: (newToken: string, uid?: string) => void;
+  logout: () => Promise<void>;
+  isAuthenticated: boolean;
+  loading: boolean;
+}
+
 export interface DarkModeContextType {
   darkMode: boolean;
   toggleDarkMode: () => void;
@@ -186,6 +195,12 @@ export interface AttendanceContextType {
   invites: any[];
   loadExistingInvites: () => Promise<void>;
   setInvites: React.Dispatch<React.SetStateAction<any[]>>;
+  subjectStats: SubjectStats[];
+  setSubjectStats: React.Dispatch<React.SetStateAction<SubjectStats[]>>;
+  fetchSubjectStats: () => Promise<void>;
+  calendarData: any;
+  setCalendarData: React.Dispatch<React.SetStateAction<any>>;
+  fetchCalendarData: () => Promise<void>;
 }
 
 // --- Component Props & Local Types ---

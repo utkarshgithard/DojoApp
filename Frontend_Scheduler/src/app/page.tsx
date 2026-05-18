@@ -6,6 +6,8 @@ import { Moon, Sun } from 'lucide-react';
 import { useSwipeable } from 'react-swipeable';
 import { useDarkMode } from '@/context/DarkModeContext';
 
+import { useAuth } from '@/context/authContext';
+
 const slides = [
   { text: 'Track your attendance effortlessly.', image: '/attendanceImg.png' },
   { text: 'Plan your weekly class schedule.', image: '/scheduleImg.png' },
@@ -14,9 +16,16 @@ const slides = [
 
 export default function LandingPage() {
   const router = useRouter();
-  const { darkMode, toggleDarkMode } = useDarkMode();
+  const { darkMode, toggleDarkMode } = useDarkMode() as any;
+  const { isAuthenticated, loading } = useAuth();
   const [currentSlide, setCurrentSlide] = useState(0);
   const [manual, setManual] = useState(false);
+
+  useEffect(() => {
+    if (!loading && isAuthenticated) {
+      router.push('/dashboard');
+    }
+  }, [isAuthenticated, loading, router]);
 
   useEffect(() => {
     if (manual) return;
