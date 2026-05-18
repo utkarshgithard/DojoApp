@@ -1,7 +1,7 @@
 "use client";
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import API from '@/lib/axios';
-import Swal from 'sweetalert2';
+import { toast } from 'sonner';
 import moment from 'moment';
 import { useSocket } from "./SocketContext";
 import { useAuth } from "./authContext";
@@ -12,7 +12,7 @@ export const useAttendance = () => useContext(Ctx);
 
 export const AttendanceProvider = ({ children }: { children: React.ReactNode }) => {
   const socket = useSocket();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, loading } = useAuth();
   const [date, setDate] = useState(moment().format('YYYY-MM-DD'));
   const [unmarkedSubjects, setUnmarkedSubjects] = useState<Subject[]>([]);
   const [markedSubjects, setMarkedSubjects] = useState<Subject[]>([]);
@@ -89,17 +89,6 @@ export const AttendanceProvider = ({ children }: { children: React.ReactNode }) 
 
   const handleAttendance = useCallback(async (subject: Subject, status: string) => {
     try {
-      const result = await Swal.fire({
-        title: `Mark "${subject.subjectName || subject.subject}" as "${status}"?`,
-        text: "This action cannot be undone.",
-        icon: 'question',
-        showCancelButton: true,
-        confirmButtonText: 'Yes',
-        cancelButtonText: 'No',
-      });
-
-      if (!result.isConfirmed) return;
-
       await API.post('/attendance/mark', {
         date,
         status: [{
@@ -112,26 +101,26 @@ export const AttendanceProvider = ({ children }: { children: React.ReactNode }) 
       setUnmarkedSubjects(prev => prev.filter(s => s.id !== subject.id));
       setMarkedSubjects(prev => [...prev, { ...subject, status }]);
 
-      Swal.fire('Success', 'Attendance marked successfully.', 'success');
+      toast.success(`Successfully marked "${subject.subjectName || subject.subject}" as ${status}.`);
     } catch (error) {
       console.error('Error marking attendance:', error);
-      Swal.fire('Error', 'Could not mark attendance.', 'error');
+      toast.error(`Failed to mark attendance as ${status}.`);
     }
   }, [date, setUnmarkedSubjects, setMarkedSubjects]);
 
   useEffect(() => {
-    if (isAuthenticated) {
+    if (isAuthenticated && !loading) {
       fetchSummary();
       fetchSubjectStats();
       fetchCalendarData();
     }
-  }, [fetchSummary, fetchSubjectStats, fetchCalendarData, isAuthenticated]);
+  }, [fetchSummary, fetchSubjectStats, fetchCalendarData, isAuthenticated, loading]);
 
   useEffect(() => {
-    if (isAuthenticated) {
+    if (isAuthenticated && !loading) {
       fetchFriends();
     }
-  }, [fetchFriends, isAuthenticated]);
+  }, [fetchFriends, isAuthenticated, loading]);
 
   return (
     <Ctx.Provider value={{

@@ -7,6 +7,7 @@ import AuthProvider from "@/context/authContext";
 import { usePathname } from "next/navigation";
 import Navbar from "./Navbar";
 import InternetStatus from "./InternetStatus";
+import { Toaster } from "@/components/ui/sonner";
 
 export default function ClientProviders({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -21,6 +22,7 @@ export default function ClientProviders({ children }: { children: React.ReactNod
             <InternetStatus />
             {showNavbar && <Navbar />}
             {children}
+            <Toaster />
           </DarkModeProvider>
         </AttendanceProvider>
       </SocketProvider>

@@ -2,9 +2,11 @@
 
 import { useAuth } from '@/context/authContext';
 import { useRouter } from 'next/navigation';
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import API from "@/lib/axios";
 import { useDarkMode } from '@/context/DarkModeContext';
+import { User, Palette, Copy, Check, Settings, Mail, BookOpen } from 'lucide-react';
+import { toast } from 'sonner';
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -12,287 +14,307 @@ export default function SettingsPage() {
   const [details, setDetails] = useState<any>({});
   const { darkMode, toggleDarkMode } = useDarkMode() as any;
   const [activeTab, setActiveTab] = useState('profile');
-  const [message, setMessage] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+
   const [userData, setUserData] = useState({
     name: '',
     email: '',
     bio: '',
     department: '',
-    notifications: {
-      email: true,
-      push: true,
-      sessionInvites: true,
-      sessionReminders: true,
-      friendRequests: true,
-      messages: true
-    },
-    privacy: {
-      profileVisibility: 'friends' as const,
-      activityStatus: true,
-      dataSharing: false
-    }
   });
 
-  const fetchUser = async () => {
+  const fetchUser = useCallback(async () => {
     try {
       const res = await API.get("/auth/userDetails");
       if (res.data.user) {
         setDetails(res.data.user);
-        setUserData(prev => ({
-          ...prev,
+        setUserData({
           name: res.data.user.name,
           email: res.data.user.email,
           bio: res.data.user.bio || '',
           department: res.data.user.department || ''
-        }));
+        });
+        setLoaded(true);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("Failed to fetch user details:", err);
+      if (err.response?.status === 401) {
+        toast.error("Session expired. Please log in again.");
+        router.push('/login');
+      }
     }
-  };
+  }, [router]);
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
       router.push('/login');
-    } else if (isAuthenticated) {
+    } else if (isAuthenticated && !authLoading && !loaded) {
       fetchUser();
     }
-  }, [isAuthenticated, authLoading, router]);
+  }, [isAuthenticated, authLoading, router, loaded, fetchUser]);
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-    const target = e.target as HTMLInputElement;
-    const { name, value, type, checked } = target;
-
-    if (type === 'checkbox') {
-      if (name.includes('.')) {
-        const [category, field] = name.split('.');
-        setUserData((prev: any) => ({
-          ...prev,
-          [category]: {
-            ...prev[category],
-            [field]: checked
-          }
-        }));
-      } else {
-        setUserData(prev => ({ ...prev, [name]: checked }));
-      }
-    } else {
-      if (name.includes('.')) {
-        const [category, field] = name.split('.');
-        setUserData((prev: any) => ({
-          ...prev,
-          [category]: {
-            ...prev[category],
-            [field]: value
-          }
-        }));
-      } else {
-        setUserData(prev => ({ ...prev, [name]: value }));
-      }
-    }
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    setUserData(prev => ({ ...prev, [name]: value }));
   };
 
-  const handleSave = async (section: string) => {
+  const handleSave = async () => {
+    setSaving(true);
     try {
-      if (section === 'profile') {
-        const res = await API.put('/auth/profile', {
-          name: userData.name,
-          bio: userData.bio,
-          department: userData.department
-        });
-        setDetails(res.data.user);
-      } else {
-        // Handle other sections if implemented
-        await API.put(`/auth/${section}`, (userData as any)[section]);
-      }
-      setMessage('Settings saved successfully!');
-      setTimeout(() => setMessage(''), 3000);
+      const res = await API.put('/auth/profile', {
+        name: userData.name,
+        bio: userData.bio,
+        department: userData.department
+      });
+      setDetails(res.data.user);
+      toast.success('Profile settings updated successfully!');
     } catch (error) {
       console.error(error);
-      setMessage('Error saving settings');
+      toast.error('Failed to update profile settings.');
+    } finally {
+      setSaving(false);
     }
   };
 
-  const handlePasswordChange = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const formData = new FormData(e.currentTarget);
-    const currentPassword = formData.get('currentPassword');
-    const newPassword = formData.get('newPassword');
-    const confirmPassword = formData.get('confirmPassword');
-
-    if (newPassword !== confirmPassword) {
-      setMessage('New passwords do not match');
-      return;
-    }
-
-    try {
-      await API.post('/auth/change-password', {
-        currentPassword,
-        newPassword
-      });
-      setMessage('Password changed successfully!');
-      e.currentTarget.reset();
-      setTimeout(() => setMessage(''), 3000);
-    } catch (error) {
-      setMessage('Error changing password');
+  const handleCopyCode = () => {
+    if (details.friendCode) {
+      navigator.clipboard.writeText(details.friendCode);
+      setCopied(true);
+      toast.success('Friend Code copied to clipboard!');
+      setTimeout(() => setCopied(false), 2000);
     }
   };
+
+  const dark = darkMode;
+  const border = dark ? 'border-gray-800' : 'border-gray-200';
+  const muted = dark ? 'text-gray-400' : 'text-gray-500';
+  const cardClass = `border rounded-xl p-5 ${border} ${dark ? 'bg-black' : 'bg-white'}`;
+
+  const inputClass = `w-full px-3.5 py-2 text-sm rounded-lg border outline-none transition-colors mb-4
+    ${dark
+      ? 'bg-black border-gray-800 text-white placeholder-gray-700 focus:border-gray-600'
+      : 'bg-white border-gray-200 text-gray-900 placeholder-gray-400 focus:border-gray-400'
+    }`;
+
+  const labelClass = `block text-[11px] uppercase tracking-wider font-medium mb-1.5 ${muted}`;
+
+  const primaryBtn = `px-4 py-2.5 rounded-lg text-[13px] font-medium transition-opacity hover:opacity-80 active:scale-95
+    ${dark ? 'bg-white text-black' : 'bg-black text-white'}
+    disabled:opacity-40`;
+
+  const secondaryBtn = `px-3.5 py-2.5 rounded-lg text-[13px] font-medium border transition-colors flex items-center justify-center gap-1.5
+    ${dark
+      ? 'border-gray-800 text-gray-200 hover:bg-gray-900 active:bg-gray-950'
+      : 'border-gray-200 text-gray-700 hover:bg-gray-50 active:bg-gray-100'
+    } disabled:opacity-40`;
+
+  if (authLoading) {
+    return (
+      <div className={`min-h-screen flex justify-center items-center transition-colors duration-300 ${dark ? 'bg-black text-white' : 'bg-white text-gray-900'}`}>
+        <span className="inline-block w-6 h-6 rounded-full border-[2px] border-current border-t-transparent animate-spin" />
+      </div>
+    );
+  }
 
   return (
-    <div className={`min-h-screen py-20 px-4 md:px-10 transition-colors duration-300 ${darkMode ? 'dark bg-gray-900 text-white' : 'bg-gray-50 text-gray-900'
-      }`}>
-      <div className="max-w-4xl mx-auto">
-        <h1 className="text-3xl font-bold mb-8">Settings</h1>
-        
-        {message && (
-          <div className={`p-4 mb-6 rounded-lg ${message.includes('Error')
-            ? 'bg-red-100 text-red-700'
-            : 'bg-green-100 text-green-700'
-            }`}>
-            {message}
-          </div>
-        )}
+    <div className={`min-h-screen transition-colors duration-300 pt-[96px] pb-20 ${dark ? 'bg-black text-white' : 'bg-white text-gray-900'}`}>
+      <div className="max-w-[1100px] w-full mx-auto px-5">
 
-        <div className="flex flex-col md:flex-row gap-8">
-          <div className="w-full md:w-64 flex-shrink-0">
-            <div className={`rounded-lg shadow-md p-4 ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
-              <nav className="space-y-2">
-                {[
-                  { id: 'profile', label: 'Profile', icon: '👤' },
-                  { id: 'account', label: 'Account', icon: '🔐' },
-                  { id: 'notifications', label: 'Notifications', icon: '🔔' },
-                  { id: 'privacy', label: 'Privacy & Security', icon: '🛡️' },
-                  { id: 'appearance', label: 'Appearance', icon: '🎨' },
-                  { id: 'preferences', label: 'Preferences', icon: '⚙️' }
-                ].map((item) => (
-                  <button
-                    key={item.id}
-                    onClick={() => setActiveTab(item.id)}
-                    className={`w-full text-left px-4 py-3 rounded-md transition-colors flex items-center ${activeTab === item.id
-                      ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200'
-                      : 'hover:bg-gray-100 dark:hover:bg-gray-700'
-                      }`}
-                  >
-                    <span className="mr-3">{item.icon}</span>
-                    {item.label}
-                  </button>
-                ))}
-              </nav>
+        {/* Page Header */}
+        <div className="mb-8 border-b pb-5 border-gray-100 dark:border-gray-900">
+          <p className={`text-[11px] uppercase tracking-widest ${muted} mb-1 flex items-center gap-1.5`}>
+            <Settings size={12} />
+            <span>Preferences</span>
+          </p>
+          <h1 className="text-[22px] font-medium tracking-tight">Account Settings</h1>
+          <p className={`text-[13px] ${muted} mt-0.5`}>Manage your personal profile details, copy your friend invitation key, or customize themes.</p>
+        </div>
+
+        <div className="flex flex-col md:flex-row gap-8 items-start">
+          {/* Settings Sidebar */}
+          <div className="w-full md:w-56 flex-shrink-0">
+            <div className={`${cardClass} p-3 space-y-1`}>
+              {[
+                { id: 'profile', label: 'Profile Settings', icon: <User size={14} /> },
+                { id: 'appearance', label: 'Theme Styling', icon: <Palette size={14} /> }
+              ].map((item) => (
+                <button
+                  key={item.id}
+                  onClick={() => setActiveTab(item.id)}
+                  className={`w-full text-left px-3.5 py-2.5 rounded-lg text-[13px] font-medium transition-colors flex items-center gap-2.5 ${activeTab === item.id
+                      ? dark
+                        ? 'bg-white text-black'
+                        : 'bg-black text-white'
+                      : dark
+                        ? 'text-gray-400 hover:text-white hover:bg-gray-950'
+                        : 'text-gray-600 hover:text-black hover:bg-gray-50'
+                    }`}
+                >
+                  {item.icon}
+                  <span>{item.label}</span>
+                </button>
+              ))}
             </div>
           </div>
 
-          <div className="flex-1">
-            <div className={`rounded-lg shadow-md p-6 ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
-              {activeTab === 'profile' && (
-                <div>
-                  <h2 className="text-xl font-semibold mb-6">Profile Information</h2>
-                  
-                  {/* Friend Code Section */}
-                  <div className="mb-8 p-4 rounded-xl bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800 flex justify-between items-center">
-                    <div>
-                      <p className="text-xs font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wider mb-1">Your Friend Code</p>
-                      <p className="text-2xl font-mono font-bold tracking-widest">{details.friendCode || 'Loading...'}</p>
-                    </div>
-                    <button 
-                      onClick={() => {
-                        if (details.friendCode) {
-                          navigator.clipboard.writeText(details.friendCode);
-                          setMessage('Code copied to clipboard!');
-                          setTimeout(() => setMessage(''), 2000);
-                        }
-                      }}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition shadow-sm active:scale-95"
-                    >
-                      Copy Code
-                    </button>
-                  </div>
+          {/* Settings Main Panel */}
+          <div className="flex-1 w-full">
+            <div className={cardClass}>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+              {activeTab === 'profile' && (
+                !loaded ? (
+                  <div className="space-y-6 animate-pulse">
                     <div>
-                      <label className="block text-sm font-medium mb-2">Name</label>
-                      <input
-                        type="text"
-                        name="name"
-                        value={userData.name}
-                        onChange={handleInputChange}
-                        className="w-full p-3 border rounded-md dark:bg-gray-700 dark:border-gray-600"
-                      />
+                      <div className="h-5 bg-gray-200 dark:bg-gray-800 rounded w-1/4 mb-2"></div>
+                      <div className="h-4 bg-gray-100 dark:bg-gray-900/50 rounded w-1/2"></div>
                     </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-2">Email</label>
-                      <input
-                        type="email"
-                        name="email"
-                        value={userData.email}
-                        onChange={handleInputChange}
-                        readOnly
-                        className="w-full p-3 border rounded-md dark:bg-gray-800 dark:border-gray-700 text-gray-500 cursor-not-allowed"
-                      />
-                    </div>
-                    <div className="md:col-span-2">
-                      <label className="block text-sm font-medium mb-2">Bio</label>
-                      <textarea
-                        name="bio"
-                        value={userData.bio}
-                        onChange={handleInputChange}
-                        rows={3}
-                        className="w-full p-3 border rounded-md dark:bg-gray-700 dark:border-gray-600"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-2">Department/Major</label>
-                      <input
-                        type="text"
-                        name="department"
-                        value={userData.department}
-                        onChange={handleInputChange}
-                        className="w-full p-3 border rounded-md dark:bg-gray-700 dark:border-gray-600"
-                      />
+                    <div className="h-20 bg-gray-100 dark:bg-gray-900/50 rounded-xl w-full"></div>
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="h-10 bg-gray-100 dark:bg-gray-900/50 rounded-lg w-full"></div>
+                        <div className="h-10 bg-gray-100 dark:bg-gray-900/50 rounded-lg w-full"></div>
+                      </div>
+                      <div className="h-10 bg-gray-100 dark:bg-gray-900/50 rounded-lg w-full"></div>
+                      <div className="h-24 bg-gray-100 dark:bg-gray-900/50 rounded-lg w-full"></div>
                     </div>
                   </div>
-                  <button
-                    onClick={() => handleSave('profile')}
-                    className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-                  >
-                    Save Changes
-                  </button>
-                </div>
+                ) : (
+                  <div className="space-y-6">
+                    <div>
+                      <h2 className="text-[15px] font-medium tracking-tight">Profile Information</h2>
+                      <p className={`text-[12.5px] ${muted} mt-0.5`}>Update your personal background and departments details.</p>
+                    </div>
+
+                    {/* Friend Code Master Card */}
+                    <div className={`p-4 rounded-xl border flex justify-between items-center gap-4 ${dark ? 'border-gray-800 bg-gray-950/20' : 'border-gray-200 bg-gray-50/50'
+                      }`}>
+                      <div>
+                        <p className={`text-[10px] font-semibold uppercase tracking-wider ${muted} mb-1`}>Your Dojo Friend Code</p>
+                        <p className="text-[20px] font-mono font-bold tracking-widest text-current">{details.friendCode || '------'}</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleCopyCode}
+                        className={secondaryBtn}
+                      >
+                        {copied ? <Check size={13} className="text-green-500" /> : <Copy size={13} />}
+                        <span>{copied ? 'Copied' : 'Copy Code'}</span>
+                      </button>
+                    </div>
+
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {/* Name input */}
+                        <div>
+                          <label className={labelClass}>Full Name</label>
+                          <input
+                            type="text"
+                            name="name"
+                            value={userData.name}
+                            onChange={handleInputChange}
+                            className={inputClass}
+                          />
+                        </div>
+
+                        {/* Email input */}
+                        <div>
+                          <label className={labelClass}>Email Address</label>
+                          <div className="relative">
+                            <input
+                              type="email"
+                              name="email"
+                              value={userData.email}
+                              readOnly
+                              disabled
+                              className={`${inputClass} select-none opacity-50 cursor-not-allowed`}
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Department */}
+                      <div>
+                        <label className={labelClass}>Department / Major</label>
+                        <input
+                          type="text"
+                          name="department"
+                          value={userData.department}
+                          onChange={handleInputChange}
+                          placeholder="e.g. Computer Science"
+                          className={inputClass}
+                        />
+                      </div>
+
+                      {/* Bio */}
+                      <div>
+                        <label className={labelClass}>Personal Bio</label>
+                        <textarea
+                          name="bio"
+                          value={userData.bio}
+                          onChange={handleInputChange}
+                          rows={3}
+                          placeholder="Tell others a bit about your research studies..."
+                          className={`${inputClass} resize-none`}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Actions */}
+                    <div className="pt-4 border-t border-gray-50 dark:border-gray-900 flex justify-end">
+                      <button
+                        type="button"
+                        onClick={handleSave}
+                        disabled={saving}
+                        className={primaryBtn}
+                      >
+                        {saving ? 'Saving changes...' : 'Save Settings'}
+                      </button>
+                    </div>
+                  </div>
+                )
               )}
 
               {activeTab === 'appearance' && (
-                <div>
-                  <h2 className="text-xl font-semibold mb-6">Appearance</h2>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-6">
+                  <div>
+                    <h2 className="text-[15px] font-medium tracking-tight">Theme Customization</h2>
+                    <p className={`text-[12.5px] ${muted} mt-0.5`}>Switch the Dojo visual interface mode to match your setting.</p>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+                    {/* Light Mode Selector Card */}
                     <div
-                      className={`border-2 rounded-lg p-4 cursor-pointer flex flex-col items-center ${!darkMode ? 'border-blue-500 bg-blue-50' : 'border-gray-300 dark:border-gray-600'}`}
+                      className={`border rounded-xl p-4 cursor-pointer flex flex-col transition-all ${!darkMode
+                          ? 'border-black dark:border-white bg-gray-50/50'
+                          : 'border-gray-200 dark:border-gray-800 hover:border-gray-400 dark:hover:border-gray-600'
+                        }`}
                       onClick={() => darkMode && toggleDarkMode()}
                     >
-                      <div className="w-full h-24 bg-white rounded-md mb-3 border"></div>
-                      <span>Light</span>
+                      <div className="w-full h-24 bg-white rounded-lg mb-3 border border-gray-100 flex items-center justify-center">
+                        <span className="text-[12px] font-medium text-gray-400">ClassMate Light</span>
+                      </div>
+                      <span className="text-[13px] font-medium text-center">Light Aesthetic</span>
                     </div>
+
+                    {/* Dark Mode Selector Card */}
                     <div
-                      className={`border-2 rounded-lg p-4 cursor-pointer flex flex-col items-center ${darkMode ? 'border-blue-500 bg-blue-900/20' : 'border-gray-300 dark:border-gray-600'}`}
+                      className={`border rounded-xl p-4 cursor-pointer flex flex-col transition-all ${darkMode
+                          ? 'border-white dark:border-black bg-gray-950/20'
+                          : 'border-gray-200 dark:border-gray-800 hover:border-gray-300 dark:hover:border-gray-700'
+                        }`}
                       onClick={() => !darkMode && toggleDarkMode()}
                     >
-                      <div className="w-full h-24 bg-gray-800 rounded-md mb-3 border dark:border-gray-600"></div>
-                      <span>Dark</span>
+                      <div className="w-full h-24 bg-black rounded-lg mb-3 border border-gray-900 flex items-center justify-center">
+                        <span className="text-[12px] font-medium text-gray-700">ClassMate Dark</span>
+                      </div>
+                      <span className="text-[13px] font-medium text-center">Dark Aesthetic</span>
                     </div>
                   </div>
                 </div>
               )}
-              
-              {/* Add other tabs as needed or keep simple for now */}
-              {activeTab === 'account' && (
-                 <div>
-                    <h2 className="text-xl font-semibold mb-6">Change Password</h2>
-                    <form onSubmit={handlePasswordChange} className="space-y-4">
-                      <input type="password" name="currentPassword" placeholder="Current Password" required className="w-full p-3 border rounded-md dark:bg-gray-700 dark:border-gray-600" />
-                      <input type="password" name="newPassword" placeholder="New Password" required minLength={6} className="w-full p-3 border rounded-md dark:bg-gray-700 dark:border-gray-600" />
-                      <input type="password" name="confirmPassword" placeholder="Confirm New Password" required className="w-full p-3 border rounded-md dark:bg-gray-700 dark:border-gray-600" />
-                      <button type="submit" className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">Change Password</button>
-                    </form>
-                 </div>
-              )}
+
             </div>
           </div>
         </div>

@@ -2,11 +2,32 @@
 
 import { useState, useContext, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { ArrowLeft } from 'lucide-react';
 import { useDarkMode } from '@/context/DarkModeContext';
 import { auth } from '@/lib/firebase';
 import { sendSignInLinkToEmail, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { AuthContext } from '@/context/authContext';
 import API from '@/lib/axios';
+
+function GoogleIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
+      <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+      <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+      <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" />
+      <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
+    </svg>
+  );
+}
+
+function Spinner() {
+  return (
+    <span
+      className="inline-block w-4 h-4 rounded-full border-[1.5px] border-current border-t-transparent animate-spin"
+      aria-hidden="true"
+    />
+  );
+}
 
 export default function Login() {
   const { darkMode } = useDarkMode() as any;
@@ -14,32 +35,28 @@ export default function Login() {
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
+  const [sent, setSent] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
 
   useEffect(() => {
-    if (!authLoading && isAuthenticated) {
-      router.push('/dashboard');
-    }
+    if (!authLoading && isAuthenticated) router.push('/dashboard');
   }, [isAuthenticated, authLoading, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setSent(false);
     try {
       const actionCodeSettings = {
-        url: window.location.origin + '/verify', // Redirect to verify page
+        url: window.location.origin + '/verify',
         handleCodeInApp: true,
       };
-
       await sendSignInLinkToEmail(auth, email, actionCodeSettings);
-
-      // Save to localStorage for the verification page
       window.localStorage.setItem('emailForSignIn', email);
-
-      alert("✨ Magic link sent! Please check your email to sign in.");
+      setSent(true);
     } catch (err: any) {
       console.error(err);
-      alert('❌ Login failed: ' + err.message);
+      alert('Login failed: ' + err.message);
     } finally {
       setLoading(false);
     }
@@ -52,98 +69,117 @@ export default function Login() {
       const result = await signInWithPopup(auth, provider);
       const user = result.user;
       const token = await user.getIdToken();
-
-      // Sync with database
-      await API.post('/auth/sync',
+      await API.post(
+        '/auth/sync',
         { name: user.displayName, email: user.email },
         { headers: { Authorization: `Bearer ${token}` } }
       );
-
       login(token);
       router.push('/dashboard');
     } catch (err: any) {
       console.error(err);
       if (err.code !== 'auth/popup-closed-by-user') {
-        alert('❌ Google sign-in failed: ' + err.message);
+        alert('Google sign-in failed: ' + err.message);
       }
     } finally {
       setGoogleLoading(false);
     }
   };
 
+  const dark = darkMode;
+  const border = dark ? 'border-gray-800' : 'border-gray-200';
+  const muted = dark ? 'text-gray-400' : 'text-gray-500';
+  const inputClass = `w-full px-3.5 py-2.5 text-sm rounded-lg border outline-none transition-colors
+    ${dark
+      ? 'bg-black border-gray-700 text-white placeholder-gray-600 focus:border-gray-500'
+      : 'bg-white border-gray-200 text-gray-900 placeholder-gray-400 focus:border-gray-400'
+    }`;
+
   return (
-    <div className={`min-h-screen flex justify-center items-center transition duration-300 ${darkMode ? 'bg-black text-white' : 'bg-gradient-to-br from-gray-100 to-white text-black'}`}>
-      <div
-        className={`p-8 shadow-xl rounded-xl w-full max-w-md space-y-4 ${darkMode ? 'bg-gray-900' : 'bg-white'}`}
-      >
-        <h2 className="text-2xl font-bold text-center">Welcome Back</h2>
-        <p className="text-center text-sm text-gray-500 mb-4">Choose your preferred sign-in method</p>
+    <div className={`min-h-screen flex flex-col transition-colors duration-300 ${dark ? 'bg-black text-white' : 'bg-white text-gray-900'}`}>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <input
-            type="email"
-            placeholder="Email"
-            className={`w-full border px-4 py-2 rounded ${darkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-50 border-gray-300'}`}
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-          />
-          <button
-            type="submit"
-            disabled={loading || googleLoading}
-            className="w-full bg-blue-600 text-white py-2 rounded font-semibold hover:bg-blue-700 disabled:opacity-50 transition duration-200"
-          >
-            {loading ? 'Sending Link...' : 'Send Magic Link'}
-          </button>
-        </form>
-
-        <div className="relative flex items-center py-2">
-          <div className="flex-grow border-t border-gray-300"></div>
-          <span className="flex-shrink mx-4 text-gray-400 text-xs uppercase">Or</span>
-          <div className="flex-grow border-t border-gray-300"></div>
-        </div>
-
+      {/* Top bar */}
+      <div className={`flex justify-between items-center px-5 py-4 border-b ${border}`}>
+        <span className="text-[16px] font-medium">ClassMate</span>
         <button
-          onClick={handleGoogleSignIn}
-          disabled={loading || googleLoading}
-          className={`w-full flex items-center justify-center gap-3 py-2 border rounded font-semibold transition duration-200 ${darkMode
-              ? 'bg-gray-800 border-gray-700 text-white hover:bg-gray-700'
-              : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
-            } disabled:opacity-50`}
+          onClick={() => router.back()}
+          className={`flex items-center gap-1 text-[13px] transition-colors ${muted} hover:text-current`}
         >
-          {googleLoading ? (
-            <div className="w-5 h-5 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin"></div>
-          ) : (
-            <svg className="w-5 h-5" viewBox="0 0 24 24">
-              <path
-                fill="#4285F4"
-                d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-              />
-              <path
-                fill="#34A853"
-                d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-              />
-              <path
-                fill="#FBBC05"
-                d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"
-              />
-              <path
-                fill="#EA4335"
-                d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-              />
-            </svg>
-          )}
-          {googleLoading ? 'Signing in...' : 'Sign in with Google'}
+          <ArrowLeft size={14} /> Back
         </button>
+      </div>
 
-        <p className="text-center text-sm pt-2">
-          Don’t have an account?{' '}
-          <span className="text-blue-500 cursor-pointer hover:underline font-medium" onClick={() => router.push('/register')}>
-            Sign Up
-          </span>
-        </p>
+      {/* Form area */}
+      <div className="flex-1 flex items-center justify-center px-5 py-12">
+        <div className="w-full max-w-[360px]">
+
+          <h1 className="text-[22px] font-medium mb-1">Welcome back</h1>
+          <p className={`text-[13px] mb-6 ${muted}`}>Sign in to continue tracking your attendance</p>
+
+          {/* Magic link form */}
+          <form onSubmit={handleSubmit} className="space-y-2.5 mb-4">
+            <input
+              type="email"
+              placeholder="Email address"
+              className={inputClass}
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              required
+            />
+            <button
+              type="submit"
+              disabled={loading || googleLoading}
+              className={`w-full py-2.5 rounded-lg text-[14px] font-medium flex items-center justify-center gap-2 transition-opacity
+                ${dark ? 'bg-white text-black' : 'bg-black text-white'}
+                disabled:opacity-40`}
+            >
+              {loading ? (
+                <><Spinner /> Sending link...</>
+              ) : sent ? (
+                'Link sent — check your email'
+              ) : (
+                'Send magic link'
+              )}
+            </button>
+          </form>
+
+          {/* Divider */}
+          <div className="flex items-center gap-3 mb-4">
+            <div className={`flex-1 h-px ${dark ? 'bg-gray-800' : 'bg-gray-200'}`} />
+            <span className={`text-[11px] uppercase tracking-widest ${muted}`}>or</span>
+            <div className={`flex-1 h-px ${dark ? 'bg-gray-800' : 'bg-gray-200'}`} />
+          </div>
+
+          {/* Google */}
+          <button
+            onClick={handleGoogleSignIn}
+            disabled={loading || googleLoading}
+            className={`w-full py-2.5 rounded-lg text-[14px] border flex items-center justify-center gap-2 transition-colors mb-6
+              ${dark
+                ? 'border-gray-700 text-gray-200 hover:bg-gray-900'
+                : 'border-gray-200 text-gray-700 hover:bg-gray-50'
+              } disabled:opacity-40`}
+          >
+            {googleLoading ? (
+              <><Spinner /> Signing in...</>
+            ) : (
+              <><GoogleIcon /> Continue with Google</>
+            )}
+          </button>
+
+          {/* Footer */}
+          <p className={`text-center text-[12px] ${muted}`}>
+            {"Don't have an account?"}{' '}
+            <button
+              onClick={() => router.push('/register')}
+              className={`font-medium underline underline-offset-2 ${dark ? 'text-white' : 'text-gray-900'}`}
+            >
+              Sign up
+            </button>
+          </p>
+
+        </div>
       </div>
     </div>
   );
 }
-

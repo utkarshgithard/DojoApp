@@ -21,6 +21,10 @@ interface ActiveSession {
 // e.g. SADD session:{id}:members userId  |  SCARD session:{id}:members
 const activeSessions = new Map<string, ActiveSession>();
 
+// --- In-memory chat storage ---
+// Key: sessionId, Value: array of message objects
+const sessionMessages = new Map<string, any[]>();
+
 // --- Per-user typing timeout handles ---
 // Clears "is typing" state if a user disconnects or stops sending typing events
 const typingTimers = new Map<string, NodeJS.Timeout>();
@@ -90,6 +94,7 @@ async function maybeCompleteSession(io: Server, sessionId: string) {
   const active = activeSessions.get(sessionId);
   if (active && active.participants.size === 0) {
     activeSessions.delete(sessionId);
+    sessionMessages.delete(sessionId); // Clear messages when session ends
     try {
       await prisma.studySession.update({
         where: { id: sessionId },
@@ -425,7 +430,6 @@ function registerSessionHandlers(io: Server, socket: Socket, user: UserPayload) 
         // Still re-send current state so client can re-hydrate if needed
         const sessionData = await prisma.studySession.findUnique({
           where: { id: sessionId },
-          include: { messages: { orderBy: { ts: 'asc' }, take: 100 } },
         });
         const active = activeSessions.get(sessionId);
         socket.emit('sessionJoined', {
@@ -436,7 +440,7 @@ function registerSessionHandlers(io: Server, socket: Socket, user: UserPayload) 
         });
         socket.emit('sessionMessages', {
           sessionId,
-          messages: sessionData?.messages ?? [],
+          messages: sessionMessages.get(sessionId) || [],
         });
         return;
       }
@@ -445,14 +449,12 @@ function registerSessionHandlers(io: Server, socket: Socket, user: UserPayload) 
 
       let sessionData = await prisma.studySession.findUnique({
         where: { id: sessionId },
-        include: { messages: { orderBy: { ts: 'asc' }, take: 100 } },
       });
 
       if (sessionData?.status === 'scheduled') {
         sessionData = await prisma.studySession.update({
           where: { id: sessionId },
           data: { status: 'in_progress', actualStartTime: new Date() },
-          include: { messages: { orderBy: { ts: 'asc' }, take: 100 } },
         });
         io.to(sessionRoom).emit('sessionStarted', { sessionId, sessionDetails: sessionData });
       }
@@ -481,7 +483,7 @@ function registerSessionHandlers(io: Server, socket: Socket, user: UserPayload) 
       // Send chat history separately — client should NOT call getSessionMessages again on mount
       socket.emit('sessionMessages', {
         sessionId,
-        messages: sessionData?.messages ?? [],
+        messages: sessionMessages.get(sessionId) || [],
       });
 
       console.log(`✅ ${user.name} joined session ${sessionId} (${active.participants.size} in room)`);
@@ -569,6 +571,7 @@ function registerSessionHandlers(io: Server, socket: Socket, user: UserPayload) 
         active.participants.clear();
         activeSessions.delete(sessionId);
       }
+      sessionMessages.delete(sessionId); // Clear messages from memory!
 
       io.to(`session_${sessionId}`).emit('sessionEnded', {
         sessionId,
@@ -609,25 +612,27 @@ function registerChatHandlers(io: Server, socket: Socket, user: UserPayload) {
         return socket.emit('chatError', { msg: 'Chat is only available while the session is live' });
       }
 
-      // FIX: Rolling window deletion wrapped in a transaction to prevent TOCTOU race
-      const message = await prisma.$transaction(async (tx) => {
-        const count = await tx.message.count({ where: { sessionId } });
-        if (count >= MAX_MESSAGES_PER_SESSION) {
-          const oldest = await tx.message.findFirst({
-            where: { sessionId },
-            orderBy: { ts: 'asc' },
-          });
-          if (oldest) await tx.message.delete({ where: { id: oldest.id } });
-        }
-        return tx.message.create({
-          data: {
-            sessionId,
-            userId: user.id,
-            name: user.name,
-            text: text.trim(),
-          },
-        });
-      });
+      // Use in-memory storage for messages
+      if (!sessionMessages.has(sessionId)) {
+        sessionMessages.set(sessionId, []);
+      }
+      const chatHistory = sessionMessages.get(sessionId)!;
+      
+      const message = {
+        id: Math.random().toString(36).substring(7),
+        sessionId,
+        userId: user.id,
+        name: user.name,
+        text: text.trim(),
+        ts: new Date().toISOString()
+      };
+      
+      chatHistory.push(message);
+      
+      // Optional: keep memory footprint small
+      if (chatHistory.length > MAX_MESSAGES_PER_SESSION) {
+        chatHistory.shift();
+      }
 
       // Stop any active typing indicator for this user when they send
       const key = `${user.id}:${sessionId}`;
@@ -659,19 +664,12 @@ function registerChatHandlers(io: Server, socket: Socket, user: UserPayload) {
       const verification = await getParticipantStatus(sessionId, user.id);
       if (!verification.ok) return;
 
-      const messages = await prisma.message.findMany({
-        where: {
-          sessionId,
-          ...(before ? { ts: { lt: new Date(before) } } : {}),
-        },
-        orderBy: { ts: 'desc' },
-        take: 50,
-      });
-
+      const chatHistory = sessionMessages.get(sessionId) || [];
+      // If we implement pagination, we'd slice here. For now, just send all.
       socket.emit('sessionMessages', {
         sessionId,
-        messages: messages.reverse(), // oldest-first for the client
-        pagination: { before, hasMore: messages.length === 50 },
+        messages: chatHistory,
+        pagination: { before, hasMore: false },
       });
     } catch (error) {
       console.error('getSessionMessages error:', error);

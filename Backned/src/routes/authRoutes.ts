@@ -18,6 +18,8 @@ userRouter.get('/userDetails', verifyToken, async (req: AuthenticatedRequest, re
         verified: true,
         friendCode: true,
         createdAt: true,
+        bio: true,
+        department: true,
       },
     });
     res.json({ user, success: true, message: 'User Found' });

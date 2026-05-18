@@ -1,138 +1,139 @@
 "use client";
-// SubjectStatsChart.jsx
+
 import React, { useState, useRef, useEffect } from "react";
 import { Doughnut } from "react-chartjs-2";
 import { Chart as ChartJS, ArcElement, Tooltip, Legend } from "chart.js";
 import { useAttendance } from "@/context/AttendanceContext";
+import { useDarkMode } from "@/context/DarkModeContext";
 import { SubjectStats as SubjectStat } from "@/lib/types";
 
 ChartJS.register(ArcElement, Tooltip, Legend);
 
 const SubjectStatsChart = () => {
     const { subjectStats: stats } = useAttendance() as { subjectStats: SubjectStat[] };
+    const { darkMode } = useDarkMode() as any;
     const [activeIndex, setActiveIndex] = useState<number | null>(null);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        // Just a brief mock loading to ensure smooth transition
-        const timer = setTimeout(() => setLoading(false), 300);
+        const timer = setTimeout(() => setLoading(false), 200);
         return () => clearTimeout(timer);
     }, []);
 
-    // Scroll functions for navigation buttons
     const scrollLeft = () => {
         if (scrollContainerRef.current) {
-            scrollContainerRef.current.scrollBy({ left: -300, behavior: 'smooth' });
+            scrollContainerRef.current.scrollBy({ left: -300, behavior: "smooth" });
         }
     };
 
     const scrollRight = () => {
         if (scrollContainerRef.current) {
-            scrollContainerRef.current.scrollBy({ left: 300, behavior: 'smooth' });
+            scrollContainerRef.current.scrollBy({ left: 300, behavior: "smooth" });
         }
     };
 
     if (loading) {
         return (
-            <div className="flex justify-center items-center p-12">
-                <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-indigo-500"></div>
+            <div className="flex justify-center items-center py-16">
+                <span className="inline-block w-6 h-6 rounded-full border-[2px] border-current border-t-transparent animate-spin" />
             </div>
         );
     }
 
     if (!stats || stats.length === 0) {
         return (
-            <div className="text-center p-12 bg-white/30 dark:bg-gray-800/40 rounded-2xl backdrop-blur-md">
-                <p className="text-gray-600 dark:text-gray-300">No subject statistics available</p>
+            <div className="text-center py-12">
+                <p className="text-[13px] text-gray-500">No subject statistics available</p>
             </div>
         );
     }
 
+    const dark = darkMode;
+    const border = dark ? "border-gray-800" : "border-gray-200";
+    const muted = dark ? "text-gray-400" : "text-gray-500";
+
+    const totalAttended = stats.reduce((total, s) => total + s.attended, 0);
+    const totalMissed = stats.reduce((total, s) => total + s.missed, 0);
+    const totalCancelled = stats.reduce((total, s) => total + s.cancelled, 0);
+
     return (
-        <div className="p-6 relative">
-            <h2 className="text-2xl font-bold mb-6 text-gray-800 dark:text-gray-100 text-center font-serif">
-                Subject Attendance Overview
-            </h2>
-            
-            {/* Navigation buttons */}
-            <div className="absolute left-2 top-1/2 transform -translate-y-1/2 z-10">
-                <button 
+        <div className="relative">
+            <style>{`
+                .scrollbar-hide::-webkit-scrollbar {
+                    display: none !important;
+                }
+                .scrollbar-hide {
+                    -ms-overflow-style: none !important;
+                    scrollbar-width: none !important;
+                }
+            `}</style>
+            {/* Scroll Navigation Buttons */}
+            <div className="absolute -left-2 top-[125px] z-10">
+                <button
                     onClick={scrollLeft}
-                    className="bg-white dark:bg-gray-800 p-2 rounded-full shadow-md hover:bg-indigo-50 dark:hover:bg-gray-700 transition-colors"
+                    className={`p-1.5 rounded-full border transition-colors hover:bg-gray-50 dark:hover:bg-gray-900 bg-white dark:bg-black ${border}`}
                     aria-label="Scroll left"
                 >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-indigo-600 dark:text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                     </svg>
                 </button>
             </div>
-            
-            <div className="absolute right-2 top-1/2 transform -translate-y-1/2 z-10">
-                <button 
+
+            <div className="absolute -right-2 top-[125px] z-10">
+                <button
                     onClick={scrollRight}
-                    className="bg-white dark:bg-gray-800 p-2 rounded-full shadow-md hover:bg-indigo-50 dark:hover:bg-gray-700 transition-colors"
+                    className={`p-1.5 rounded-full border transition-colors hover:bg-gray-50 dark:hover:bg-gray-900 bg-white dark:bg-black ${border}`}
                     aria-label="Scroll right"
                 >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-indigo-600 dark:text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                     </svg>
                 </button>
             </div>
 
-            {/* Stats summary bar */}
-            <div className="bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-gray-800 dark:to-gray-900 p-4 rounded-xl mb-6 shadow-sm">
-                <div className="flex flex-wrap justify-center gap-6">
-                    <div className="text-center">
-                        <div className="text-2xl font-bold text-indigo-600 dark:text-indigo-400 font-mono">
-                            {stats.reduce((total, subject) => total + subject.attended, 0)}
-                        </div>
-                        <div className="text-sm text-gray-600 dark:text-gray-300">Total Attended</div>
-                    </div>
-                    <div className="text-center">
-                        <div className="text-2xl font-bold text-red-600 dark:text-red-400 font-mono">
-                            {stats.reduce((total, subject) => total + subject.missed, 0)}
-                        </div>
-                        <div className="text-sm text-gray-600 dark:text-gray-300">Total Missed</div>
-                    </div>
-                    <div className="text-center">
-                        <div className="text-2xl font-bold text-amber-600 dark:text-amber-400 font-mono">
-                            {stats.reduce((total, subject) => total + subject.cancelled, 0)}
-                        </div>
-                        <div className="text-sm text-gray-600 dark:text-gray-300">Total Cancelled</div>
-                    </div>
+            {/* Total Metrics Dashboard Grid */}
+            <div className={`grid grid-cols-3 border rounded-lg p-3 text-center mb-6 bg-transparent ${border}`}>
+                <div>
+                    <div className="text-[18px] font-mono font-medium text-green-500">{totalAttended}</div>
+                    <div className={`text-[10px] uppercase tracking-wider mt-0.5 ${muted}`}>Attended</div>
+                </div>
+                <div className={`border-x ${border}`}>
+                    <div className="text-[18px] font-mono font-medium text-red-500">{totalMissed}</div>
+                    <div className={`text-[10px] uppercase tracking-wider mt-0.5 ${muted}`}>Missed</div>
+                </div>
+                <div>
+                    <div className="text-[18px] font-mono font-medium text-amber-500">{totalCancelled}</div>
+                    <div className={`text-[10px] uppercase tracking-wider mt-0.5 ${muted}`}>Cancelled</div>
                 </div>
             </div>
-            
-            <div 
+
+            {/* Carousel Content */}
+            <div
                 ref={scrollContainerRef}
-                className="flex overflow-x-auto scrollbar-hide gap-6 pb-6 snap-x snap-mandatory"
-                style={{ scrollBehavior: 'smooth' }}
+                className="flex overflow-x-auto scrollbar-hide gap-4 pb-4 snap-x snap-mandatory"
+                style={{ scrollBehavior: "smooth" }}
             >
                 {stats.map((subject, idx) => {
                     const total = subject.attended + subject.missed + subject.cancelled;
                     const attendedPercentage = total > 0 ? Math.round((subject.attended / total) * 100) : 0;
-                    
+
                     const data = {
                         labels: ["Attended", "Missed", "Cancelled"],
                         datasets: [
                             {
-                                data: [
-                                    subject.attended,
-                                    subject.missed,
-                                    subject.cancelled,
-                                ],
+                                data: [subject.attended, subject.missed, subject.cancelled],
                                 backgroundColor: [
-                                    "#10B981", // More vibrant green
-                                    "#EF4444", // More vibrant red
-                                    "#F59E0B", // More vibrant yellow
+                                    "#10B981", // Emerald green
+                                    "#EF4444", // Crimson red
+                                    "#F59E0B", // Bright amber
                                 ],
-                                borderWidth: 2,
-                                borderColor: "#fff",
+                                borderWidth: 0,
                                 hoverBackgroundColor: [
-                                    "#34D399", // Lighter green on hover
-                                    "#F87171", // Lighter red on hover
-                                    "#FBBF24", // Lighter yellow on hover
+                                    "#34D399",
+                                    "#F87171",
+                                    "#FBBF24",
                                 ],
                             },
                         ],
@@ -141,104 +142,104 @@ const SubjectStatsChart = () => {
                     return (
                         <div
                             key={idx}
-                            className={`min-w-[300px] snap-center flex-shrink-0 flex flex-col items-center 
-                                bg-white dark:bg-gray-800 p-5 rounded-2xl shadow-lg transition-all duration-300
-                                ${activeIndex === idx ? "ring-2 ring-indigo-500 scale-105" : "hover:shadow-xl"}`}
+                            className={`min-w-[270px] snap-center flex-shrink-0 flex flex-col items-center 
+                                border rounded-lg p-4 transition-all duration-350 bg-white dark:bg-black
+                                ${border} ${activeIndex === idx ? "scale-[1.02]" : "opacity-95"}`}
                             onMouseEnter={() => setActiveIndex(idx)}
                             onMouseLeave={() => setActiveIndex(null)}
                         >
-                            <h2 className="text-lg font-semibold mb-4 text-center text-gray-800 dark:text-gray-100 truncate w-full font-sans">
+                            <h3 className="text-[14px] font-medium tracking-tight mb-4 truncate w-full text-center">
                                 {subject.subject}
-                            </h2>
-                            
-                            <div className="flex items-center justify-center mb-4">
-                                <div className="relative w-28 h-28">
-                                    <Doughnut
-                                        data={data}
-                                        options={{
-                                            plugins: {
-                                                legend: { display: false },
-                                                tooltip: {
-                                                    backgroundColor: "#1f2937",
-                                                    titleColor: "#fff",
-                                                    bodyColor: "#fff",
-                                                    displayColors: true,
-                                                    callbacks: {
-                                                        label: function(context) {
-                                                            const value = context.parsed;
-                                                            const percentage = Math.round((value / total) * 100);
-                                                            return `${context.label}: ${value} (${percentage}%)`;
-                                                        }
-                                                    }
+                            </h3>
+
+                            {/* Ultra-sleek Thin Doughnut Ring */}
+                            <div className="relative w-28 h-28 flex items-center justify-center mb-4">
+                                <Doughnut
+                                    data={data}
+                                    options={{
+                                        plugins: {
+                                            legend: { display: false },
+                                            tooltip: {
+                                                backgroundColor: dark ? "#000" : "#fff",
+                                                titleColor: dark ? "#fff" : "#000",
+                                                bodyColor: dark ? "#ccc" : "#444",
+                                                borderColor: dark ? "#222" : "#eee",
+                                                borderWidth: 1,
+                                                displayColors: true,
+                                                callbacks: {
+                                                    label: function (context) {
+                                                        const value = context.parsed;
+                                                        const percentage = Math.round((value / total) * 100);
+                                                        return ` ${context.label}: ${value} (${percentage}%)`;
+                                                    },
                                                 },
                                             },
-                                            cutout: "65%",
-                                            rotation: -90,
-                                            circumference: 360,
-                                            animation: {
-                                                animateScale: true,
-                                                animateRotate: true
-                                            }
-                                        }}
-                                    />
-                                    <div className="absolute inset-0 flex flex-col items-center justify-center">
-                                        <span className="text-2xl font-bold text-gray-800 dark:text-gray-100 font-mono">
-                                            {attendedPercentage}%
-                                        </span>
-                                        <span className="text-xs text-gray-500 dark:text-gray-400 font-sans">attended</span>
-                                    </div>
+                                        },
+                                        cutout: "82%", // Very thin & premium looking cutout
+                                        rotation: -90,
+                                        circumference: 360,
+                                        animation: {
+                                            animateScale: true,
+                                            animateRotate: true,
+                                        },
+                                    }}
+                                />
+                                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                                    <span className="text-[20px] font-medium font-mono tracking-tighter">
+                                        {attendedPercentage}%
+                                    </span>
+                                    <span className={`text-[9px] uppercase tracking-wider ${muted}`}>Attended</span>
                                 </div>
                             </div>
-                            
-                            <div className="space-y-2 mt-4 w-full">
-                                <div className="flex justify-between items-center">
+
+                            {/* Detailed Rows */}
+                            <div className="space-y-1.5 w-full text-[12px] mt-2">
+                                <div className="flex justify-between items-center py-0.5 border-b border-gray-50/50 dark:border-gray-900/50">
                                     <div className="flex items-center">
-                                        <span className="w-3 h-3 rounded-full bg-[#10B981] mr-2"></span>
-                                        <span className="text-sm font-sans">Attended</span>
+                                        <span className="w-2 h-2 rounded-full bg-[#10B981] mr-2"></span>
+                                        <span className={muted}>Attended</span>
                                     </div>
                                     <div className="font-medium font-mono">
-                                        {subject.attended} <span className="text-xs text-gray-500">({Math.round((subject.attended / total) * 100)}%)</span>
+                                        {subject.attended} <span className={`text-[10px] ${muted}`}>({total > 0 ? Math.round((subject.attended / total) * 100) : 0}%)</span>
                                     </div>
                                 </div>
-                                
-                                <div className="flex justify-between items-center">
+
+                                <div className="flex justify-between items-center py-0.5 border-b border-gray-50/50 dark:border-gray-900/50">
                                     <div className="flex items-center">
-                                        <span className="w-3 h-3 rounded-full bg-[#EF4444] mr-2"></span>
-                                        <span className="text-sm font-sans">Missed</span>
+                                        <span className="w-2 h-2 rounded-full bg-[#EF4444] mr-2"></span>
+                                        <span className={muted}>Missed</span>
                                     </div>
                                     <div className="font-medium font-mono">
-                                        {subject.missed} <span className="text-xs text-gray-500">({Math.round((subject.missed / total) * 100)}%)</span>
+                                        {subject.missed} <span className={`text-[10px] ${muted}`}>({total > 0 ? Math.round((subject.missed / total) * 100) : 0}%)</span>
                                     </div>
                                 </div>
-                                
-                                <div className="flex justify-between items-center">
+
+                                <div className="flex justify-between items-center py-0.5 border-b border-gray-50/50 dark:border-gray-900/50">
                                     <div className="flex items-center">
-                                        <span className="w-3 h-3 rounded-full bg-[#F59E0B] mr-2"></span>
-                                        <span className="text-sm font-sans">Cancelled</span>
+                                        <span className="w-2 h-2 rounded-full bg-[#F59E0B] mr-2"></span>
+                                        <span className={muted}>Cancelled</span>
                                     </div>
                                     <div className="font-medium font-mono">
-                                        {subject.cancelled} <span className="text-xs text-gray-500">({Math.round((subject.cancelled / total) * 100)}%)</span>
+                                        {subject.cancelled} <span className={`text-[10px] ${muted}`}>({total > 0 ? Math.round((subject.cancelled / total) * 100) : 0}%)</span>
                                     </div>
                                 </div>
-                            </div>
-                            
-                            <div className="mt-4 pt-3 border-t border-gray-100 dark:border-gray-700 w-full">
-                                <div className="flex justify-between text-sm">
-                                    <span className="text-gray-500 dark:text-gray-400 font-sans">Total sessions:</span>
+
+                                <div className="flex justify-between items-center pt-2 text-[11px]">
+                                    <span className={muted}>Total Sessions</span>
                                     <span className="font-medium font-mono">{total}</span>
                                 </div>
                             </div>
 
-                            {/* Student-focused status indicator */}
+                            {/* Minimal Clean Status Indicator */}
                             <div className="mt-4 w-full">
-                                <div className={`text-center text-sm px-3 py-1 rounded-full font-sans ${
-                                    attendedPercentage >= 80 ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200" :
-                                    attendedPercentage >= 60 ? "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200" :
-                                    "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
+                                <div className={`text-center text-[11px] font-medium py-1 rounded border ${
+                                    attendedPercentage >= 80 ? "border-green-500/20 text-green-500 bg-green-500/5" :
+                                    attendedPercentage >= 60 ? "border-amber-500/20 text-amber-500 bg-amber-500/5" :
+                                    "border-red-500/20 text-red-500 bg-red-500/5"
                                 }`}>
-                                    {attendedPercentage >= 80 ? "Excellent Attendance" :
-                                     attendedPercentage >= 60 ? "Good Attendance" :
-                                     "Needs Improvement"}
+                                    {attendedPercentage >= 80 ? "Excellent Standing" :
+                                     attendedPercentage >= 60 ? "Fair Standing" :
+                                     "Critical Warning"}
                                 </div>
                             </div>
                         </div>
@@ -246,20 +247,28 @@ const SubjectStatsChart = () => {
                 })}
             </div>
 
-            {/* Scroll indicators for better UX */}
-            <div className="flex justify-center mt-4 space-x-1">
+            {/* Pill-shaped Slide Navigation Dots */}
+            <div className="flex justify-center mt-3 gap-1.5">
                 {stats.map((_, idx) => (
                     <button
                         key={idx}
                         onClick={() => {
                             if (scrollContainerRef.current) {
                                 scrollContainerRef.current.scrollTo({
-                                    left: idx * 324, // 300px card width + 24px gap
-                                    behavior: 'smooth'
+                                    left: idx * 286,
+                                    behavior: "smooth"
                                 });
                             }
                         }}
-                        className="w-2 h-2 rounded-full bg-gray-300 hover:bg-indigo-400 transition-colors"
+                        style={{
+                            width: activeIndex === idx ? 18 : 6,
+                            height: 6,
+                            borderRadius: 9999,
+                            background: activeIndex === idx
+                                ? dark ? "#f5f5f5" : "#111"
+                                : dark ? "#333" : "#ddd",
+                        }}
+                        className="transition-all duration-300"
                         aria-label={`Go to card ${idx + 1}`}
                     />
                 ))}
@@ -269,4 +278,3 @@ const SubjectStatsChart = () => {
 };
 
 export default SubjectStatsChart;
-

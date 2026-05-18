@@ -88,13 +88,16 @@ scheduleRouter.get('/calender', verifyToken, async (req: AuthenticatedRequest, r
       },
     });
 
+    const days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+
     if (!scheduleDoc) {
-      res.status(404).json({ message: 'Schedule not found' });
+      const emptySchedule: Record<string, any[]> = {};
+      days.forEach((d) => (emptySchedule[d] = []));
+      res.status(200).json({ schedule: emptySchedule });
       return;
     }
 
     // Group entries by day to match the old Mongoose shape
-    const days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
     const schedule: Record<string, typeof scheduleDoc.entries[0]['subject'][]> = {};
     days.forEach((d) => (schedule[d] = []));
 

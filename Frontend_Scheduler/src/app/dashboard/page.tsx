@@ -10,21 +10,24 @@ import { useSocket } from '@/context/SocketContext';
 import { useAuth } from '@/context/authContext'; // FIX: corrected casing to match disk
 import API from '@/lib/axios';
 import SessionStatus from '@/components/SessionStatus';
-import Swal from 'sweetalert2';
 import { DashboardInvite as Invite, StudySession as Session, StudySession } from '@/lib/types';
+import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
+import { Calendar } from '@/components/ui/calendar';
+import { format } from 'date-fns';
+import { CalendarIcon, Sun, Moon, Plus, LogOut, ArrowRight, UserPlus, Users, MessageSquare } from 'lucide-react';
 
 // ---------------------------------------------------------------------------
 // Dashboard
 // ---------------------------------------------------------------------------
 const Dashboard = () => {
   const router = useRouter();
-  const { darkMode } = useDarkMode() as any;
+  const { darkMode, toggleDarkMode } = useDarkMode() as any;
   const { date, setDate, unmarkedSubjects, markedSubjects, handleAttendance, invites, loadExistingInvites, setInvites, friends } = useAttendance() as any;
   const { socket, joinedSessions, setJoinedSessions, sessions, setSessions } = useSocket() as any;
 
   // FIX: userId from verified auth context — never decode JWT client-side
-  const { userId: currentUserId, isAuthenticated, loading } = useAuth() as any;
+  const { userId: currentUserId, isAuthenticated, loading, logout } = useAuth() as any;
 
   useEffect(() => {
     if (!loading && !isAuthenticated) {
@@ -32,9 +35,11 @@ const Dashboard = () => {
     }
   }, [isAuthenticated, loading, router]);
 
-  // UI state
   const [chatOpen, setChatOpen] = useState(false);
   const [createSessionOpen, setCreateSessionOpen] = useState(false);
+  const [calendarOpen, setCalendarOpen] = useState(false);
+  const [attendanceConfirm, setAttendanceConfirm] = useState<{ subject: any; status: string } | null>(null);
+  const [sessionEndConfirm, setSessionEndConfirm] = useState<{ sessionId: string } | null>(null);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [currentSessionDetails, setCurrentSessionDetails] = useState<Session | null>(null);
   const [friendCode, setFriendCode] = useState('');
@@ -237,15 +242,7 @@ const Dashboard = () => {
     });
     if (currentSessionId === data.sessionId) setChatOpen(false);
 
-    Swal.fire({
-      icon: 'info',
-      title: 'Session ended',
-      text: data.endedBy ? `${data.endedBy} ended the session.` : 'The study session has ended.',
-      timer: 3000,
-      showConfirmButton: false,
-      toast: true,
-      position: 'top-end',
-    });
+    toast.info(data.endedBy ? `${data.endedBy} ended the session.` : 'The study session has ended.');
   }, [setSessions, setJoinedSessions, currentSessionId]);
 
   const onUserJoinedSession = useCallback((data: any) => {
@@ -278,17 +275,9 @@ const Dashboard = () => {
     );
   }, [setSessions]);
 
-  // FIX: use Swal toast instead of blocking alert()
+  // FIX: use Sonner toast instead of blocking alert()
   const onJoinError = useCallback((data: any) => {
-    Swal.fire({
-      icon: 'error',
-      title: 'Could not join session',
-      text: data.message,
-      toast: true,
-      position: 'top-end',
-      timer: 4000,
-      showConfirmButton: false,
-    });
+    toast.error(`Could not join session: ${data.message}`);
   }, []);
 
   const onInviteAccepted = useCallback((data: any) => {
@@ -305,42 +294,18 @@ const Dashboard = () => {
 
   const onInviteDeclined = useCallback((data: any) => {
     setInvites((prev: Invite[]) => prev.filter((inv) => inv.from !== data.by));
-    Swal.fire({
-      icon: 'info',
-      title: 'Invite declined',
-      text: `${data.name} declined your invite.`,
-      toast: true,
-      position: 'top-end',
-      timer: 3000,
-      showConfirmButton: false,
-    });
+    toast.info(`${data.name} declined your invite.`);
   }, [setInvites]);
 
   // FIX: handle inviteExpired from updated server
   const onInviteExpired = useCallback((data: any) => {
     setInvites((prev: Invite[]) => prev.filter((inv) => inv.id !== data.sessionId));
-    Swal.fire({
-      icon: 'warning',
-      title: 'Invite expired',
-      text: 'This invite has expired and is no longer valid.',
-      toast: true,
-      position: 'top-end',
-      timer: 4000,
-      showConfirmButton: false,
-    });
+    toast.warning("Invite expired: This invite has expired and is no longer valid.");
   }, [setInvites]);
 
   // FIX: handle inviteUndelivered from updated server
   const onInviteUndelivered = useCallback((data: any) => {
-    Swal.fire({
-      icon: 'info',
-      title: 'Friend is offline',
-      text: "Your friend is offline right now. They'll see the invite when they reconnect.",
-      toast: true,
-      position: 'top-end',
-      timer: 5000,
-      showConfirmButton: false,
-    });
+    toast.info("Friend is offline. They'll see the invite when they reconnect.");
   }, []);
 
   const onSessionExpired = useCallback((data: any) => {
@@ -354,6 +319,8 @@ const Dashboard = () => {
   // FIX: each listener is a stable reference so socket.off works correctly
   // ---------------------------------------------------------------------------
   useEffect(() => {
+    if (loading || !isAuthenticated) return;
+
     // FIX: AbortController cancels in-flight API calls if component unmounts mid-request
     const controller = new AbortController();
 
@@ -419,6 +386,8 @@ const Dashboard = () => {
     onUserJoinedSession, onUserLeftSession, onJoinError, onInviteAccepted,
     onInviteDeclined, onInviteExpired, onInviteUndelivered, onSessionExpired,
     loadExistingInvites, loadExistingSessions, setJoinedSessions,
+    isAuthenticated,
+    loading
   ]);
 
   // ---------------------------------------------------------------------------
@@ -440,15 +409,7 @@ const Dashboard = () => {
         handleJoinSession(invite.id);
         openChat(invite.id, res.session || invite);
       } else {
-        Swal.fire({
-          icon: 'error',
-          title: 'Could not accept invite',
-          text: res?.error || 'Something went wrong. Please try again.',
-          toast: true,
-          position: 'top-end',
-          timer: 4000,
-          showConfirmButton: false,
-        });
+        toast.error(`Could not accept invite: ${res?.error || 'Something went wrong. Please try again.'}`);
         // Invite stays visible so user can retry
       }
     });
@@ -473,352 +434,412 @@ const Dashboard = () => {
   // ---------------------------------------------------------------------------
   // JSX
   // ---------------------------------------------------------------------------
+  const dark = darkMode;
+  const border = dark ? 'border-gray-800' : 'border-gray-200';
+  const muted = dark ? 'text-gray-400' : 'text-gray-500';
+  const cardClass = `border rounded-xl p-5 ${border} ${dark ? 'bg-black' : 'bg-white'}`;
+
+  const inputClass = `w-full px-3.5 py-2 text-sm rounded-lg border outline-none transition-colors
+    ${dark
+      ? 'bg-black border-gray-800 text-white placeholder-gray-700 focus:border-gray-600'
+      : 'bg-white border-gray-200 text-gray-900 placeholder-gray-400 focus:border-gray-400'
+    }`;
+
+  const primaryBtn = `px-3.5 py-1.5 rounded-lg text-[13px] font-medium transition-opacity hover:opacity-80 active:scale-95
+    ${dark ? 'bg-white text-black' : 'bg-black text-white'}
+    disabled:opacity-40`;
+
+  const secondaryBtn = `px-3.5 py-1.5 rounded-lg text-[13px] font-medium border transition-colors
+    ${dark
+      ? 'border-gray-800 text-gray-200 hover:bg-gray-900'
+      : 'border-gray-200 text-gray-700 hover:bg-gray-50'
+    } disabled:opacity-40`;
+
+  const dangerBtn = `px-3.5 py-1.5 rounded-lg text-[13px] font-medium border border-red-500/50 text-red-500 hover:bg-red-500/10 transition-colors`;
+
   return (
-    <div
-      className={`py-20 px-4 md:px-10 min-h-screen mx-auto transition-colors duration-300 ${darkMode ? 'dark bg-gray-900 text-white' : 'bg-white text-black'
-        }`}
-    >
-      <div className="text-2xl font-bold mb-6">Dashboard</div>
+    <div className={`min-h-screen flex flex-col transition-colors duration-300 pt-[76px] ${dark ? 'bg-black text-white' : 'bg-white text-gray-900'}`}>
+      
+      {/* Main Container */}
+      <div className="flex-1 max-w-[1100px] w-full mx-auto px-5 py-8">
+        
+        {/* Upper Dashboard header with Date Picker */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+          <div>
+            <h1 className="text-[22px] font-medium tracking-tight mb-1">Dojo Workspace</h1>
+            <p className={`text-[13px] ${muted}`}>Track classes, manage friends, and host joint study sessions</p>
+          </div>
+          
+          {/* Pick Date */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setCalendarOpen(!calendarOpen)}
+              className={`flex items-center space-x-2 px-3.5 py-2 border rounded-lg text-[13px] font-medium transition-colors ${
+                dark ? 'border-gray-800 hover:bg-gray-950 text-gray-200' : 'border-gray-200 hover:bg-gray-50 text-gray-700'
+              }`}
+            >
+              <CalendarIcon className="size-4 text-gray-400" />
+              <span>{date ? format(new Date(date + 'T00:00:00'), 'PPP') : 'Pick a date'}</span>
+            </button>
 
-      <div className="mb-6">
-        <label className="block text-sm font-medium mb-2">Select Date</label>
-        <input
-          type="date"
-          value={date}
-          onChange={(e) => setDate(e.target.value)}
-          className="p-2 border rounded w-full md:w-64 bg-transparent border-black dark:border-white text-black dark:text-white"
-        />
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* ---- LEFT COLUMN ---- */}
-        <div className="space-y-8">
-
-          {/* Friends */}
-          <section className="p-4 rounded-2xl shadow-md bg-white dark:bg-gray-800">
-            <h2 className="text-xl font-semibold mb-4">Friends</h2>
-
-            <div className="mb-6">
-              <h3 className="text-md font-medium mb-3">Add a Friend</h3>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  placeholder="Enter 6-digit friend code"
-                  value={friendCode}
-                  onChange={(e) => setFriendCode(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleAddFriend()}
-                  className="border rounded-lg p-2 flex-1 dark:bg-gray-700 dark:text-white"
-                  maxLength={6}
+            {calendarOpen && (
+              <div className={`absolute right-0 mt-2 z-50 p-2 rounded-lg border shadow-xl ${
+                dark ? 'bg-black border-gray-800' : 'bg-white border-gray-200'
+              }`}>
+                <Calendar
+                  mode="single"
+                  selected={date ? new Date(date + 'T00:00:00') : undefined}
+                  onSelect={(selectedDate) => {
+                    if (selectedDate) {
+                      const yyyy = selectedDate.getFullYear();
+                      const mm = String(selectedDate.getMonth() + 1).padStart(2, '0');
+                      const dd = String(selectedDate.getDate()).padStart(2, '0');
+                      setDate(`${yyyy}-${mm}-${dd}`);
+                    }
+                    setCalendarOpen(false);
+                  }}
+                  className={`${dark ? 'bg-black text-white border-none' : 'bg-white text-gray-900 border-none'}`}
                 />
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Two column grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {/* ---- LEFT COLUMN ---- */}
+          <div className="space-y-8">
+            
+            {/* Today's Classes */}
+            <section className={cardClass}>
+              <p className={`text-[11px] uppercase tracking-widest ${muted} mb-2`}>Schedule</p>
+              <h2 className="text-[16px] font-medium tracking-tight mb-4 flex justify-between items-center">
+                <span>Today&apos;s Classes</span>
+                <span className={`text-[11px] px-2 py-0.5 rounded border ${border} ${muted}`}>
+                  {unmarkedSubjects.length} classes
+                </span>
+              </h2>
+              {unmarkedSubjects.length === 0 ? (
+                <p className={`text-[13px] ${muted} py-4`}>No classes scheduled for today.</p>
+              ) : (
+                <div className="space-y-3">
+                  {unmarkedSubjects.map((subject: any) => (
+                    <div
+                      key={subject._id || subject.id}
+                      className={`border rounded-lg p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 ${border}`}
+                    >
+                      <div>
+                        <p className="font-medium text-[15px]">{subject.subjectName || subject.subject}</p>
+                        <p className={`text-[12px] mt-0.5 ${muted}`}>{subject.time}</p>
+                      </div>
+                      <div className="flex gap-2 flex-wrap mt-2 sm:mt-0">
+                        {['attended', 'missed', 'cancelled'].map((status) => (
+                          <button
+                            key={status}
+                            onClick={() => setAttendanceConfirm({ subject, status })}
+                            className={secondaryBtn}
+                          >
+                            {status.charAt(0).toUpperCase() + status.slice(1)}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+
+            {/* Marked Attendance */}
+            <section className={cardClass}>
+              <p className={`text-[11px] uppercase tracking-widest ${muted} mb-2`}>Attendance Logs</p>
+              <h2 className="text-[16px] font-medium tracking-tight mb-4">Marked Attendance</h2>
+              {markedSubjects.length === 0 ? (
+                <p className={`text-[13px] ${muted} py-4`}>No attendance marked yet.</p>
+              ) : (
+                <div className="space-y-2.5">
+                  {markedSubjects.map((subject: any) => (
+                    <div
+                      key={subject._id || subject.id}
+                      className={`border rounded-lg p-3.5 flex justify-between items-center ${border}`}
+                    >
+                      <div>
+                        <p className="font-medium text-[14px]">{subject.subject}</p>
+                        <p className={`text-[12px] mt-0.5 ${muted}`}>{subject.time}</p>
+                      </div>
+                      <span
+                        className={`px-3 py-1 rounded-full border text-[10px] uppercase font-medium tracking-wider ${
+                          subject.status === 'attended'
+                            ? 'border-green-500/30 text-green-500 bg-green-500/5'
+                            : subject.status === 'missed'
+                              ? 'border-red-500/30 text-red-500 bg-red-500/5'
+                              : 'border-gray-500/30 text-gray-500 bg-gray-500/5'
+                        }`}
+                      >
+                        {subject.status}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+
+            {/* Friends Section */}
+            <section className={cardClass}>
+              <p className={`text-[11px] uppercase tracking-widest ${muted} mb-2`}>Social Network</p>
+              <h2 className="text-[16px] font-medium tracking-tight mb-4">Friends & Connections</h2>
+
+              {/* Add friend */}
+              <div className="mb-6">
+                <p className={`text-[12px] font-medium mb-2.5 ${muted}`}>Add a Friend</p>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="Enter 6-digit friend code"
+                    value={friendCode}
+                    onChange={(e) => setFriendCode(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleAddFriend()}
+                    className={`${inputClass} flex-1`}
+                    maxLength={6}
+                  />
+                  <button
+                    onClick={handleAddFriend}
+                    disabled={!friendCode}
+                    className={primaryBtn}
+                  >
+                    Add
+                  </button>
+                </div>
+                {friendMessage && (
+                  <p className={`mt-2 text-xs font-medium ${friendMessage.type === 'error' ? 'text-red-500' : 'text-green-500'}`}>
+                    {friendMessage.text}
+                  </p>
+                )}
+              </div>
+
+              {/* Friends list */}
+              <div>
+                <p className={`text-[12px] font-medium mb-3 ${muted}`}>Your Friends</p>
+                {friends.length === 0 ? (
+                  <p className={`text-[13px] ${muted} py-2`}>No friends added yet.</p>
+                ) : (
+                  <ul className="space-y-2">
+                    {friends.map((f: any) => (
+                      <li
+                        key={f._id || f.id}
+                        className={`p-3 rounded-lg border flex justify-between items-center ${border}`}
+                      >
+                        <span className="text-[14px] font-medium">{f.name}</span>
+                        <div className="flex items-center gap-2">
+                          <span className={`text-[12px] ${muted}`}>{f.friendCode}</span>
+                          <button
+                            onClick={() => {
+                              navigator.clipboard.writeText(f.friendCode);
+                              toast.success("Friend code copied!");
+                            }}
+                            className={`p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-900 border ${border} transition-colors text-gray-500 hover:text-current`}
+                            aria-label="Copy friend code"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-3.5 h-3.5">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M15.666 3.888A2.25 2.25 0 0 0 13.5 2.25h-3c-1.03 0-1.9.693-2.166 1.638m7.332 0c.055.194.084.4.084.612v0a.75.75 0 0 1-.75.75H9a.75.75 0 0 1-.75-.75v0c0-.212.03-.418.084-.612m7.332 0c.646.049 1.288.11 1.927.184 1.1.128 1.907 1.077 1.907 2.185V19.5a2.25 2.25 0 0 1-2.25 2.25H6.75A2.25 2.25 0 0 1 4.5 19.5V6.257c0-1.108.806-2.057 1.907-2.185a48.208 48.208 0 0 1 1.927-.184" />
+                            </svg>
+                          </button>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </section>
+          </div>
+
+          {/* ---- RIGHT COLUMN ---- */}
+          <div className="space-y-8">
+            
+            {/* Study Sessions */}
+            <section className={cardClass}>
+              <p className={`text-[11px] uppercase tracking-widest ${muted} mb-2`}>Co-learning</p>
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-[16px] font-medium tracking-tight flex items-center gap-2">
+                  <span>Study Sessions</span>
+                  {newInviteCount > 0 && (
+                    <span className="inline-flex items-center justify-center w-5 h-5 text-xs font-bold text-white bg-black dark:bg-white dark:text-black border border-current rounded-full">
+                      {newInviteCount}
+                    </span>
+                  )}
+                </h2>
                 <button
-                  onClick={handleAddFriend}
-                  disabled={!friendCode}
-                  className="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  onClick={() => setCreateSessionOpen(true)}
+                  className={primaryBtn}
                 >
-                  Add
+                  Create Session
                 </button>
               </div>
 
-              {/* FIX: show error in red, success in green; auto-clears after 3s */}
-              {friendMessage && (
-                <p className={`mt-2 text-sm ${friendMessage.type === 'error' ? 'text-red-500' : 'text-green-500'}`}>
-                  {friendMessage.text}
-                </p>
-              )}
-            </div>
-
-            <div>
-              <h3 className="text-md font-medium mb-3">Your Friends</h3>
-              {friends.length === 0 ? (
-                <p className="text-gray-500">No friends added yet.</p>
-              ) : (
-                <ul className="space-y-2">
-                  {friends.map((f: any) => (
-                    <li
-                      key={f._id || f.id}
-                      className="p-2 rounded-lg bg-gray-100 dark:bg-gray-700 flex justify-between items-center"
-                    >
-                      <span>{f.name}</span>
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm text-gray-500">{f.friendCode}</span>
-                        <button
-                          onClick={() => navigator.clipboard.writeText(f.friendCode)}
-                          className="p-1 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 rounded focus:outline-none"
-                          aria-label="Copy friend code"
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M15.666 3.888A2.25 2.25 0 0 0 13.5 2.25h-3c-1.03 0-1.9.693-2.166 1.638m7.332 0c.055.194.084.4.084.612v0a.75.75 0 0 1-.75.75H9a.75.75 0 0 1-.75-.75v0c0-.212.03-.418.084-.612m7.332 0c.646.049 1.288.11 1.927.184 1.1.128 1.907 1.077 1.907 2.185V19.5a2.25 2.25 0 0 1-2.25 2.25H6.75A2.25 2.25 0 0 1 4.5 19.5V6.257c0-1.108.806-2.057 1.907-2.185a48.208 48.208 0 0 1 1.927-.184" />
-                          </svg>
-                        </button>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          </section>
-
-          {/* Today's Classes */}
-          <section className="p-4 rounded-2xl shadow-md bg-white dark:bg-gray-800">
-            <h2 className="text-xl font-semibold mb-4">Today&apos;s Classes</h2>
-            {unmarkedSubjects.length === 0 ? (
-              <p>No classes scheduled for today.</p>
-            ) : (
-              <div className="space-y-4">
-                {unmarkedSubjects.map((subject: any) => (
-                  <div
-                    key={subject._id || subject.id}
-                    className="border rounded-lg p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 dark:border-white border-black"
-                  >
-                    <div>
-                      <p className="font-semibold text-lg">{subject.subjectName || subject.subject}</p>
-                      <p className="text-sm text-gray-500 dark:text-gray-400">{subject.time}</p>
-                    </div>
-                    <div className="flex gap-2 flex-wrap mt-2 sm:mt-0">
-                      {['attended', 'missed', 'cancelled'].map((status) => (
-                        <button
-                          key={status}
-                          onClick={() => handleAttendance(subject, status)}
-                          className="border border-black dark:border-white px-4 py-1 rounded hover:bg-black hover:text-white dark:hover:bg-white dark:hover:text-black transition"
-                        >
-                          {status.charAt(0).toUpperCase() + status.slice(1)}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </section>
-
-          {/* Marked Attendance */}
-          <section className="p-4 rounded-2xl shadow-md bg-white dark:bg-gray-800">
-            <h2 className="text-xl font-semibold mb-4">Marked Attendance</h2>
-            {markedSubjects.length === 0 ? (
-              <p>No attendance marked yet.</p>
-            ) : (
-              <div className="space-y-4">
-                {markedSubjects.map((subject: any) => (
-                  <div
-                    key={subject._id || subject.id}
-                    className="border rounded-lg p-4 flex justify-between items-center dark:border-white border-black"
-                  >
-                    <div>
-                      <p className="font-semibold text-lg">{subject.subject}</p>
-                      <p className="text-sm text-gray-500 dark:text-gray-400">{subject.time}</p>
-                    </div>
-                    <span
-                      className={`px-4 py-1 rounded-full border text-sm uppercase ${subject.status === 'attended'
-                        ? 'border-green-500 text-green-600'
-                        : subject.status === 'missed'
-                          ? 'border-red-500 text-red-600'
-                          : 'border-gray-500 text-gray-600'
-                        }`}
-                    >
-                      {subject.status}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </section>
-        </div>
-
-        {/* ---- RIGHT COLUMN ---- */}
-        <div className="space-y-8">
-
-          {/* Study Sessions */}
-          <section className="p-4 rounded-2xl shadow-md bg-white dark:bg-gray-800">
-            <div className="flex justify-between items-center mb-4">
-              {/* FIX: notification badge on the section header */}
-              <h2 className="text-xl font-semibold flex items-center gap-2">
-                Study Sessions
-                {newInviteCount > 0 && (
-                  <span className="inline-flex items-center justify-center w-5 h-5 text-xs font-bold text-white bg-red-500 rounded-full">
-                    {newInviteCount}
-                  </span>
-                )}
-              </h2>
-              <button
-                onClick={() => setCreateSessionOpen(true)}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-              >
-                Create Session
-              </button>
-            </div>
-
-            {/* Pending Invites */}
-            <div className="mb-6">
-              <h3 className="text-lg font-medium mb-3">Pending Invites</h3>
-              {invites.length === 0 ? (
-                <p className="text-gray-500">No pending invites.</p>
-              ) : (
-                (invites as Invite[]).map((invite, idx) => (
-                  <div
-                    key={invite.id || idx}
-                    className="border rounded-lg p-4 flex justify-between items-center dark:border-white border-black bg-gradient-to-r from-yellow-50 to-orange-50 dark:from-gray-700 dark:to-gray-800 mb-3"
-                  >
-                    <div>
-                      <p className="font-semibold text-gray-800 dark:text-white">
-                        {invite.name || 'Unknown User'}
-                      </p>
-                      <p className="text-sm text-gray-600 dark:text-gray-300">
-                        {invite.subject || 'No topic'}
-                      </p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">
-                        {invite.startAt ? new Date(invite.startAt).toLocaleDateString() : 'No date'}
-                      </p>
-                    </div>
-                    <div className="flex gap-2">
-                      {/* FIX: disabled while pending to prevent double-tap */}
-                      <button
-                        onClick={() => handleAcceptInvite(invite)}
-                        disabled={pendingInviteId === invite.id}
-                        className="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        {pendingInviteId === invite.id ? '...' : 'Accept'}
-                      </button>
-                      <button
-                        onClick={() => handleDeclineInvite(invite)}
-                        disabled={pendingInviteId === invite.id}
-                        className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        Decline
-                      </button>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-
-            {/* Active Sessions */}
-            <div>
-              <h3 className="text-lg font-medium mb-3">Active Sessions</h3>
-              {activeSessions.length === 0 ? (
-                <p className="text-gray-500">No active sessions.</p>
-              ) : (
-                activeSessions.map((session, idx) => {
-                  const sessionId = session.id;
-                  const isJoined = joinedSessions.has(sessionId);
-
-                  // FIX: participant check uses currentUserId from auth context (not decoded JWT)
-                  const isAcceptedParticipant = session.participants?.some(
-                    (p) =>
-                      String(p.userId || p.user?.id) === String(currentUserId) &&
-                      p.status === 'accepted'
-                  );
-                  const canJoin =
-                    (session.status === 'scheduled' || session.status === 'in_progress') &&
-                    isAcceptedParticipant;
-
-                  return (
+              {/* Pending Invites */}
+              <div className="mb-6">
+                <p className={`text-[12px] font-medium mb-3 ${muted}`}>Pending Invites</p>
+                {invites.length === 0 ? (
+                  <p className={`text-[13px] ${muted} py-2`}>No pending invites.</p>
+                ) : (
+                  (invites as Invite[]).map((invite, idx) => (
                     <div
-                      key={sessionId || idx}
-                      className="border rounded-lg p-4 gap-4 dark:border-white border-black bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-gray-700 dark:to-gray-800 mb-3"
+                      key={invite.id || idx}
+                      className={`border rounded-lg p-4 flex justify-between items-center mb-3 ${border}`}
                     >
-                      <div className="flex justify-between items-start mb-3">
-                        <div>
-                          <h3 className="font-semibold text-lg text-gray-800 dark:text-white">
-                            {session.subject}
-                          </h3>
-                          <p className="text-sm text-gray-600 dark:text-gray-300">
-                            Duration: {session.duration} minutes
-                          </p>
-                        </div>
-                        <span className="px-3 py-1 rounded-full text-xs font-medium">
-                          <SessionStatus session={session} />
-                        </span>
+                      <div>
+                        <p className="font-medium text-[14px]">
+                          {invite.name || 'Unknown User'}
+                        </p>
+                        <p className={`text-[12px] mt-0.5 ${muted}`}>
+                          {invite.subject || 'No topic'}
+                        </p>
+                        <p className={`text-[11px] mt-1 ${muted}`}>
+                          {invite.startAt ? new Date(invite.startAt).toLocaleDateString() : 'No date'}
+                        </p>
                       </div>
-
-                      <div className="space-y-2 text-sm text-gray-600 dark:text-gray-300">
-                        <div>
-                          {new Date(session.startAt).toLocaleDateString('en-US', {
-                            weekday: 'short',
-                            month: 'short',
-                            day: 'numeric',
-                          })}
-                        </div>
-                        <div>
-                          {new Date(session.startAt).toLocaleTimeString('en-US', {
-                            hour: '2-digit',
-                            minute: '2-digit',
-                            hour12: true,
-                          })}
-                        </div>
-                      </div>
-
-                      <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-600">
-                        <div className="flex gap-2 flex-wrap">
-                          {canJoin && !isJoined && (
-                            <button
-                              onClick={() => handleJoinSession(sessionId)}
-                              className="px-4 py-2 bg-green-500 text-white text-sm rounded hover:bg-green-600 transition-colors"
-                            >
-                              Join Session
-                            </button>
-                          )}
-                          {isJoined && (
-                            <>
-                              <button
-                                onClick={() => handleLeaveSession(sessionId)}
-                                className="px-4 py-2 bg-red-500 text-white text-sm rounded hover:bg-red-600 transition-colors"
-                              >
-                                Leave Session
-                              </button>
-                              <button
-                                onClick={() => openChat(sessionId, session)}
-                                className="px-4 py-2 bg-blue-500 text-white text-sm rounded hover:bg-blue-600 transition-colors"
-                              >
-                                Chat
-                              </button>
-                            </>
-                          )}
-                          {/* Creator-only end session button */}
-                          {session.creatorId === currentUserId && isJoined && (
-                            <button
-                              onClick={() => {
-                                Swal.fire({
-                                  title: 'End session?',
-                                  text: 'This will end the session for all participants.',
-                                  icon: 'warning',
-                                  showCancelButton: true,
-                                  confirmButtonText: 'End session',
-                                  confirmButtonColor: '#EF4444',
-                                }).then((result) => {
-                                  if (result.isConfirmed) {
-                                    socket?.emit('endSession', { sessionId });
-                                  }
-                                });
-                              }}
-                              className="px-4 py-2 bg-gray-700 text-white text-sm rounded hover:bg-gray-900 transition-colors"
-                            >
-                              End Session
-                            </button>
-                          )}
-                        </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => handleAcceptInvite(invite)}
+                          disabled={pendingInviteId === invite.id}
+                          className={primaryBtn}
+                        >
+                          {pendingInviteId === invite.id ? '...' : 'Accept'}
+                        </button>
+                        <button
+                          onClick={() => handleDeclineInvite(invite)}
+                          disabled={pendingInviteId === invite.id}
+                          className={secondaryBtn}
+                        >
+                          Decline
+                        </button>
                       </div>
                     </div>
-                  );
-                })
-              )}
-            </div>
-          </section>
+                  ))
+                )}
+              </div>
 
-          {/* Stats */}
-          <section className="p-4 rounded-2xl shadow-md bg-white dark:bg-gray-800">
-            <h2 className="text-xl font-semibold mb-4">Attendance Statistics</h2>
-            <SubjectStatsChart />
-          </section>
+              {/* Active Sessions */}
+              <div>
+                <p className={`text-[12px] font-medium mb-3 ${muted}`}>Active Sessions</p>
+                {activeSessions.length === 0 ? (
+                  <p className={`text-[13px] ${muted} py-2`}>No active sessions.</p>
+                ) : (
+                  activeSessions.map((session, idx) => {
+                    const sessionId = session.id;
+                    const isJoined = joinedSessions.has(sessionId);
+
+                    const isAcceptedParticipant = session.participants?.some(
+                      (p) =>
+                        String(p.userId || p.user?.id) === String(currentUserId) &&
+                        p.status === 'accepted'
+                    );
+                    const canJoin =
+                      (session.status === 'scheduled' || session.status === 'in_progress') &&
+                      isAcceptedParticipant;
+
+                    return (
+                      <div
+                        key={sessionId || idx}
+                        className={`border rounded-lg p-4 mb-3 ${border}`}
+                      >
+                        <div className="flex justify-between items-start mb-3">
+                          <div>
+                            <h3 className="font-medium text-[15px]">{session.subject}</h3>
+                            <p className={`text-[12px] mt-0.5 ${muted}`}>
+                              Duration: {session.duration} mins
+                            </p>
+                          </div>
+                          <span className={`px-2 py-0.5 rounded text-[10px] uppercase border font-medium ${
+                            session.status === 'in_progress' ? 'border-green-500/30 text-green-500 bg-green-500/5' : 'border-gray-500/30 text-gray-500'
+                          }`}>
+                            <SessionStatus session={session} />
+                          </span>
+                        </div>
+
+                        <div className={`space-y-1 text-[12px] ${muted} mb-4`}>
+                          <div>
+                            {new Date(session.startAt).toLocaleDateString('en-US', {
+                              weekday: 'short',
+                              month: 'short',
+                              day: 'numeric',
+                            })}
+                          </div>
+                          <div>
+                            {new Date(session.startAt).toLocaleTimeString('en-US', {
+                              hour: '2-digit',
+                              minute: '2-digit',
+                              hour12: true,
+                            })}
+                          </div>
+                        </div>
+
+                        <div className={`pt-3 border-t ${border}`}>
+                          <div className="flex gap-2 flex-wrap">
+                            {canJoin && !isJoined && (
+                              <button
+                                onClick={() => handleJoinSession(sessionId)}
+                                className={primaryBtn}
+                              >
+                                Join Session
+                              </button>
+                            )}
+                            {isJoined && (
+                              <>
+                                <button
+                                  onClick={() => handleLeaveSession(sessionId)}
+                                  className={dangerBtn}
+                                >
+                                  Leave
+                                </button>
+                                <button
+                                  onClick={() => openChat(sessionId, session)}
+                                  className={primaryBtn}
+                                >
+                                  Chat
+                                </button>
+                              </>
+                            )}
+                            {session.creatorId === currentUserId && isJoined && (
+                              <button
+                                onClick={() => setSessionEndConfirm({ sessionId })}
+                                className={secondaryBtn}
+                              >
+                                End Session
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </section>
+
+            {/* Stats */}
+            <section className={cardClass}>
+              <p className={`text-[11px] uppercase tracking-widest ${muted} mb-2`}>Visual Insights</p>
+              <h2 className="text-[16px] font-medium tracking-tight mb-4">Attendance Statistics</h2>
+              <SubjectStatsChart />
+            </section>
+          </div>
         </div>
       </div>
 
       {/* Create Session Modal */}
       {createSessionOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-xl font-semibold">Create Study Session</h3>
-              <button onClick={closeCreateSession} aria-label="Close">&times;</button>
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className={`rounded-xl border p-6 w-full max-w-md ${dark ? 'bg-black border-gray-800 text-white' : 'bg-white border-gray-200 text-gray-900'}`}>
+            <div className="flex justify-between items-center mb-4 border-b pb-3 border-gray-150 dark:border-gray-900">
+              <h3 className="text-[16px] font-medium tracking-tight">Create Study Session</h3>
+              <button
+                onClick={closeCreateSession}
+                className={`text-[18px] leading-none transition-colors ${muted} hover:text-current`}
+                aria-label="Close"
+              >
+                &times;
+              </button>
             </div>
             <CreateStudySession socket={socket} onClose={closeCreateSession} />
           </div>
@@ -833,6 +854,79 @@ const Dashboard = () => {
           isOpen={chatOpen}
           onClose={() => setChatOpen(false)}
         />
+      )}
+
+      {/* Premium Custom Confirmation Dialog for Marking Attendance */}
+      {attendanceConfirm && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm transition-all duration-300">
+          <div className={`rounded-xl border p-6 max-w-md w-full mx-4 shadow-2xl animate-in fade-in zoom-in-95 duration-200 ${
+            dark ? 'bg-black border-gray-800 text-white' : 'bg-white border-gray-200 text-gray-900'
+          }`}>
+            <div className="mb-4">
+              <h3 className="text-[16px] font-medium tracking-tight">Confirm Attendance Change</h3>
+              <p className={`mt-2 text-sm leading-relaxed ${muted}`}>
+                Are you sure you want to mark <span className="font-semibold text-current">{attendanceConfirm.subject.subjectName || attendanceConfirm.subject.subject}</span> as <span className="font-semibold text-current capitalize">{attendanceConfirm.status}</span>?
+              </p>
+            </div>
+            <div className="flex justify-end gap-2.5 mt-6 pt-3 border-t border-gray-100 dark:border-gray-900">
+              <button
+                type="button"
+                onClick={() => setAttendanceConfirm(null)}
+                className={secondaryBtn}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  const { subject, status } = attendanceConfirm;
+                  setAttendanceConfirm(null);
+                  await handleAttendance(subject, status);
+                }}
+                className={primaryBtn}
+              >
+                Yes, Mark
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Premium Custom Confirmation Dialog for Ending Sessions */}
+      {sessionEndConfirm && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm transition-all duration-300">
+          <div className={`rounded-xl border p-6 max-w-md w-full mx-4 shadow-2xl animate-in fade-in zoom-in-95 duration-200 ${
+            dark ? 'bg-black border-gray-800 text-white' : 'bg-white border-gray-200 text-gray-900'
+          }`}>
+            <div className="mb-4">
+              <h3 className="text-[16px] font-medium tracking-tight text-red-500">End Study Session?</h3>
+              <p className={`mt-2 text-sm leading-relaxed ${muted}`}>
+                This will end the session for all participants. Are you sure you want to proceed?
+              </p>
+            </div>
+            <div className="flex justify-end gap-2.5 mt-6 pt-3 border-t border-gray-100 dark:border-gray-900">
+              <button
+                type="button"
+                onClick={() => setSessionEndConfirm(null)}
+                className={secondaryBtn}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const { sessionId } = sessionEndConfirm;
+                  setSessionEndConfirm(null);
+                  socket?.emit('endSession', { sessionId });
+                  toast.success("Study session ended successfully.");
+                }}
+                className={dangerBtn}
+              >
+                End Session
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
