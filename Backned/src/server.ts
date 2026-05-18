@@ -37,7 +37,7 @@ export const io = new Server(server, {
   cors: {
     origin: [
       process.env.FRONTEND_URL || 'http://localhost:3000',
-      'https://dojo-app-ep5l.vercel.app'
+      'https://dojo-beige.vercel.app/'
     ],
     methods: ['GET', 'POST'],
   },
