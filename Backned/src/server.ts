@@ -54,14 +54,24 @@ app.set('io', io);
 import prisma from './lib/prisma.js';
 
 // Test Database Connection and Start Server
-prisma.$connect()
-  .then(() => {
-    console.log('✅ Successfully connected to the database!');
-    const PORT = process.env.PORT || 5000;
-    server.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
-  })
-  .catch((err) => {
-    console.error('❌ Failed to connect to the database:', err.message);
-    process.exit(1);
-  });
+const isServerless = process.env.VERCEL === '1';
+
+if (isServerless) {
+  prisma.$connect()
+    .then(() => console.log('✅ Connected to database in serverless mode'))
+    .catch((err) => console.error('❌ Database connection warning:', err.message));
+} else {
+  prisma.$connect()
+    .then(() => {
+      console.log('✅ Successfully connected to the database!');
+      const PORT = process.env.PORT || 5000;
+      server.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+    })
+    .catch((err) => {
+      console.error('❌ Failed to connect to the database:', err.message);
+      process.exit(1);
+    });
+}
+
+export default app;
 
