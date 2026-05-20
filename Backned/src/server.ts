@@ -33,11 +33,14 @@ app.get('/', (_req, res) => {
 const server = createServer(app);
 
 // Init Socket.io
+const rawFrontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+const cleanFrontendUrl = rawFrontendUrl.endsWith('/') ? rawFrontendUrl.slice(0, -1) : rawFrontendUrl;
+
 export const io = new Server(server, {
   cors: {
     origin: [
-      process.env.FRONTEND_URL || 'http://localhost:3000',
-      'https://dojo-beige.vercel.app/'
+      cleanFrontendUrl,
+      'https://dojo-beige.vercel.app'
     ],
     methods: ['GET', 'POST'],
   },
