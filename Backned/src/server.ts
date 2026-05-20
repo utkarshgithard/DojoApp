@@ -40,7 +40,9 @@ export const io = new Server(server, {
   cors: {
     origin: [
       cleanFrontendUrl,
-      'https://dojo-beige.vercel.app'
+      'https://dojo-beige.vercel.app',
+      'https://dojoclass.space',      // ← add this
+      'https://www.dojoclass.space',  // ← and www variant
     ],
     methods: ['GET', 'POST'],
   },
