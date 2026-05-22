@@ -2,7 +2,7 @@ import axios from 'axios';
 import { auth } from './firebase';
 
 const API = axios.create({
-  baseURL: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api`,
+  baseURL: `${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5000'}/api`,
 });
 
 // Add token to every request (if exists)

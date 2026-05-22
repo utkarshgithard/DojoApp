@@ -30,7 +30,7 @@ const Dashboard = () => {
   const router = useRouter();
   const { darkMode, toggleDarkMode } = useDarkMode() as any;
   const { date, setDate, unmarkedSubjects, markedSubjects, handleAttendance, invites, loadExistingInvites, setInvites, friends, markHoliday, undoHoliday, attendanceLoading, holidayLoading, friendsLoading } = useAttendance() as any;
-  const { socket, joinedSessions, setJoinedSessions, sessions, setSessions } = useSocket() as any;
+  const { socket, joinedSessions, setJoinedSessions, sessions, setSessions, sessionsLoaded, setSessionsLoaded } = useSocket() as any;
 
   // FIX: userId from verified auth context — never decode JWT client-side
   const { userId: currentUserId, isAuthenticated, loading, logout } = useAuth() as any;
@@ -48,12 +48,17 @@ const Dashboard = () => {
   const [sessionEndConfirm, setSessionEndConfirm] = useState<{ sessionId: string } | null>(null);
   const [holidayConfirm, setHolidayConfirm] = useState(false);
   const [undoHolidayConfirm, setUndoHolidayConfirm] = useState(false);
-  const [sessionsLoading, setSessionsLoading] = useState(true);
+  const [sessionsLoading, setSessionsLoading] = useState(!sessionsLoaded);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [currentSessionDetails, setCurrentSessionDetails] = useState<Session | null>(null);
   const [friendCode, setFriendCode] = useState('');
   const [friendMessage, setFriendMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
   const friendMessageTimer = useRef<NodeJS.Timeout | null>(null);
+  const sessionsLoadedRef = useRef(sessionsLoaded);
+
+  useEffect(() => {
+    sessionsLoadedRef.current = sessionsLoaded;
+  }, [sessionsLoaded]);
 
   // FIX: per-invite pending state to prevent double-tap and allow retry on failure
   const [pendingInviteId, setPendingInviteId] = useState<string | null>(null);
@@ -61,9 +66,19 @@ const Dashboard = () => {
   // FIX: notification badge counter
   const [newInviteCount, setNewInviteCount] = useState(0);
 
-  // FIX: user details states
+  // FIX: user details states (initialized from local cache to prevent flashes)
   const [userName, setUserName] = useState('');
   const [profileLoading, setProfileLoading] = useState(true);
+
+  useEffect(() => {
+    const cachedName = localStorage.getItem('userName');
+    if (cachedName) {
+      setUserName(cachedName);
+      setProfileLoading(false);
+    } else {
+      setProfileLoading(false);
+    }
+  }, []);
 
   // FIX: keep a ref to joinedSessions so the 'connect' handler always sees the latest value
   const joinedSessionsRef = useRef<Set<string>>(joinedSessions);
@@ -133,10 +148,15 @@ const Dashboard = () => {
   // Data loaders (with unmount guard to prevent state update on unmounted component)
   // ---------------------------------------------------------------------------
   const loadExistingSessions = useCallback(async (signal?: AbortSignal) => {
-    setSessionsLoading(true);
+    if (!sessionsLoadedRef.current) {
+      setSessionsLoading(true);
+    }
     try {
       const response = await API.get('/study-session/mine', { signal });
-      if (!signal?.aborted) setSessions(response.data);
+      if (!signal?.aborted) {
+        setSessions(response.data);
+        setSessionsLoaded(true);
+      }
     } catch (error: any) {
       if (error.name !== 'CanceledError' && error.name !== 'AbortError') {
         console.error('Error loading existing sessions:', error);
@@ -144,7 +164,7 @@ const Dashboard = () => {
     } finally {
       if (!signal?.aborted) setSessionsLoading(false);
     }
-  }, [setSessions]);
+  }, [setSessions, setSessionsLoaded]);
 
   // ---------------------------------------------------------------------------
   // Active sessions derived value
@@ -340,11 +360,14 @@ const Dashboard = () => {
     // FIX: AbortController cancels in-flight API calls if component unmounts mid-request
     const controller = new AbortController();
 
-    setProfileLoading(true);
+    if (!userName) {
+      setProfileLoading(true);
+    }
     API.get('/auth/userDetails', { signal: controller.signal })
       .then(res => {
         if (res.data.user?.name) {
           setUserName(res.data.user.name);
+          localStorage.setItem('userName', res.data.user.name);
         }
       })
       .catch(err => {
@@ -494,10 +517,10 @@ const Dashboard = () => {
 
   return (
     <div className={`min-h-screen flex flex-col transition-colors duration-300 pt-[76px] ${dark ? 'bg-black text-white' : 'bg-white text-gray-900'}`}>
-      
+
       {/* Main Container */}
       <div className="flex-1 max-w-[1100px] w-full mx-auto px-5 py-8">
-        
+
         {/* Upper Dashboard header with Date Picker */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
           <div>
@@ -510,24 +533,22 @@ const Dashboard = () => {
             )}
             <p className={`text-[13px] ${muted}`}>Track classes, manage friends, and host joint study sessions</p>
           </div>
-          
+
           {/* Pick Date */}
           <div className="relative">
             <button
               type="button"
               onClick={() => setCalendarOpen(!calendarOpen)}
-              className={`flex items-center space-x-2 px-3.5 py-2 border rounded-lg text-[13px] font-medium transition-colors ${
-                dark ? 'border-gray-800 hover:bg-gray-950 text-gray-200' : 'border-gray-200 hover:bg-gray-50 text-gray-700'
-              }`}
+              className={`flex items-center space-x-2 px-3.5 py-2 border rounded-lg text-[13px] font-medium transition-colors ${dark ? 'border-gray-800 hover:bg-gray-950 text-gray-200' : 'border-gray-200 hover:bg-gray-50 text-gray-700'
+                }`}
             >
               <CalendarIcon className="size-4 text-gray-400" />
               <span>{date ? format(new Date(date + 'T00:00:00'), 'PPP') : 'Pick a date'}</span>
             </button>
 
             {calendarOpen && (
-              <div className={`absolute right-0 mt-2 z-50 p-2 rounded-lg border shadow-xl ${
-                dark ? 'bg-black border-gray-800' : 'bg-white border-gray-200'
-              }`}>
+              <div className={`absolute right-0 mt-2 z-50 p-2 rounded-lg border shadow-xl ${dark ? 'bg-black border-gray-800' : 'bg-white border-gray-200'
+                }`}>
                 <Calendar
                   mode="single"
                   selected={date ? new Date(date + 'T00:00:00') : undefined}

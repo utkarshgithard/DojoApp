@@ -175,10 +175,13 @@ export interface SocketContextType {
   setJoinedSessions: React.Dispatch<React.SetStateAction<Set<string>>>;
   sessions: any[];
   setSessions: React.Dispatch<React.SetStateAction<any[]>>;
+  sessionsLoaded: boolean;
+  setSessionsLoaded: React.Dispatch<React.SetStateAction<boolean>>;
   userNotifications: Notification[];
   clearNotification: (id: number) => void;
   clearAllNotifications: () => void;
 }
+
 
 export interface AttendanceContextType {
   date: string;

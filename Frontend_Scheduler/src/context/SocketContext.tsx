@@ -17,6 +17,7 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
   const [socket, setSocket] = useState<Socket | null>(null);
   const [joinedSessions, setJoinedSessions] = useState<Set<string>>(new Set());
   const [sessions, setSessions] = useState<any[]>([]);
+  const [sessionsLoaded, setSessionsLoaded] = useState(false);
   const [userNotifications, setUserNotifications] = useState<Notification[]>([]);
 
   useEffect(() => {
@@ -24,6 +25,7 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
     if (loading || !token) {
       setSocket(null);
       setJoinedSessions(new Set());
+      setSessionsLoaded(false);
       return;
     }
 
@@ -117,10 +119,12 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
     setJoinedSessions,
     sessions,
     setSessions,
+    sessionsLoaded,
+    setSessionsLoaded,
     userNotifications,
     clearNotification,
     clearAllNotifications,
-  }), [socket, joinedSessions, sessions, userNotifications]);
+  }), [socket, joinedSessions, sessions, sessionsLoaded, userNotifications]);
 
   return (
     <SocketContext.Provider value={value}>

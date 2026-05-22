@@ -11,7 +11,7 @@ import { auth } from '@/lib/firebase';
 
 const Navbar = () => {
   const { darkMode, toggleDarkMode } = useDarkMode() as any;
-  const { logout, isAuthenticated } = useContext(AuthContext) as any;
+  const { logout, isAuthenticated, loading } = useContext(AuthContext) as any;
   const router = useRouter();
   const pathname = usePathname();
 
@@ -21,7 +21,17 @@ const Navbar = () => {
   const [isMounted, setIsMounted] = useState(false);
   const [userName, setUserName] = useState('');
   const [userPhoto, setUserPhoto] = useState<string | null>(null);
-  const [profileLoading, setProfileLoading] = useState(false);
+  const [profileLoading, setProfileLoading] = useState(true);
+
+  useEffect(() => {
+    const cachedName = localStorage.getItem('userName');
+    if (cachedName) {
+      setUserName(cachedName);
+      setProfileLoading(false);
+    } else {
+      setProfileLoading(false);
+    }
+  }, []);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
 
   useEffect(() => {
@@ -30,8 +40,13 @@ const Navbar = () => {
 
   // Fetch username if authenticated
   useEffect(() => {
+    if (loading) return; // Wait for Firebase Auth to resolve
+
     if (isAuthenticated) {
-      setProfileLoading(true);
+      // Only show spinner on initial fetch (when we do not have a username yet)
+      if (!userName) {
+        setProfileLoading(true);
+      }
       
       const currentUser = auth.currentUser;
       if (currentUser?.photoURL) {
@@ -44,6 +59,7 @@ const Navbar = () => {
         .then(res => {
           if (res.data.user?.name) {
             setUserName(res.data.user.name);
+            localStorage.setItem('userName', res.data.user.name);
           }
         })
         .catch(err => console.error("Error fetching user details in Navbar:", err))
@@ -55,7 +71,7 @@ const Navbar = () => {
       setUserPhoto(null);
       setProfileLoading(false);
     }
-  }, [isAuthenticated, pathname]); // Re-fetch on pathname changes to sync updates from Settings
+  }, [isAuthenticated, loading, pathname]); // Re-fetch on pathname changes to sync updates from Settings
 
   const toggleMenu = () => setIsOpen(!isOpen);
   const closeMenu = () => setIsOpen(false);
@@ -108,10 +124,12 @@ const Navbar = () => {
       `}
     >
       <div className="max-w-[1100px] mx-auto px-5 py-3 flex justify-between items-center">
-        {/* Brand logo */}
-        <Link href="/dashboard" className="flex items-center gap-2" onClick={closeMenu}>
-          <span className="text-[16px] font-medium tracking-tight">ClassMate</span>
-        </Link>
+        {/* Brand logo on the left */}
+        <div className="flex items-center gap-3">
+          <Link href="/dashboard" className="flex items-center gap-2" onClick={closeMenu}>
+            <span className="text-[16px] font-medium tracking-tight">ClassMate</span>
+          </Link>
+        </div>
 
         {/* Desktop Links */}
         <div className="hidden md:flex items-center gap-6">
@@ -149,17 +167,28 @@ const Navbar = () => {
           </Link>
         </div>
 
-        {/* Right side controls */}
-        <div className="hidden md:flex items-center gap-3">
-          {/* Dark Mode Switcher */}
+        {/* Right side controls (Always visible, containing desktop-only Dark Mode Switcher, mobile hamburger, & all-devices Profile Dropdown) */}
+        <div className="flex items-center gap-3">
+          {/* Dark Mode Switcher - hidden on mobile, visible on desktop */}
           <button
             onClick={toggleDarkMode}
-            className={`p-2 rounded-full border transition-colors ${
+            className={`hidden md:flex p-2 rounded-full border transition-colors ${
               dark ? 'border-gray-800 text-gray-300 hover:bg-gray-900' : 'border-gray-200 text-gray-600 hover:bg-gray-50'
             }`}
             aria-label="Toggle dark mode"
           >
             {dark ? <Sun size={14} /> : <Moon size={14} />}
+          </button>
+
+          {/* Mobile hamburger menu toggle button - placed immediately to the left of the profile */}
+          <button
+            onClick={toggleMenu}
+            className={`p-1.5 rounded border transition-colors md:hidden ${
+              dark ? 'border-gray-800 text-white hover:bg-gray-900' : 'border-gray-200 text-gray-900 hover:bg-gray-50'
+            }`}
+            aria-label="Menu"
+          >
+            {isOpen ? <X size={16} /> : <Menu size={16} />}
           </button>
 
           {isMounted && isAuthenticated && (
@@ -253,6 +282,26 @@ const Navbar = () => {
                       <LayoutDashboard size={13} />
                       <span>Dashboard</span>
                     </Link>
+
+                    {/* Mobile-only Dark/Light Mode toggle */}
+                    <button
+                      onClick={() => {
+                        toggleDarkMode();
+                      }}
+                      className={`flex md:hidden items-center justify-between w-full px-3 py-2 rounded-lg text-[13px] font-medium transition-colors text-left ${
+                        dark ? 'text-gray-400 hover:text-white hover:bg-gray-950' : 'text-gray-600 hover:text-black hover:bg-gray-50'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        {dark ? <Sun size={13} /> : <Moon size={13} />}
+                        <span>{dark ? 'Light Mode' : 'Dark Mode'}</span>
+                      </div>
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded border ${
+                        dark ? 'border-gray-800 text-gray-400 bg-gray-950' : 'border-gray-200 text-gray-500 bg-gray-50'
+                      }`}>
+                        {dark ? 'Dark' : 'Light'}
+                      </span>
+                    </button>
                   </div>
 
                   <div className="border-t border-gray-100 dark:border-gray-950 pt-1 mt-1">
@@ -271,29 +320,6 @@ const Navbar = () => {
               )}
             </div>
           )}
-        </div>
-
-        {/* Mobile controls & toggle */}
-        <div className="flex items-center gap-3.5 md:hidden">
-          <button
-            onClick={toggleDarkMode}
-            className={`p-1.5 rounded-full border ${
-              dark ? 'border-gray-800 text-gray-300' : 'border-gray-200 text-gray-600'
-            }`}
-            aria-label="Toggle dark mode"
-          >
-            {dark ? <Sun size={13} /> : <Moon size={13} />}
-          </button>
-
-          <button
-            onClick={toggleMenu}
-            className={`p-1.5 rounded border transition-colors ${
-              dark ? 'border-gray-800 text-white' : 'border-gray-200 text-gray-900'
-            }`}
-            aria-label="Menu"
-          >
-            {isOpen ? <X size={16} /> : <Menu size={16} />}
-          </button>
         </div>
       </div>
 
