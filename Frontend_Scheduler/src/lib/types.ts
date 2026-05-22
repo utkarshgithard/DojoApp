@@ -188,8 +188,13 @@ export interface AttendanceContextType {
   fetchSubjects: (latestMarkedSubjects?: Subject[]) => Promise<void>;
   fetchFriends: () => Promise<void>;
   friends: any[];
+  friendsLoading: boolean;
   fetchSummary: () => Promise<void>;
+  attendanceLoading: boolean;
+  holidayLoading: boolean;
   handleAttendance: (subject: Subject, status: string) => Promise<void>;
+  markHoliday: () => Promise<void>;
+  undoHoliday: () => Promise<void>;
   sessions: any[];
   setSessions: React.Dispatch<React.SetStateAction<any[]>>;
   invites: any[];

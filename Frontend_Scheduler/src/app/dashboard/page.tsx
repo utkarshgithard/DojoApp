@@ -10,12 +10,18 @@ import { useSocket } from '@/context/SocketContext';
 import { useAuth } from '@/context/authContext'; // FIX: corrected casing to match disk
 import API from '@/lib/axios';
 import SessionStatus from '@/components/SessionStatus';
-import { DashboardInvite as Invite, StudySession as Session, StudySession } from '@/lib/types';
+import { DashboardInvite as Invite, StudySession as Session } from '@/lib/types';
+import TodayClasses from '@/components/dashboard/TodayClasses';
+import MarkedAttendance from '@/components/dashboard/MarkedAttendance';
+import FriendsSection from '@/components/dashboard/FriendsSection';
+import StudySessionsSection from '@/components/dashboard/StudySessionsSection';
+import DashboardConfirmationModals from '@/components/dashboard/DashboardConfirmationModals';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
 import { Calendar } from '@/components/ui/calendar';
+import { Button } from '@/components/ui/button';
 import { format } from 'date-fns';
-import { CalendarIcon, Sun, Moon, Plus, LogOut, ArrowRight, UserPlus, Users, MessageSquare } from 'lucide-react';
+import { CalendarIcon, Sun, Moon, Plus, LogOut, ArrowRight, UserPlus, Users, MessageSquare, Undo2 } from 'lucide-react';
 
 // ---------------------------------------------------------------------------
 // Dashboard
@@ -23,7 +29,7 @@ import { CalendarIcon, Sun, Moon, Plus, LogOut, ArrowRight, UserPlus, Users, Mes
 const Dashboard = () => {
   const router = useRouter();
   const { darkMode, toggleDarkMode } = useDarkMode() as any;
-  const { date, setDate, unmarkedSubjects, markedSubjects, handleAttendance, invites, loadExistingInvites, setInvites, friends } = useAttendance() as any;
+  const { date, setDate, unmarkedSubjects, markedSubjects, handleAttendance, invites, loadExistingInvites, setInvites, friends, markHoliday, undoHoliday, attendanceLoading, holidayLoading, friendsLoading } = useAttendance() as any;
   const { socket, joinedSessions, setJoinedSessions, sessions, setSessions } = useSocket() as any;
 
   // FIX: userId from verified auth context — never decode JWT client-side
@@ -31,7 +37,7 @@ const Dashboard = () => {
 
   useEffect(() => {
     if (!loading && !isAuthenticated) {
-      router.push('/login');
+      router.push('/');
     }
   }, [isAuthenticated, loading, router]);
 
@@ -40,6 +46,9 @@ const Dashboard = () => {
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [attendanceConfirm, setAttendanceConfirm] = useState<{ subject: any; status: string } | null>(null);
   const [sessionEndConfirm, setSessionEndConfirm] = useState<{ sessionId: string } | null>(null);
+  const [holidayConfirm, setHolidayConfirm] = useState(false);
+  const [undoHolidayConfirm, setUndoHolidayConfirm] = useState(false);
+  const [sessionsLoading, setSessionsLoading] = useState(true);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [currentSessionDetails, setCurrentSessionDetails] = useState<Session | null>(null);
   const [friendCode, setFriendCode] = useState('');
@@ -51,6 +60,10 @@ const Dashboard = () => {
 
   // FIX: notification badge counter
   const [newInviteCount, setNewInviteCount] = useState(0);
+
+  // FIX: user details states
+  const [userName, setUserName] = useState('');
+  const [profileLoading, setProfileLoading] = useState(true);
 
   // FIX: keep a ref to joinedSessions so the 'connect' handler always sees the latest value
   const joinedSessionsRef = useRef<Set<string>>(joinedSessions);
@@ -120,6 +133,7 @@ const Dashboard = () => {
   // Data loaders (with unmount guard to prevent state update on unmounted component)
   // ---------------------------------------------------------------------------
   const loadExistingSessions = useCallback(async (signal?: AbortSignal) => {
+    setSessionsLoading(true);
     try {
       const response = await API.get('/study-session/mine', { signal });
       if (!signal?.aborted) setSessions(response.data);
@@ -127,6 +141,8 @@ const Dashboard = () => {
       if (error.name !== 'CanceledError' && error.name !== 'AbortError') {
         console.error('Error loading existing sessions:', error);
       }
+    } finally {
+      if (!signal?.aborted) setSessionsLoading(false);
     }
   }, [setSessions]);
 
@@ -324,6 +340,22 @@ const Dashboard = () => {
     // FIX: AbortController cancels in-flight API calls if component unmounts mid-request
     const controller = new AbortController();
 
+    setProfileLoading(true);
+    API.get('/auth/userDetails', { signal: controller.signal })
+      .then(res => {
+        if (res.data.user?.name) {
+          setUserName(res.data.user.name);
+        }
+      })
+      .catch(err => {
+        if (err.name !== 'CanceledError' && err.name !== 'AbortError') {
+          console.error("Error fetching user details in Dashboard:", err);
+        }
+      })
+      .finally(() => {
+        setProfileLoading(false);
+      });
+
     loadExistingInvites();
     loadExistingSessions(controller.signal);
 
@@ -457,6 +489,9 @@ const Dashboard = () => {
 
   const dangerBtn = `px-3.5 py-1.5 rounded-lg text-[13px] font-medium border border-red-500/50 text-red-500 hover:bg-red-500/10 transition-colors`;
 
+  const hasClasses = unmarkedSubjects.length > 0 || markedSubjects.length > 0;
+  const isAlreadyHoliday = unmarkedSubjects.length === 0 && markedSubjects.length > 0 && markedSubjects.every((s: any) => s.status === 'cancelled');
+
   return (
     <div className={`min-h-screen flex flex-col transition-colors duration-300 pt-[76px] ${dark ? 'bg-black text-white' : 'bg-white text-gray-900'}`}>
       
@@ -466,7 +501,13 @@ const Dashboard = () => {
         {/* Upper Dashboard header with Date Picker */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
           <div>
-            <h1 className="text-[22px] font-medium tracking-tight mb-1">Dojo Workspace</h1>
+            {profileLoading ? (
+              <div className="h-7 w-48 bg-gray-200 dark:bg-gray-850 rounded animate-pulse mb-1.5" />
+            ) : (
+              <h1 className="text-[22px] font-medium tracking-tight mb-1">
+                {userName ? `${userName}'s Workspace` : 'Dojo Workspace'}
+              </h1>
+            )}
             <p className={`text-[13px] ${muted}`}>Track classes, manage friends, and host joint study sessions</p>
           </div>
           
@@ -510,312 +551,72 @@ const Dashboard = () => {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* ---- LEFT COLUMN ---- */}
           <div className="space-y-8">
-            
-            {/* Today's Classes */}
-            <section className={cardClass}>
-              <p className={`text-[11px] uppercase tracking-widest ${muted} mb-2`}>Schedule</p>
-              <h2 className="text-[16px] font-medium tracking-tight mb-4 flex justify-between items-center">
-                <span>Today&apos;s Classes</span>
-                <span className={`text-[11px] px-2 py-0.5 rounded border ${border} ${muted}`}>
-                  {unmarkedSubjects.length} classes
-                </span>
-              </h2>
-              {unmarkedSubjects.length === 0 ? (
-                <p className={`text-[13px] ${muted} py-4`}>No classes scheduled for today.</p>
-              ) : (
-                <div className="space-y-3">
-                  {unmarkedSubjects.map((subject: any) => (
-                    <div
-                      key={subject._id || subject.id}
-                      className={`border rounded-lg p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 ${border}`}
-                    >
-                      <div>
-                        <p className="font-medium text-[15px]">{subject.subjectName || subject.subject}</p>
-                        <p className={`text-[12px] mt-0.5 ${muted}`}>{subject.time}</p>
-                      </div>
-                      <div className="flex gap-2 flex-wrap mt-2 sm:mt-0">
-                        {['attended', 'missed', 'cancelled'].map((status) => (
-                          <button
-                            key={status}
-                            onClick={() => setAttendanceConfirm({ subject, status })}
-                            className={secondaryBtn}
-                          >
-                            {status.charAt(0).toUpperCase() + status.slice(1)}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </section>
+            <TodayClasses
+              date={date}
+              unmarkedSubjects={unmarkedSubjects}
+              attendanceLoading={attendanceLoading}
+              holidayLoading={holidayLoading}
+              hasClasses={hasClasses}
+              isAlreadyHoliday={isAlreadyHoliday}
+              setUndoHolidayConfirm={setUndoHolidayConfirm}
+              setHolidayConfirm={setHolidayConfirm}
+              setAttendanceConfirm={setAttendanceConfirm}
+              cardClass={cardClass}
+              border={border}
+              muted={muted}
+              secondaryBtn={secondaryBtn}
+            />
 
-            {/* Marked Attendance */}
-            <section className={cardClass}>
-              <p className={`text-[11px] uppercase tracking-widest ${muted} mb-2`}>Attendance Logs</p>
-              <h2 className="text-[16px] font-medium tracking-tight mb-4">Marked Attendance</h2>
-              {markedSubjects.length === 0 ? (
-                <p className={`text-[13px] ${muted} py-4`}>No attendance marked yet.</p>
-              ) : (
-                <div className="space-y-2.5">
-                  {markedSubjects.map((subject: any) => (
-                    <div
-                      key={subject._id || subject.id}
-                      className={`border rounded-lg p-3.5 flex justify-between items-center ${border}`}
-                    >
-                      <div>
-                        <p className="font-medium text-[14px]">{subject.subject}</p>
-                        <p className={`text-[12px] mt-0.5 ${muted}`}>{subject.time}</p>
-                      </div>
-                      <span
-                        className={`px-3 py-1 rounded-full border text-[10px] uppercase font-medium tracking-wider ${
-                          subject.status === 'attended'
-                            ? 'border-green-500/30 text-green-500 bg-green-500/5'
-                            : subject.status === 'missed'
-                              ? 'border-red-500/30 text-red-500 bg-red-500/5'
-                              : 'border-gray-500/30 text-gray-500 bg-gray-500/5'
-                        }`}
-                      >
-                        {subject.status}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </section>
+            <MarkedAttendance
+              date={date}
+              markedSubjects={markedSubjects}
+              attendanceLoading={attendanceLoading}
+              holidayLoading={holidayLoading}
+              cardClass={cardClass}
+              border={border}
+              muted={muted}
+            />
 
-            {/* Friends Section */}
-            <section className={cardClass}>
-              <p className={`text-[11px] uppercase tracking-widest ${muted} mb-2`}>Social Network</p>
-              <h2 className="text-[16px] font-medium tracking-tight mb-4">Friends & Connections</h2>
-
-              {/* Add friend */}
-              <div className="mb-6">
-                <p className={`text-[12px] font-medium mb-2.5 ${muted}`}>Add a Friend</p>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    placeholder="Enter 6-digit friend code"
-                    value={friendCode}
-                    onChange={(e) => setFriendCode(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleAddFriend()}
-                    className={`${inputClass} flex-1`}
-                    maxLength={6}
-                  />
-                  <button
-                    onClick={handleAddFriend}
-                    disabled={!friendCode}
-                    className={primaryBtn}
-                  >
-                    Add
-                  </button>
-                </div>
-                {friendMessage && (
-                  <p className={`mt-2 text-xs font-medium ${friendMessage.type === 'error' ? 'text-red-500' : 'text-green-500'}`}>
-                    {friendMessage.text}
-                  </p>
-                )}
-              </div>
-
-              {/* Friends list */}
-              <div>
-                <p className={`text-[12px] font-medium mb-3 ${muted}`}>Your Friends</p>
-                {friends.length === 0 ? (
-                  <p className={`text-[13px] ${muted} py-2`}>No friends added yet.</p>
-                ) : (
-                  <ul className="space-y-2">
-                    {friends.map((f: any) => (
-                      <li
-                        key={f._id || f.id}
-                        className={`p-3 rounded-lg border flex justify-between items-center ${border}`}
-                      >
-                        <span className="text-[14px] font-medium">{f.name}</span>
-                        <div className="flex items-center gap-2">
-                          <span className={`text-[12px] ${muted}`}>{f.friendCode}</span>
-                          <button
-                            onClick={() => {
-                              navigator.clipboard.writeText(f.friendCode);
-                              toast.success("Friend code copied!");
-                            }}
-                            className={`p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-900 border ${border} transition-colors text-gray-500 hover:text-current`}
-                            aria-label="Copy friend code"
-                          >
-                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-3.5 h-3.5">
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M15.666 3.888A2.25 2.25 0 0 0 13.5 2.25h-3c-1.03 0-1.9.693-2.166 1.638m7.332 0c.055.194.084.4.084.612v0a.75.75 0 0 1-.75.75H9a.75.75 0 0 1-.75-.75v0c0-.212.03-.418.084-.612m7.332 0c.646.049 1.288.11 1.927.184 1.1.128 1.907 1.077 1.907 2.185V19.5a2.25 2.25 0 0 1-2.25 2.25H6.75A2.25 2.25 0 0 1 4.5 19.5V6.257c0-1.108.806-2.057 1.907-2.185a48.208 48.208 0 0 1 1.927-.184" />
-                            </svg>
-                          </button>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            </section>
+            <FriendsSection
+              friendCode={friendCode}
+              setFriendCode={setFriendCode}
+              handleAddFriend={handleAddFriend}
+              friendMessage={friendMessage}
+              friends={friends}
+              friendsLoading={friendsLoading}
+              cardClass={cardClass}
+              border={border}
+              muted={muted}
+              inputClass={inputClass}
+              primaryBtn={primaryBtn}
+            />
           </div>
 
           {/* ---- RIGHT COLUMN ---- */}
           <div className="space-y-8">
-            
-            {/* Study Sessions */}
-            <section className={cardClass}>
-              <p className={`text-[11px] uppercase tracking-widest ${muted} mb-2`}>Co-learning</p>
-              <div className="flex justify-between items-center mb-4">
-                <h2 className="text-[16px] font-medium tracking-tight flex items-center gap-2">
-                  <span>Study Sessions</span>
-                  {newInviteCount > 0 && (
-                    <span className="inline-flex items-center justify-center w-5 h-5 text-xs font-bold text-white bg-black dark:bg-white dark:text-black border border-current rounded-full">
-                      {newInviteCount}
-                    </span>
-                  )}
-                </h2>
-                <button
-                  onClick={() => setCreateSessionOpen(true)}
-                  className={primaryBtn}
-                >
-                  Create Session
-                </button>
-              </div>
-
-              {/* Pending Invites */}
-              <div className="mb-6">
-                <p className={`text-[12px] font-medium mb-3 ${muted}`}>Pending Invites</p>
-                {invites.length === 0 ? (
-                  <p className={`text-[13px] ${muted} py-2`}>No pending invites.</p>
-                ) : (
-                  (invites as Invite[]).map((invite, idx) => (
-                    <div
-                      key={invite.id || idx}
-                      className={`border rounded-lg p-4 flex justify-between items-center mb-3 ${border}`}
-                    >
-                      <div>
-                        <p className="font-medium text-[14px]">
-                          {invite.name || 'Unknown User'}
-                        </p>
-                        <p className={`text-[12px] mt-0.5 ${muted}`}>
-                          {invite.subject || 'No topic'}
-                        </p>
-                        <p className={`text-[11px] mt-1 ${muted}`}>
-                          {invite.startAt ? new Date(invite.startAt).toLocaleDateString() : 'No date'}
-                        </p>
-                      </div>
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => handleAcceptInvite(invite)}
-                          disabled={pendingInviteId === invite.id}
-                          className={primaryBtn}
-                        >
-                          {pendingInviteId === invite.id ? '...' : 'Accept'}
-                        </button>
-                        <button
-                          onClick={() => handleDeclineInvite(invite)}
-                          disabled={pendingInviteId === invite.id}
-                          className={secondaryBtn}
-                        >
-                          Decline
-                        </button>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-
-              {/* Active Sessions */}
-              <div>
-                <p className={`text-[12px] font-medium mb-3 ${muted}`}>Active Sessions</p>
-                {activeSessions.length === 0 ? (
-                  <p className={`text-[13px] ${muted} py-2`}>No active sessions.</p>
-                ) : (
-                  activeSessions.map((session, idx) => {
-                    const sessionId = session.id;
-                    const isJoined = joinedSessions.has(sessionId);
-
-                    const isAcceptedParticipant = session.participants?.some(
-                      (p) =>
-                        String(p.userId || p.user?.id) === String(currentUserId) &&
-                        p.status === 'accepted'
-                    );
-                    const canJoin =
-                      (session.status === 'scheduled' || session.status === 'in_progress') &&
-                      isAcceptedParticipant;
-
-                    return (
-                      <div
-                        key={sessionId || idx}
-                        className={`border rounded-lg p-4 mb-3 ${border}`}
-                      >
-                        <div className="flex justify-between items-start mb-3">
-                          <div>
-                            <h3 className="font-medium text-[15px]">{session.subject}</h3>
-                            <p className={`text-[12px] mt-0.5 ${muted}`}>
-                              Duration: {session.duration} mins
-                            </p>
-                          </div>
-                          <span className={`px-2 py-0.5 rounded text-[10px] uppercase border font-medium ${
-                            session.status === 'in_progress' ? 'border-green-500/30 text-green-500 bg-green-500/5' : 'border-gray-500/30 text-gray-500'
-                          }`}>
-                            <SessionStatus session={session} />
-                          </span>
-                        </div>
-
-                        <div className={`space-y-1 text-[12px] ${muted} mb-4`}>
-                          <div>
-                            {new Date(session.startAt).toLocaleDateString('en-US', {
-                              weekday: 'short',
-                              month: 'short',
-                              day: 'numeric',
-                            })}
-                          </div>
-                          <div>
-                            {new Date(session.startAt).toLocaleTimeString('en-US', {
-                              hour: '2-digit',
-                              minute: '2-digit',
-                              hour12: true,
-                            })}
-                          </div>
-                        </div>
-
-                        <div className={`pt-3 border-t ${border}`}>
-                          <div className="flex gap-2 flex-wrap">
-                            {canJoin && !isJoined && (
-                              <button
-                                onClick={() => handleJoinSession(sessionId)}
-                                className={primaryBtn}
-                              >
-                                Join Session
-                              </button>
-                            )}
-                            {isJoined && (
-                              <>
-                                <button
-                                  onClick={() => handleLeaveSession(sessionId)}
-                                  className={dangerBtn}
-                                >
-                                  Leave
-                                </button>
-                                <button
-                                  onClick={() => openChat(sessionId, session)}
-                                  className={primaryBtn}
-                                >
-                                  Chat
-                                </button>
-                              </>
-                            )}
-                            {session.creatorId === currentUserId && isJoined && (
-                              <button
-                                onClick={() => setSessionEndConfirm({ sessionId })}
-                                className={secondaryBtn}
-                              >
-                                End Session
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-            </section>
+            <StudySessionsSection
+              newInviteCount={newInviteCount}
+              setCreateSessionOpen={setCreateSessionOpen}
+              sessionsLoading={sessionsLoading}
+              invites={invites}
+              handleAcceptInvite={handleAcceptInvite}
+              handleDeclineInvite={handleDeclineInvite}
+              pendingInviteId={pendingInviteId}
+              activeSessions={activeSessions}
+              joinedSessions={joinedSessions}
+              currentUserId={currentUserId}
+              handleJoinSession={handleJoinSession}
+              handleLeaveSession={handleLeaveSession}
+              openChat={openChat}
+              setSessionEndConfirm={setSessionEndConfirm}
+              cardClass={cardClass}
+              border={border}
+              muted={muted}
+              primaryBtn={primaryBtn}
+              secondaryBtn={secondaryBtn}
+              dangerBtn={dangerBtn}
+              dark={dark}
+            />
 
             {/* Stats */}
             <section className={cardClass}>
@@ -856,78 +657,27 @@ const Dashboard = () => {
         />
       )}
 
-      {/* Premium Custom Confirmation Dialog for Marking Attendance */}
-      {attendanceConfirm && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm transition-all duration-300">
-          <div className={`rounded-xl border p-6 max-w-md w-full mx-4 shadow-2xl animate-in fade-in zoom-in-95 duration-200 ${
-            dark ? 'bg-black border-gray-800 text-white' : 'bg-white border-gray-200 text-gray-900'
-          }`}>
-            <div className="mb-4">
-              <h3 className="text-[16px] font-medium tracking-tight">Confirm Attendance Change</h3>
-              <p className={`mt-2 text-sm leading-relaxed ${muted}`}>
-                Are you sure you want to mark <span className="font-semibold text-current">{attendanceConfirm.subject.subjectName || attendanceConfirm.subject.subject}</span> as <span className="font-semibold text-current capitalize">{attendanceConfirm.status}</span>?
-              </p>
-            </div>
-            <div className="flex justify-end gap-2.5 mt-6 pt-3 border-t border-gray-100 dark:border-gray-900">
-              <button
-                type="button"
-                onClick={() => setAttendanceConfirm(null)}
-                className={secondaryBtn}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={async () => {
-                  const { subject, status } = attendanceConfirm;
-                  setAttendanceConfirm(null);
-                  await handleAttendance(subject, status);
-                }}
-                className={primaryBtn}
-              >
-                Yes, Mark
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Premium Custom Confirmation Dialog for Ending Sessions */}
-      {sessionEndConfirm && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm transition-all duration-300">
-          <div className={`rounded-xl border p-6 max-w-md w-full mx-4 shadow-2xl animate-in fade-in zoom-in-95 duration-200 ${
-            dark ? 'bg-black border-gray-800 text-white' : 'bg-white border-gray-200 text-gray-900'
-          }`}>
-            <div className="mb-4">
-              <h3 className="text-[16px] font-medium tracking-tight text-red-500">End Study Session?</h3>
-              <p className={`mt-2 text-sm leading-relaxed ${muted}`}>
-                This will end the session for all participants. Are you sure you want to proceed?
-              </p>
-            </div>
-            <div className="flex justify-end gap-2.5 mt-6 pt-3 border-t border-gray-100 dark:border-gray-900">
-              <button
-                type="button"
-                onClick={() => setSessionEndConfirm(null)}
-                className={secondaryBtn}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  const { sessionId } = sessionEndConfirm;
-                  setSessionEndConfirm(null);
-                  socket?.emit('endSession', { sessionId });
-                  toast.success("Study session ended successfully.");
-                }}
-                className={dangerBtn}
-              >
-                End Session
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Premium Custom Confirmation Modals */}
+      <DashboardConfirmationModals
+        attendanceConfirm={attendanceConfirm}
+        setAttendanceConfirm={setAttendanceConfirm}
+        handleAttendance={handleAttendance}
+        sessionEndConfirm={sessionEndConfirm}
+        setSessionEndConfirm={setSessionEndConfirm}
+        socket={socket}
+        holidayConfirm={holidayConfirm}
+        setHolidayConfirm={setHolidayConfirm}
+        markHoliday={markHoliday}
+        undoHolidayConfirm={undoHolidayConfirm}
+        setUndoHolidayConfirm={setUndoHolidayConfirm}
+        undoHoliday={undoHoliday}
+        date={date}
+        dark={dark}
+        muted={muted}
+        secondaryBtn={secondaryBtn}
+        primaryBtn={primaryBtn}
+        dangerBtn={dangerBtn}
+      />
     </div>
   );
 };

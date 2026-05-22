@@ -56,15 +56,15 @@ const CreateStudySession = ({ socket, onClose }: { socket: any, onClose: () => v
 
     const inputClass = `w-full px-3.5 py-2 text-sm rounded-lg border outline-none transition-colors mb-3
         ${dark
-          ? 'bg-black border-gray-800 text-white placeholder-gray-700 focus:border-gray-600'
-          : 'bg-white border-gray-200 text-gray-900 placeholder-gray-400 focus:border-gray-400'
+            ? 'bg-black border-gray-800 text-white placeholder-gray-700 focus:border-gray-600'
+            : 'bg-white border-gray-200 text-gray-900 placeholder-gray-400 focus:border-gray-400'
         }`;
 
     const labelClass = `block text-[11px] uppercase tracking-wider font-medium mb-1.5 ${muted}`;
 
     return (
         <div className="space-y-4">
-            
+
             {/* Subject field */}
             <div>
                 <label className={labelClass}>Subject Name</label>
@@ -86,22 +86,20 @@ const CreateStudySession = ({ socket, onClose }: { socket: any, onClose: () => v
                     <button
                         type="button"
                         onClick={() => setCalendarOpen(!calendarOpen)}
-                        className={`flex items-center space-x-2 w-full px-3.5 py-2 border rounded-lg text-sm transition-colors text-left ${
-                            dark 
-                                ? 'border-gray-800 bg-black text-gray-200 hover:bg-gray-950' 
+                        className={`flex items-center space-x-2 w-full px-3.5 py-2 border rounded-lg text-sm transition-colors text-left ${dark
+                                ? 'border-gray-800 bg-black text-gray-200 hover:bg-gray-950'
                                 : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
-                        }`}
+                            }`}
                     >
                         <CalendarIcon className="size-4 text-gray-400" />
                         <span className="truncate">
                             {date ? format(new Date(date + 'T00:00:00'), 'PPP') : 'Select Date'}
                         </span>
                     </button>
-                    
+
                     {calendarOpen && (
-                        <div className={`absolute left-0 mt-1.5 z-[60] p-2 rounded-lg border shadow-xl ${
-                            dark ? 'bg-black border-gray-800' : 'bg-white border-gray-200'
-                        }`}>
+                        <div className={`absolute left-0 mt-1.5 z-[60] p-2 rounded-lg border shadow-xl ${dark ? 'bg-black border-gray-800' : 'bg-white border-gray-200'
+                            }`}>
                             <Calendar
                                 mode="single"
                                 selected={date ? new Date(date + 'T00:00:00') : undefined}

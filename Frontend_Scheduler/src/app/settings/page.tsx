@@ -7,6 +7,7 @@ import API from "@/lib/axios";
 import { useDarkMode } from '@/context/DarkModeContext';
 import { User, Palette, Copy, Check, Settings, Mail, BookOpen } from 'lucide-react';
 import { toast } from 'sonner';
+import { auth } from '@/lib/firebase';
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -42,14 +43,14 @@ export default function SettingsPage() {
       console.error("Failed to fetch user details:", err);
       if (err.response?.status === 401) {
         toast.error("Session expired. Please log in again.");
-        router.push('/login');
+        router.push('/');
       }
     }
   }, [router]);
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
-      router.push('/login');
+      router.push('/');
     } else if (isAuthenticated && !authLoading && !loaded) {
       fetchUser();
     }
@@ -182,9 +183,25 @@ export default function SettingsPage() {
                   </div>
                 ) : (
                   <div className="space-y-6">
-                    <div>
-                      <h2 className="text-[15px] font-medium tracking-tight">Profile Information</h2>
-                      <p className={`text-[12.5px] ${muted} mt-0.5`}>Update your personal background and departments details.</p>
+                    <div className="flex items-center gap-4 border-b pb-5 border-gray-100 dark:border-gray-900">
+                      <div className="relative w-14 h-14 rounded-full overflow-hidden border border-gray-200 dark:border-gray-800 text-[20px] font-semibold flex items-center justify-center bg-gray-50 dark:bg-gray-900 shrink-0">
+                        {auth.currentUser?.photoURL ? (
+                          <img
+                            src={auth.currentUser.photoURL}
+                            alt={userData.name}
+                            referrerPolicy="no-referrer"
+                            className="w-full h-full object-cover animate-in fade-in duration-300"
+                          />
+                        ) : userData.name ? (
+                          userData.name.charAt(0).toUpperCase()
+                        ) : (
+                          '👤'
+                        )}
+                      </div>
+                      <div>
+                        <h2 className="text-[15px] font-semibold tracking-tight">{userData.name || 'User'}</h2>
+                        <p className={`text-[12.5px] ${muted}`}>{userData.email}</p>
+                      </div>
                     </div>
 
                     {/* Friend Code Master Card */}

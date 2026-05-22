@@ -23,7 +23,7 @@ export default function WeeklyScheduleSetup() {
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
-      router.push('/login');
+      router.push('/');
     }
   }, [isAuthenticated, authLoading, router]);
 

@@ -7,6 +7,7 @@ import { Moon, Sun, Menu, X, LogOut, LayoutDashboard, Calendar, Clock, Settings,
 import { useDarkMode } from '@/context/DarkModeContext';
 import { AuthContext } from '@/context/authContext';
 import API from '@/lib/axios';
+import { auth } from '@/lib/firebase';
 
 const Navbar = () => {
   const { darkMode, toggleDarkMode } = useDarkMode() as any;
@@ -19,6 +20,8 @@ const Navbar = () => {
   const [lastScrollY, setLastScrollY] = useState(0);
   const [isMounted, setIsMounted] = useState(false);
   const [userName, setUserName] = useState('');
+  const [userPhoto, setUserPhoto] = useState<string | null>(null);
+  const [profileLoading, setProfileLoading] = useState(false);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
 
   useEffect(() => {
@@ -28,15 +31,29 @@ const Navbar = () => {
   // Fetch username if authenticated
   useEffect(() => {
     if (isAuthenticated) {
+      setProfileLoading(true);
+      
+      const currentUser = auth.currentUser;
+      if (currentUser?.photoURL) {
+        setUserPhoto(currentUser.photoURL);
+      } else {
+        setUserPhoto(null);
+      }
+
       API.get('/auth/userDetails')
         .then(res => {
           if (res.data.user?.name) {
             setUserName(res.data.user.name);
           }
         })
-        .catch(err => console.error("Error fetching user details in Navbar:", err));
+        .catch(err => console.error("Error fetching user details in Navbar:", err))
+        .finally(() => {
+          setProfileLoading(false);
+        });
     } else {
       setUserName('');
+      setUserPhoto(null);
+      setProfileLoading(false);
     }
   }, [isAuthenticated, pathname]); // Re-fetch on pathname changes to sync updates from Settings
 
@@ -45,10 +62,8 @@ const Navbar = () => {
 
   const handleLogout = async () => {
     try {
+      await logout();
       router.push('/');
-      setTimeout(async () => {
-        await logout();
-      }, 100);
     } catch (err) {
       console.error("Logout error:", err);
       router.push('/');
@@ -150,15 +165,38 @@ const Navbar = () => {
           {isMounted && isAuthenticated && (
             <div className="relative">
               {/* Profile Avatar Button */}
-              <button
-                onClick={() => setProfileMenuOpen(!profileMenuOpen)}
-                className={`w-8 h-8 rounded-full border text-[12.5px] font-semibold flex items-center justify-center hover:opacity-85 transition-opacity ${
-                  dark ? 'border-gray-800 bg-gray-900 text-white' : 'border-gray-200 bg-gray-50 text-gray-900'
-                }`}
-                aria-label="User Profile"
-              >
-                {userName ? userName.charAt(0).toUpperCase() : '👤'}
-              </button>
+              {profileLoading ? (
+                <button
+                  disabled
+                  className={`w-8 h-8 rounded-full border flex items-center justify-center ${
+                    dark ? 'border-gray-800 bg-gray-900' : 'border-gray-200 bg-gray-50'
+                  }`}
+                  aria-label="Loading Profile"
+                >
+                  <span className="w-3.5 h-3.5 rounded-full border-[1.5px] border-current border-t-transparent animate-spin text-gray-400 dark:text-gray-500" />
+                </button>
+              ) : (
+                <button
+                  onClick={() => setProfileMenuOpen(!profileMenuOpen)}
+                  className={`w-8 h-8 rounded-full border text-[12.5px] font-semibold flex items-center justify-center hover:opacity-85 transition-opacity overflow-hidden ${
+                    dark ? 'border-gray-800 bg-gray-900 text-white' : 'border-gray-200 bg-gray-50 text-gray-900'
+                  }`}
+                  aria-label="User Profile"
+                >
+                  {userPhoto ? (
+                    <img
+                      src={userPhoto}
+                      alt={userName}
+                      referrerPolicy="no-referrer"
+                      className="w-full h-full object-cover animate-in fade-in duration-300"
+                    />
+                  ) : userName ? (
+                    userName.charAt(0).toUpperCase()
+                  ) : (
+                    '👤'
+                  )}
+                </button>
+              )}
 
               {/* Backdrop helper to close menu on click outside */}
               {profileMenuOpen && (
@@ -173,9 +211,25 @@ const Navbar = () => {
                 <div className={`absolute right-0 top-full mt-2 w-48 rounded-xl border p-1.5 shadow-2xl z-50 animate-in fade-in slide-in-from-top-2 duration-150 ${
                   dark ? 'bg-black border-gray-800 text-white' : 'bg-white border-gray-200 text-gray-900'
                 }`}>
-                  <div className="px-3 py-2 border-b border-gray-100 dark:border-gray-950">
-                    <p className={`text-[10px] uppercase tracking-wider ${muted}`}>Account</p>
-                    <p className="text-[12.5px] font-medium truncate mt-0.5">{userName || 'My Account'}</p>
+                  <div className="px-3 py-2.5 border-b border-gray-100 dark:border-gray-950 flex items-center gap-2.5">
+                    <div className="relative w-8 h-8 rounded-full overflow-hidden shrink-0 border border-gray-200 dark:border-gray-800 text-[11px] font-semibold flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+                      {userPhoto ? (
+                        <img
+                          src={userPhoto}
+                          alt={userName}
+                          referrerPolicy="no-referrer"
+                          className="w-full h-full object-cover"
+                        />
+                      ) : userName ? (
+                        userName.charAt(0).toUpperCase()
+                      ) : (
+                        '👤'
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <p className={`text-[9px] uppercase tracking-wider font-semibold ${muted}`}>Account</p>
+                      <p className="text-[12.5px] font-semibold truncate mt-0.5 text-current">{userName || 'My Account'}</p>
+                    </div>
                   </div>
                   
                   <div className="py-1">

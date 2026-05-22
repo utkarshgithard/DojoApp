@@ -21,6 +21,9 @@ export const AttendanceProvider = ({ children }: { children: React.ReactNode }) 
   const [friends, setFriends] = useState<any[]>([]);
   const [subjectStats, setSubjectStats] = useState<SubjectStats[]>([]);
   const [calendarData, setCalendarData] = useState<any>(null);
+  const [attendanceLoading, setAttendanceLoading] = useState(true);
+  const [holidayLoading, setHolidayLoading] = useState(false);
+  const [friendsLoading, setFriendsLoading] = useState(true);
 
   const fetchCalendarData = useCallback(async () => {
     try {
@@ -41,11 +44,14 @@ export const AttendanceProvider = ({ children }: { children: React.ReactNode }) 
   }, []);
 
   const fetchFriends = useCallback(async () => {
+    setFriendsLoading(true);
     try {
       const res = await API.get("auth/friends-List");
       setFriends(res.data.friends);
     } catch (err) {
       console.error("Failed to load friends", err);
+    } finally {
+      setFriendsLoading(false);
     }
   }, []);
 
@@ -67,6 +73,7 @@ export const AttendanceProvider = ({ children }: { children: React.ReactNode }) 
   }, [date]);
 
   const fetchSummary = useCallback(async () => {
+    setAttendanceLoading(true);
     try {
       const res = await API.get(`/attendance/summary?date=${date}`);
       const summaryArray: Subject[] = res.data.summary;
@@ -74,6 +81,8 @@ export const AttendanceProvider = ({ children }: { children: React.ReactNode }) 
       await fetchSubjects(summaryArray);
     } catch (error) {
       console.error('Error fetching summary:', error);
+    } finally {
+      setAttendanceLoading(false);
     }
   }, [date, fetchSubjects]);
 
@@ -108,6 +117,36 @@ export const AttendanceProvider = ({ children }: { children: React.ReactNode }) 
     }
   }, [date, setUnmarkedSubjects, setMarkedSubjects]);
 
+  const markHoliday = useCallback(async () => {
+    setHolidayLoading(true);
+    try {
+      const res = await API.post('/attendance/holiday', { date });
+      await fetchSummary();
+      await fetchSubjectStats();
+      toast.success(res.data.message || '✅ Successfully marked holiday.');
+    } catch (error) {
+      console.error('Error marking holiday:', error);
+      toast.error('❌ Failed to mark holiday.');
+    } finally {
+      setHolidayLoading(false);
+    }
+  }, [date, fetchSummary, fetchSubjectStats]);
+
+  const undoHoliday = useCallback(async () => {
+    setHolidayLoading(true);
+    try {
+      const res = await API.post('/attendance/undo-holiday', { date });
+      await fetchSummary();
+      await fetchSubjectStats();
+      toast.success(res.data.message || '↩️ Holiday undone successfully.');
+    } catch (error) {
+      console.error('Error undoing holiday:', error);
+      toast.error('❌ Failed to undo holiday.');
+    } finally {
+      setHolidayLoading(false);
+    }
+  }, [date, fetchSummary, fetchSubjectStats]);
+
   useEffect(() => {
     if (isAuthenticated && !loading) {
       fetchSummary();
@@ -127,9 +166,9 @@ export const AttendanceProvider = ({ children }: { children: React.ReactNode }) 
       date, setDate,
       unmarkedSubjects,
       markedSubjects,
-      fetchSubjects, fetchFriends, friends,
-      fetchSummary,
-      handleAttendance, sessions, setSessions, invites,
+      fetchSubjects, fetchFriends, friends, friendsLoading,
+      fetchSummary, attendanceLoading, holidayLoading,
+      handleAttendance, markHoliday, undoHoliday, sessions, setSessions, invites,
       loadExistingInvites, setInvites,
       subjectStats, setSubjectStats, fetchSubjectStats,
       calendarData, setCalendarData, fetchCalendarData

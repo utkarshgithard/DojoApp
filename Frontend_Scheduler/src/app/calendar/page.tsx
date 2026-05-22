@@ -25,7 +25,7 @@ export default function CalendarPage() {
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
-      router.push('/login');
+      router.push('/');
     }
   }, [isAuthenticated, authLoading, router]);
 

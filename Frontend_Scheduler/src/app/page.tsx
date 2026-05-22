@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Moon, Sun } from 'lucide-react';
+import { Moon, Sun, Mail, Phone } from 'lucide-react';
 import { useSwipeable } from 'react-swipeable';
 import { useDarkMode } from '@/context/DarkModeContext';
 import { useAuth } from '@/context/authContext';
@@ -117,7 +117,7 @@ export default function LandingPage() {
 
       {/* Header */}
       <div className={`flex justify-between items-center px-5 py-4 border-b ${border}`}>
-        <h1 className="text-[17px] font-medium tracking-tight">ClassMate</h1>
+        <h1 className="text-[17px] font-medium tracking-tight">Dojo</h1>
         <button
           onClick={toggleDarkMode}
           className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[13px] border transition-colors ${dark ? 'border-gray-700 text-gray-300 hover:bg-gray-900' : 'border-gray-300 text-gray-600 hover:bg-gray-50'
@@ -207,6 +207,88 @@ export default function LandingPage() {
           </div>
         ))}
       </div>
+
+      {/* Footer Area */}
+      <footer className={`border-t ${border} ${dark ? 'bg-zinc-950 text-gray-400' : 'bg-gray-50 text-gray-600'} py-12 px-5 transition-colors duration-300`}>
+        <div className="max-w-[1100px] mx-auto grid grid-cols-1 md:grid-cols-3 gap-8">
+
+          {/* Brand & Mission Statement */}
+          <div className="space-y-4">
+            <h3 className={`text-[15px] font-semibold tracking-tight ${dark ? 'text-white' : 'text-gray-900'}`}>
+              ClassMate
+            </h3>
+            <p className="text-[12.5px] leading-relaxed">
+              Empowering students to take control of their academics. Maintain optimal attendance ratios, eliminate exam-eligibility anxiety, and build efficient routines effortlessly.
+            </p>
+            <p className="text-[11.5px] italic text-zinc-500">
+              Made with passion for students, by students.
+            </p>
+          </div>
+
+          {/* Detailed Use Case & Importance */}
+          <div className="space-y-4">
+            <h3 className={`text-[15px] font-semibold tracking-tight ${dark ? 'text-white' : 'text-gray-900'}`}>
+              How It Works & Why It Matters
+            </h3>
+            <div className="space-y-3">
+              <div className="flex gap-2.5 items-start">
+                <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded ${dark ? 'bg-zinc-800 text-zinc-300' : 'bg-zinc-200 text-zinc-800'} mt-0.5`}>1</span>
+                <p className="text-[12.5px] leading-snug">
+                  <strong>Upload Your Schedule:</strong> Set up your recurring weekly classes so ClassMate knows exactly when you have lectures.
+                </p>
+              </div>
+              <div className="flex gap-2.5 items-start">
+                <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded ${dark ? 'bg-zinc-800 text-zinc-300' : 'bg-zinc-200 text-zinc-800'} mt-0.5`}>2</span>
+                <p className="text-[12.5px] leading-snug">
+                  <strong>Mark Classes Daily:</strong> One tap to log whether you attended, missed, or if a class was cancelled.
+                </p>
+              </div>
+              <div className="flex gap-2.5 items-start">
+                <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded ${dark ? 'bg-zinc-800 text-zinc-300' : 'bg-zinc-200 text-zinc-800'} mt-0.5`}>3</span>
+                <p className="text-[12.5px] leading-snug">
+                  <strong>Stay Above 75%:</strong> Crucial for academic eligibility. Never guess how many classes you can afford to skip.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Contact & Support Section */}
+          <div className="space-y-4">
+            <h3 className={`text-[15px] font-semibold tracking-tight ${dark ? 'text-white' : 'text-gray-900'}`}>
+              Get In Touch
+            </h3>
+            <p className="text-[12.5px] leading-relaxed">
+              Have feedback, features you'd like to request, or run into any issues? Reach out directly, and let's make your academic journey smoother together!
+            </p>
+            <div className="space-y-2.5 pt-1">
+              <a
+                href="mailto:bceutkarsh@gmail.com"
+                className={`flex items-center gap-2 text-[13px] transition-colors ${dark ? 'hover:text-white' : 'hover:text-black'}`}
+              >
+                <Mail size={14} className="shrink-0" />
+                <span>bceutkarsh@gmail.com</span>
+              </a>
+              <a
+                href="tel:9508761011"
+                className={`flex items-center gap-2 text-[13px] transition-colors ${dark ? 'hover:text-white' : 'hover:text-black'}`}
+              >
+                <Phone size={14} className="shrink-0" />
+                <span>+91 9508761011</span>
+              </a>
+            </div>
+          </div>
+
+        </div>
+
+        {/* Bottom copyright block */}
+        <div className={`max-w-[1100px] mx-auto mt-10 pt-6 border-t ${dark ? 'border-zinc-900' : 'border-gray-200'} flex flex-col sm:flex-row justify-between items-center gap-4 text-[11px] text-zinc-500`}>
+          <span>© {new Date().getFullYear()} ClassMate. All rights reserved.</span>
+          <div className="flex gap-4">
+            <span className="hover:underline cursor-pointer">Privacy Policy</span>
+            <span className="hover:underline cursor-pointer">Terms of Service</span>
+          </div>
+        </div>
+      </footer>
 
     </div>
   );
