@@ -2,7 +2,7 @@
 
 import { useAuth } from '@/context/authContext';
 import { useRouter } from 'next/navigation';
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState } from "react";
 import API from "@/lib/axios";
 import { useDarkMode } from '@/context/DarkModeContext';
 import { User, Palette, Copy, Check, Settings, Mail, BookOpen } from 'lucide-react';
@@ -11,13 +11,12 @@ import { auth } from '@/lib/firebase';
 
 export default function SettingsPage() {
   const router = useRouter();
-  const { isAuthenticated, loading: authLoading, setUserName } = useAuth() as any;
+  const { isAuthenticated, loading: authLoading, setUserName, userDetails, profileLoading, setUserDetails } = useAuth();
   const [details, setDetails] = useState<any>({});
   const { darkMode, toggleDarkMode } = useDarkMode() as any;
   const [activeTab, setActiveTab] = useState('profile');
   const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [loaded, setLoaded] = useState(false);
 
   const [userData, setUserData] = useState({
     name: '',
@@ -26,35 +25,25 @@ export default function SettingsPage() {
     department: '',
   });
 
-  const fetchUser = useCallback(async () => {
-    try {
-      const res = await API.get("/auth/userDetails");
-      if (res.data.user) {
-        setDetails(res.data.user);
-        setUserData({
-          name: res.data.user.name,
-          email: res.data.user.email,
-          bio: res.data.user.bio || '',
-          department: res.data.user.department || ''
-        });
-        setLoaded(true);
-      }
-    } catch (err: any) {
-      console.error("Failed to fetch user details:", err);
-      if (err.response?.status === 401) {
-        toast.error("Session expired. Please log in again.");
-        router.push('/');
-      }
+  // Populate local state from auth context's userDetails (already fetched at app startup)
+  useEffect(() => {
+    if (userDetails) {
+      setDetails(userDetails);
+      setUserData({
+        name: userDetails.name || '',
+        email: userDetails.email || '',
+        bio: userDetails.bio || '',
+        department: userDetails.department || '',
+      });
     }
-  }, [router]);
+  }, [userDetails]);
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
       router.push('/');
-    } else if (isAuthenticated && !authLoading && !loaded) {
-      fetchUser();
     }
-  }, [isAuthenticated, authLoading, router, loaded, fetchUser]);
+  }, [isAuthenticated, authLoading, router]);
+
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -70,6 +59,7 @@ export default function SettingsPage() {
         department: userData.department
       });
       setDetails(res.data.user);
+      setUserDetails(res.data.user);
       if (res.data.user?.name) {
         setUserName(res.data.user.name);
       }
@@ -168,7 +158,7 @@ export default function SettingsPage() {
             <div className={cardClass}>
 
               {activeTab === 'profile' && (
-                !loaded ? (
+                !userDetails ? (
                   <div className="space-y-6 animate-pulse">
                     <div>
                       <div className="h-5 bg-gray-200 dark:bg-gray-800 rounded w-1/4 mb-2"></div>

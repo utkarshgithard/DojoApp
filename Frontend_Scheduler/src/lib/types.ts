@@ -9,6 +9,8 @@ export interface User {
   verified: boolean;
   friendCode: string;
   createdAt: string;
+  bio?: string;
+  department?: string;
 }
 
 export interface Friend {
@@ -158,6 +160,8 @@ export interface AuthContextType {
   userName: string;
   profileLoading: boolean;
   setUserName: React.Dispatch<React.SetStateAction<string>>;
+  userDetails: User | null;
+  setUserDetails: React.Dispatch<React.SetStateAction<User | null>>;
 }
 
 export interface DarkModeContextType {

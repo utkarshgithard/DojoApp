@@ -4,7 +4,7 @@ import { auth } from '@/lib/firebase';
 import { onIdTokenChanged, signOut } from 'firebase/auth';
 import API from '@/lib/axios';
 
-import { AuthContextType } from '@/lib/types';
+import { AuthContextType, User } from '@/lib/types';
 
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -17,6 +17,7 @@ const AuthProvider = (props: { children: React.ReactNode }) => {
   const [loading, setLoading] = useState(true);
   const [userName, setUserName] = useState('');
   const [profileLoading, setProfileLoading] = useState(true);
+  const [userDetails, setUserDetails] = useState<User | null>(null);
 
   useEffect(() => {
     const unsubscribe = onIdTokenChanged(auth, async (user) => {
@@ -41,6 +42,7 @@ const AuthProvider = (props: { children: React.ReactNode }) => {
     if (loading) return;
     if (!token) {
       setUserName('');
+      setUserDetails(null);
       setProfileLoading(false);
       return;
     }
@@ -48,8 +50,11 @@ const AuthProvider = (props: { children: React.ReactNode }) => {
     setProfileLoading(true);
     API.get('/auth/userDetails')
       .then(res => {
-        if (res.data.user?.name) {
-          setUserName(res.data.user.name);
+        if (res.data.user) {
+          setUserDetails(res.data.user);
+          if (res.data.user.name) {
+            setUserName(res.data.user.name);
+          }
         }
       })
       .catch(err => {
@@ -71,6 +76,7 @@ const AuthProvider = (props: { children: React.ReactNode }) => {
     setToken(null);
     setUserId(null);
     setUserName('');
+    setUserDetails(null);
     localStorage.removeItem('token');
   }, []);
 
@@ -84,8 +90,10 @@ const AuthProvider = (props: { children: React.ReactNode }) => {
     loading,
     userName,
     profileLoading,
-    setUserName
-  }), [token, userId, login, logout, isAuthenticated, loading, userName, profileLoading]);
+    setUserName,
+    userDetails,
+    setUserDetails
+  }), [token, userId, login, logout, isAuthenticated, loading, userName, profileLoading, userDetails]);
 
   return (
     <AuthContext.Provider value={value}>
@@ -103,3 +111,4 @@ export const useAuth = () => {
 };
 
 export default AuthProvider;
+
