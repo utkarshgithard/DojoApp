@@ -1,7 +1,8 @@
 "use client";
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { auth } from '@/lib/firebase';
 import { onIdTokenChanged, signOut } from 'firebase/auth';
+import API from '@/lib/axios';
 
 import { AuthContextType } from '@/lib/types';
 
@@ -14,6 +15,8 @@ const AuthProvider = (props: { children: React.ReactNode }) => {
   });
   const [userId, setUserId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [userName, setUserName] = useState('');
+  const [profileLoading, setProfileLoading] = useState(true);
 
   useEffect(() => {
     const unsubscribe = onIdTokenChanged(auth, async (user) => {
@@ -33,16 +36,41 @@ const AuthProvider = (props: { children: React.ReactNode }) => {
     return () => unsubscribe();
   }, []);
 
-  const login = React.useCallback((newToken: string, uid?: string) => {
+  // Fetch user details once when authentication resolves
+  useEffect(() => {
+    if (loading) return;
+    if (!token) {
+      setUserName('');
+      setProfileLoading(false);
+      return;
+    }
+
+    setProfileLoading(true);
+    API.get('/auth/userDetails')
+      .then(res => {
+        if (res.data.user?.name) {
+          setUserName(res.data.user.name);
+        }
+      })
+      .catch(err => {
+        console.error('Error fetching user details:', err);
+      })
+      .finally(() => {
+        setProfileLoading(false);
+      });
+  }, [loading, token]);
+
+  const login = useCallback((newToken: string, uid?: string) => {
     setToken(newToken);
     if (uid) setUserId(uid);
     localStorage.setItem('token', newToken);
   }, []);
 
-  const logout = React.useCallback(async () => {
+  const logout = useCallback(async () => {
     await signOut(auth);
     setToken(null);
     setUserId(null);
+    setUserName('');
     localStorage.removeItem('token');
   }, []);
 
@@ -53,8 +81,11 @@ const AuthProvider = (props: { children: React.ReactNode }) => {
     login,
     logout,
     isAuthenticated,
-    loading
-  }), [token, userId, login, logout, isAuthenticated, loading]);
+    loading,
+    userName,
+    profileLoading,
+    setUserName
+  }), [token, userId, login, logout, isAuthenticated, loading, userName, profileLoading]);
 
   return (
     <AuthContext.Provider value={value}>

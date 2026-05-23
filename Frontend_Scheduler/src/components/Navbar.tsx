@@ -6,12 +6,11 @@ import { useRouter, usePathname } from 'next/navigation';
 import { Moon, Sun, Menu, X, LogOut, LayoutDashboard, Calendar, Clock, Settings, User } from 'lucide-react';
 import { useDarkMode } from '@/context/DarkModeContext';
 import { AuthContext } from '@/context/authContext';
-import API from '@/lib/axios';
 import { auth } from '@/lib/firebase';
 
 const Navbar = () => {
   const { darkMode, toggleDarkMode } = useDarkMode() as any;
-  const { logout, isAuthenticated, loading } = useContext(AuthContext) as any;
+  const { logout, isAuthenticated, loading, userName, profileLoading, setUserName } = useContext(AuthContext) as any;
   const router = useRouter();
   const pathname = usePathname();
 
@@ -19,59 +18,23 @@ const Navbar = () => {
   const [showNavbar, setShowNavbar] = useState(true);
   const [lastScrollY, setLastScrollY] = useState(0);
   const [isMounted, setIsMounted] = useState(false);
-  const [userName, setUserName] = useState('');
   const [userPhoto, setUserPhoto] = useState<string | null>(null);
-  const [profileLoading, setProfileLoading] = useState(true);
-
-  useEffect(() => {
-    const cachedName = localStorage.getItem('userName');
-    if (cachedName) {
-      setUserName(cachedName);
-      setProfileLoading(false);
-    } else {
-      setProfileLoading(false);
-    }
-  }, []);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
 
   useEffect(() => {
     setIsMounted(true);
   }, []);
 
-  // Fetch username if authenticated
+  // Sync photo from Firebase Auth
   useEffect(() => {
-    if (loading) return; // Wait for Firebase Auth to resolve
-
+    if (loading) return;
     if (isAuthenticated) {
-      // Only show spinner on initial fetch (when we do not have a username yet)
-      if (!userName) {
-        setProfileLoading(true);
-      }
-      
       const currentUser = auth.currentUser;
-      if (currentUser?.photoURL) {
-        setUserPhoto(currentUser.photoURL);
-      } else {
-        setUserPhoto(null);
-      }
-
-      API.get('/auth/userDetails')
-        .then(res => {
-          if (res.data.user?.name) {
-            setUserName(res.data.user.name);
-            localStorage.setItem('userName', res.data.user.name);
-          }
-        })
-        .catch(err => console.error("Error fetching user details in Navbar:", err))
-        .finally(() => {
-          setProfileLoading(false);
-        });
+      setUserPhoto(currentUser?.photoURL || null);
     } else {
-      setUserName('');
       setUserPhoto(null);
-      setProfileLoading(false);
     }
-  }, [isAuthenticated, loading, pathname]); // Re-fetch on pathname changes to sync updates from Settings
+  }, [isAuthenticated, loading, pathname]);
 
   const toggleMenu = () => setIsOpen(!isOpen);
   const closeMenu = () => setIsOpen(false);

@@ -155,6 +155,9 @@ export interface AuthContextType {
   logout: () => Promise<void>;
   isAuthenticated: boolean;
   loading: boolean;
+  userName: string;
+  profileLoading: boolean;
+  setUserName: React.Dispatch<React.SetStateAction<string>>;
 }
 
 export interface DarkModeContextType {

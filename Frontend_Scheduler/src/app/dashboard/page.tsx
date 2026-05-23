@@ -33,7 +33,7 @@ const Dashboard = () => {
   const { socket, joinedSessions, setJoinedSessions, sessions, setSessions, sessionsLoaded, setSessionsLoaded } = useSocket() as any;
 
   // FIX: userId from verified auth context — never decode JWT client-side
-  const { userId: currentUserId, isAuthenticated, loading, logout } = useAuth() as any;
+  const { userId: currentUserId, isAuthenticated, loading, logout, userName, profileLoading } = useAuth() as any;
 
   useEffect(() => {
     if (!loading && !isAuthenticated) {
@@ -66,19 +66,6 @@ const Dashboard = () => {
   // FIX: notification badge counter
   const [newInviteCount, setNewInviteCount] = useState(0);
 
-  // FIX: user details states (initialized from local cache to prevent flashes)
-  const [userName, setUserName] = useState('');
-  const [profileLoading, setProfileLoading] = useState(true);
-
-  useEffect(() => {
-    const cachedName = localStorage.getItem('userName');
-    if (cachedName) {
-      setUserName(cachedName);
-      setProfileLoading(false);
-    } else {
-      setProfileLoading(false);
-    }
-  }, []);
 
   // FIX: keep a ref to joinedSessions so the 'connect' handler always sees the latest value
   const joinedSessionsRef = useRef<Set<string>>(joinedSessions);
@@ -359,25 +346,6 @@ const Dashboard = () => {
 
     // FIX: AbortController cancels in-flight API calls if component unmounts mid-request
     const controller = new AbortController();
-
-    if (!userName) {
-      setProfileLoading(true);
-    }
-    API.get('/auth/userDetails', { signal: controller.signal })
-      .then(res => {
-        if (res.data.user?.name) {
-          setUserName(res.data.user.name);
-          localStorage.setItem('userName', res.data.user.name);
-        }
-      })
-      .catch(err => {
-        if (err.name !== 'CanceledError' && err.name !== 'AbortError') {
-          console.error("Error fetching user details in Dashboard:", err);
-        }
-      })
-      .finally(() => {
-        setProfileLoading(false);
-      });
 
     loadExistingInvites();
     loadExistingSessions(controller.signal);

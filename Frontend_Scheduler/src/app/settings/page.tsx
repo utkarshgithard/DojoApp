@@ -11,7 +11,7 @@ import { auth } from '@/lib/firebase';
 
 export default function SettingsPage() {
   const router = useRouter();
-  const { isAuthenticated, loading: authLoading } = useAuth() as any;
+  const { isAuthenticated, loading: authLoading, setUserName } = useAuth() as any;
   const [details, setDetails] = useState<any>({});
   const { darkMode, toggleDarkMode } = useDarkMode() as any;
   const [activeTab, setActiveTab] = useState('profile');
@@ -70,6 +70,9 @@ export default function SettingsPage() {
         department: userData.department
       });
       setDetails(res.data.user);
+      if (res.data.user?.name) {
+        setUserName(res.data.user.name);
+      }
       toast.success('Profile settings updated successfully!');
     } catch (error) {
       console.error(error);
