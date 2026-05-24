@@ -303,7 +303,7 @@ export default function SettingsPage() {
                       onClick={() => darkMode && toggleDarkMode()}
                     >
                       <div className="w-full h-24 bg-white rounded-lg mb-3 border border-gray-100 flex items-center justify-center">
-                        <span className="text-[12px] font-medium text-gray-400">ClassMate Light</span>
+                        <span className="text-[12px] font-medium text-gray-400">DojoClass Light</span>
                       </div>
                       <span className="text-[13px] font-medium text-center">Light Aesthetic</span>
                     </div>
@@ -317,7 +317,7 @@ export default function SettingsPage() {
                       onClick={() => !darkMode && toggleDarkMode()}
                     >
                       <div className="w-full h-24 bg-black rounded-lg mb-3 border border-gray-900 flex items-center justify-center">
-                        <span className="text-[12px] font-medium text-gray-700">ClassMate Dark</span>
+                        <span className="text-[12px] font-medium text-gray-700">DojoClass Dark</span>
                       </div>
                       <span className="text-[13px] font-medium text-center">Dark Aesthetic</span>
                     </div>

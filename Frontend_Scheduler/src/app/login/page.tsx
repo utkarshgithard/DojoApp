@@ -100,7 +100,7 @@ export default function Login() {
 
       {/* Top bar */}
       <div className={`flex justify-between items-center px-5 py-4 border-b ${border}`}>
-        <span className="text-[16px] font-medium">ClassMate</span>
+        <span className="text-[16px] font-medium">DojoClass</span>
         <button
           onClick={() => router.back()}
           className={`flex items-center gap-1 text-[13px] transition-colors ${muted} hover:text-current`}

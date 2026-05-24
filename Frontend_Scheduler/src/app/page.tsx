@@ -116,26 +116,30 @@ export default function LandingPage() {
     <div className={`min-h-screen transition-colors duration-300 ${dark ? 'bg-black text-white' : 'bg-white text-gray-900'}`}>
 
       {/* Header */}
-      <div className={`flex justify-between items-center px-5 py-4 border-b ${border}`}>
-        <h1 className="text-[17px] font-medium tracking-tight">Dojo</h1>
+      <header className={`flex justify-between items-center px-5 py-4 border-b ${border}`}>
+        <nav aria-label="Main navigation">
+          <span className="text-[17px] font-medium tracking-tight" aria-label="DojoClass home">DojoClass</span>
+        </nav>
         <button
           onClick={toggleDarkMode}
+          aria-label={dark ? 'Switch to light mode' : 'Switch to dark mode'}
           className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[13px] border transition-colors ${dark ? 'border-gray-700 text-gray-300 hover:bg-gray-900' : 'border-gray-300 text-gray-600 hover:bg-gray-50'
             }`}
         >
           {dark ? <Sun size={14} /> : <Moon size={14} />}
           {dark ? 'Light' : 'Dark'}
         </button>
-      </div>
+      </header>
 
+      <main>
       {/* Hero */}
-      <div className="px-5 pt-10 pb-8">
+      <section aria-label="Hero" className="px-5 pt-10 pb-8">
         <p className={`text-[11px] uppercase tracking-widest mb-3 ${muted}`}>
           Attendance tracker · for students
         </p>
-        <h2 className="text-[30px] font-medium leading-[1.1] tracking-tight mb-3">
+        <h1 className="text-[30px] font-medium leading-[1.1] tracking-tight mb-3">
           Stay above 75%.<br />Always.
-        </h2>
+        </h1>
         <p className={`text-[14px] leading-relaxed mb-7 max-w-sm ${muted}`}>
           Track attendance, plan your schedule, and know exactly how many classes you can afford to miss.
         </p>
@@ -154,34 +158,36 @@ export default function LandingPage() {
             Already have an account? Log in
           </button>
         </div>
-      </div>
+      </section>
 
       {/* Slide card */}
-      <div className={`mx-5 border rounded-xl overflow-hidden ${border}`} {...swipeHandlers}>
-        <div className="overflow-hidden">
+      <section aria-label="Feature showcase" className={`mx-5 border rounded-xl overflow-hidden ${border}`} {...swipeHandlers}>
+        <div className="overflow-hidden" role="region" aria-roledescription="carousel" aria-label="App features">
           <div
             className="flex transition-transform duration-500 ease-[cubic-bezier(0.4,0,0.2,1)]"
             style={{ transform: `translateX(-${currentSlide * 100}%)` }}
           >
             {slides.map((slide, i) => (
-              <div key={i} className="min-w-full p-5">
+              <article key={i} className="min-w-full p-5" role="group" aria-roledescription="slide" aria-label={slide.title}>
                 <p className={`text-[11px] uppercase tracking-wider mb-1.5 ${muted}`}>{slide.num}</p>
-                <p className="text-[15px] font-medium mb-4">{slide.title}</p>
+                <h2 className="text-[15px] font-medium mb-4">{slide.title}</h2>
                 {slide.type === 'bars' && <BarsSlide dark={dark} />}
                 {slide.type === 'schedule' && <ScheduleSlide dark={dark} />}
                 {slide.type === 'stats' && <StatsSlide dark={dark} />}
-              </div>
+              </article>
             ))}
           </div>
         </div>
 
         {/* Dots */}
-        <div className="flex justify-center gap-1.5 py-4">
+        <div className="flex justify-center gap-1.5 py-4" role="tablist" aria-label="Slide navigation">
           {slides.map((_, i) => (
             <button
               key={i}
               onClick={() => goTo(i)}
-              aria-label={`Go to slide ${i + 1}`}
+              role="tab"
+              aria-selected={currentSlide === i}
+              aria-label={`Go to slide ${i + 1}: ${slides[i].title}`}
               className="h-[5px] rounded-full transition-all duration-300"
               style={{
                 width: currentSlide === i ? 18 : 6,
@@ -192,21 +198,22 @@ export default function LandingPage() {
             />
           ))}
         </div>
-      </div>
+      </section>
 
       {/* Feature strip */}
-      <div className={`grid grid-cols-3 border-t mt-8 ${border}`}>
+      <section aria-label="Key features" className={`grid grid-cols-3 border-t mt-8 ${border}`}>
         {[
           { label: 'Mark attendance', desc: 'One tap per class, present or absent' },
           { label: 'Weekly schedule', desc: 'Set up classes for each day' },
           { label: 'Subject stats', desc: 'See exactly where you stand' },
         ].map((f, i) => (
           <div key={f.label} className={`px-4 py-5 ${i < 2 ? `border-r ${border}` : ''}`}>
-            <p className="text-[12px] font-medium mb-1">{f.label}</p>
+            <h2 className="text-[12px] font-medium mb-1">{f.label}</h2>
             <p className={`text-[11px] leading-snug ${muted}`}>{f.desc}</p>
           </div>
         ))}
-      </div>
+      </section>
+      </main>
 
       {/* Footer Area */}
       <footer className={`border-t ${border} ${dark ? 'bg-zinc-950 text-gray-400' : 'bg-gray-50 text-gray-600'} py-12 px-5 transition-colors duration-300`}>
@@ -215,7 +222,7 @@ export default function LandingPage() {
           {/* Brand & Mission Statement */}
           <div className="space-y-4">
             <h3 className={`text-[15px] font-semibold tracking-tight ${dark ? 'text-white' : 'text-gray-900'}`}>
-              ClassMate
+              DojoClass
             </h3>
             <p className="text-[12.5px] leading-relaxed">
               Empowering students to take control of their academics. Maintain optimal attendance ratios, eliminate exam-eligibility anxiety, and build efficient routines effortlessly.
@@ -234,7 +241,7 @@ export default function LandingPage() {
               <div className="flex gap-2.5 items-start">
                 <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded ${dark ? 'bg-zinc-800 text-zinc-300' : 'bg-zinc-200 text-zinc-800'} mt-0.5`}>1</span>
                 <p className="text-[12.5px] leading-snug">
-                  <strong>Upload Your Schedule:</strong> Set up your recurring weekly classes so ClassMate knows exactly when you have lectures.
+                  <strong>Upload Your Schedule:</strong> Set up your recurring weekly classes so DojoClass knows exactly when you have lectures.
                 </p>
               </div>
               <div className="flex gap-2.5 items-start">
@@ -282,7 +289,7 @@ export default function LandingPage() {
 
         {/* Bottom copyright block */}
         <div className={`max-w-[1100px] mx-auto mt-10 pt-6 border-t ${dark ? 'border-zinc-900' : 'border-gray-200'} flex flex-col sm:flex-row justify-between items-center gap-4 text-[11px] text-zinc-500`}>
-          <span>© {new Date().getFullYear()} ClassMate. All rights reserved.</span>
+          <span>© {new Date().getFullYear()} DojoClass. All rights reserved.</span>
           <div className="flex gap-4">
             <span className="hover:underline cursor-pointer">Privacy Policy</span>
             <span className="hover:underline cursor-pointer">Terms of Service</span>

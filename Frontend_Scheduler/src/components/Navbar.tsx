@@ -90,7 +90,7 @@ const Navbar = () => {
         {/* Brand logo on the left */}
         <div className="flex items-center gap-3">
           <Link href="/dashboard" className="flex items-center gap-2" onClick={closeMenu}>
-            <span className="text-[16px] font-medium tracking-tight">ClassMate</span>
+            <span className="text-[16px] font-medium tracking-tight">DojoClass</span>
           </Link>
         </div>
 
