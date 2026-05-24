@@ -71,6 +71,9 @@ export const metadata: Metadata = {
   alternates: {
     canonical: "https://www.dojoclass.space",
   },
+  verification: {
+    google: "MH-qCpIalYR4S1flnD1CRaPx_tUMSziNE9Y6cLpgdnI",
+  },
 };
 
 export default function RootLayout({
