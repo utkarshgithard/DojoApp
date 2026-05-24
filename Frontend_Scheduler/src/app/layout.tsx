@@ -71,9 +71,6 @@ export const metadata: Metadata = {
   alternates: {
     canonical: "https://www.dojoclass.space",
   },
-  verification: {
-    google: "MH-qCpIalYR4S1flnD1CRaPx_tUMSziNE9Y6cLpgdnI",
-  },
 };
 
 export default function RootLayout({
@@ -83,6 +80,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={cn("font-sans", geist.variable)}>
+      <head>
+        <meta name="google-site-verification" content="MH-qCpIalYR4S1flnD1CRaPx_tUMSziNE9Y6cLpgdnI" />
+      </head>
       <body className={inter.className}>
         <JsonLd />
         <ClientProviders>
