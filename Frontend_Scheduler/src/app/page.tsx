@@ -114,6 +114,7 @@ export default function LandingPage() {
 
   return (
     <div className={`min-h-screen transition-colors duration-300 ${dark ? 'bg-black text-white' : 'bg-white text-gray-900'}`}>
+      <meta name="google-site-verification" content="MH-qCpIalYR4S1flnD1CRaPx_tUMSziNE9Y6cLpgdnI" />
 
       {/* Header */}
       <header className={`flex justify-between items-center px-5 py-4 border-b ${border}`}>
