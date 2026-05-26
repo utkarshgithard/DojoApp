@@ -133,87 +133,87 @@ export default function LandingPage() {
       </header>
 
       <main>
-      {/* Hero */}
-      <section aria-label="Hero" className="px-5 pt-10 pb-8">
-        <p className={`text-[11px] uppercase tracking-widest mb-3 ${muted}`}>
-          Attendance tracker · for students
-        </p>
-        <h1 className="text-[30px] font-medium leading-[1.1] tracking-tight mb-3">
-          Stay above 75%.<br />Always.
-        </h1>
-        <p className={`text-[14px] leading-relaxed mb-7 max-w-sm ${muted}`}>
-          Track attendance, plan your schedule, and know exactly how many classes you can afford to miss.
-        </p>
-        <div className="flex items-center gap-5 flex-wrap">
-          <button
-            onClick={() => router.push('/register')}
-            className={`px-5 py-2.5 rounded-lg text-[14px] font-medium transition-opacity hover:opacity-80 active:scale-95 ${dark ? 'bg-white text-black' : 'bg-black text-white'
-              }`}
-          >
-            Get started
-          </button>
-          <button
-            onClick={() => router.push('/login')}
-            className={`text-[13px] underline underline-offset-2 transition-colors ${muted} hover:text-current`}
-          >
-            Already have an account? Log in
-          </button>
-        </div>
-      </section>
+        {/* Hero */}
+        <section aria-label="Hero" className="px-5 pt-10 pb-8">
+          <p className={`text-[11px] uppercase tracking-widest mb-3 ${muted}`}>
+            Attendance tracker · for students
+          </p>
+          <h1 className="text-[30px] font-medium leading-[1.1] tracking-tight mb-3">
+            Stay above 75%.<br />Always.
+          </h1>
+          <p className={`text-[14px] leading-relaxed mb-7 max-w-sm ${muted}`}>
+            Track attendance, plan your schedule, and know exactly how many classes you can afford to miss.
+          </p>
+          <div className="flex items-center gap-5 flex-wrap">
+            <button
+              onClick={() => router.push('/register')}
+              className={`px-5 py-2.5 rounded-lg text-[14px] font-medium transition-opacity hover:opacity-80 active:scale-95 ${dark ? 'bg-white text-black' : 'bg-black text-white'
+                }`}
+            >
+              Get started
+            </button>
+            <button
+              onClick={() => router.push('/login')}
+              className={`text-[13px] underline underline-offset-2 transition-colors ${muted} hover:text-current`}
+            >
+              Already have an account? Log in
+            </button>
+          </div>
+        </section>
 
-      {/* Slide card */}
-      <section aria-label="Feature showcase" className={`mx-5 border rounded-xl overflow-hidden ${border}`} {...swipeHandlers}>
-        <div className="overflow-hidden" role="region" aria-roledescription="carousel" aria-label="App features">
-          <div
-            className="flex transition-transform duration-500 ease-[cubic-bezier(0.4,0,0.2,1)]"
-            style={{ transform: `translateX(-${currentSlide * 100}%)` }}
-          >
-            {slides.map((slide, i) => (
-              <article key={i} className="min-w-full p-5" role="group" aria-roledescription="slide" aria-label={slide.title}>
-                <p className={`text-[11px] uppercase tracking-wider mb-1.5 ${muted}`}>{slide.num}</p>
-                <h2 className="text-[15px] font-medium mb-4">{slide.title}</h2>
-                {slide.type === 'bars' && <BarsSlide dark={dark} />}
-                {slide.type === 'schedule' && <ScheduleSlide dark={dark} />}
-                {slide.type === 'stats' && <StatsSlide dark={dark} />}
-              </article>
+        {/* Slide card */}
+        <section aria-label="Feature showcase" className={`mx-5 border rounded-xl overflow-hidden ${border}`} {...swipeHandlers}>
+          <div className="overflow-hidden" role="region" aria-roledescription="carousel" aria-label="App features">
+            <div
+              className="flex transition-transform duration-500 ease-[cubic-bezier(0.4,0,0.2,1)]"
+              style={{ transform: `translateX(-${currentSlide * 100}%)` }}
+            >
+              {slides.map((slide, i) => (
+                <article key={i} className="min-w-full p-5" role="group" aria-roledescription="slide" aria-label={slide.title}>
+                  <p className={`text-[11px] uppercase tracking-wider mb-1.5 ${muted}`}>{slide.num}</p>
+                  <h2 className="text-[15px] font-medium mb-4">{slide.title}</h2>
+                  {slide.type === 'bars' && <BarsSlide dark={dark} />}
+                  {slide.type === 'schedule' && <ScheduleSlide dark={dark} />}
+                  {slide.type === 'stats' && <StatsSlide dark={dark} />}
+                </article>
+              ))}
+            </div>
+          </div>
+
+          {/* Dots */}
+          <div className="flex justify-center gap-1.5 py-4" role="tablist" aria-label="Slide navigation">
+            {slides.map((_, i) => (
+              <button
+                key={i}
+                onClick={() => goTo(i)}
+                role="tab"
+                aria-selected={currentSlide === i}
+                aria-label={`Go to slide ${i + 1}: ${slides[i].title}`}
+                className="h-[5px] rounded-full transition-all duration-300"
+                style={{
+                  width: currentSlide === i ? 18 : 6,
+                  background: currentSlide === i
+                    ? dark ? '#f5f5f5' : '#111'
+                    : dark ? '#444' : '#ddd',
+                }}
+              />
             ))}
           </div>
-        </div>
+        </section>
 
-        {/* Dots */}
-        <div className="flex justify-center gap-1.5 py-4" role="tablist" aria-label="Slide navigation">
-          {slides.map((_, i) => (
-            <button
-              key={i}
-              onClick={() => goTo(i)}
-              role="tab"
-              aria-selected={currentSlide === i}
-              aria-label={`Go to slide ${i + 1}: ${slides[i].title}`}
-              className="h-[5px] rounded-full transition-all duration-300"
-              style={{
-                width: currentSlide === i ? 18 : 6,
-                background: currentSlide === i
-                  ? dark ? '#f5f5f5' : '#111'
-                  : dark ? '#444' : '#ddd',
-              }}
-            />
+        {/* Feature strip */}
+        <section aria-label="Key features" className={`grid grid-cols-3 border-t mt-8 ${border}`}>
+          {[
+            { label: 'Mark attendance', desc: 'One tap per class, present or absent' },
+            { label: 'Weekly schedule', desc: 'Set up classes for each day' },
+            { label: 'Subject stats', desc: 'See exactly where you stand' },
+          ].map((f, i) => (
+            <div key={f.label} className={`px-4 py-5 ${i < 2 ? `border-r ${border}` : ''}`}>
+              <h2 className="text-[12px] font-medium mb-1">{f.label}</h2>
+              <p className={`text-[11px] leading-snug ${muted}`}>{f.desc}</p>
+            </div>
           ))}
-        </div>
-      </section>
-
-      {/* Feature strip */}
-      <section aria-label="Key features" className={`grid grid-cols-3 border-t mt-8 ${border}`}>
-        {[
-          { label: 'Mark attendance', desc: 'One tap per class, present or absent' },
-          { label: 'Weekly schedule', desc: 'Set up classes for each day' },
-          { label: 'Subject stats', desc: 'See exactly where you stand' },
-        ].map((f, i) => (
-          <div key={f.label} className={`px-4 py-5 ${i < 2 ? `border-r ${border}` : ''}`}>
-            <h2 className="text-[12px] font-medium mb-1">{f.label}</h2>
-            <p className={`text-[11px] leading-snug ${muted}`}>{f.desc}</p>
-          </div>
-        ))}
-      </section>
+        </section>
       </main>
 
       {/* Footer Area */}

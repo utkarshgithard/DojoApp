@@ -97,6 +97,10 @@ export const AttendanceProvider = ({ children }: { children: React.ReactNode }) 
   }, [setInvites]);
 
   const handleAttendance = useCallback(async (subject: Subject, status: string) => {
+    // Optimistically update the UI instantly
+    setUnmarkedSubjects(prev => prev.filter(s => s.id !== subject.id));
+    setMarkedSubjects(prev => [...prev, { ...subject, status }]);
+
     try {
       await API.post('/attendance/mark', {
         date,
@@ -105,47 +109,77 @@ export const AttendanceProvider = ({ children }: { children: React.ReactNode }) 
           status
         }]
       });
-
-      // Prisma returns `id`, not `_id`
-      setUnmarkedSubjects(prev => prev.filter(s => s.id !== subject.id));
-      setMarkedSubjects(prev => [...prev, { ...subject, status }]);
-
       toast.success(`Successfully marked "${subject.subjectName || subject.subject}" as ${status}.`);
+      fetchSubjectStats();
     } catch (error) {
       console.error('Error marking attendance:', error);
       toast.error(`Failed to mark attendance as ${status}.`);
+      // Revert optimistic update on failure
+      setMarkedSubjects(prev => prev.filter(s => s.id !== subject.id));
+      setUnmarkedSubjects(prev => [...prev, subject]);
     }
-  }, [date, setUnmarkedSubjects, setMarkedSubjects]);
+  }, [date, fetchSubjectStats]);
 
   const markHoliday = useCallback(async () => {
-    setHolidayLoading(true);
+    // Save state for potential rollback
+    const prevUnmarked = [...unmarkedSubjects];
+    const prevMarked = [...markedSubjects];
+
+    // Optimistically mark all unmarked subjects as cancelled
+    const cancelledSubjects = unmarkedSubjects.map(s => ({ ...s, status: 'cancelled' }));
+    setMarkedSubjects(prev => [...prev, ...cancelledSubjects]);
+    setUnmarkedSubjects([]);
+    
+    // Don't set holidayLoading to true, keep it fast UX
+    // setHolidayLoading(true); 
+    
     try {
       const res = await API.post('/attendance/holiday', { date });
-      await fetchSummary();
-      await fetchSubjectStats();
+      // Sync with server in background
+      fetchSummary();
+      fetchSubjectStats();
       toast.success(res.data.message || '✅ Successfully marked holiday.');
     } catch (error) {
       console.error('Error marking holiday:', error);
       toast.error('❌ Failed to mark holiday.');
-    } finally {
-      setHolidayLoading(false);
+      // Rollback
+      setUnmarkedSubjects(prevUnmarked);
+      setMarkedSubjects(prevMarked);
     }
-  }, [date, fetchSummary, fetchSubjectStats]);
+  }, [date, fetchSummary, fetchSubjectStats, unmarkedSubjects, markedSubjects]);
 
   const undoHoliday = useCallback(async () => {
-    setHolidayLoading(true);
+    // Save state for potential rollback
+    const prevUnmarked = [...unmarkedSubjects];
+    const prevMarked = [...markedSubjects];
+
+    // Optimistically move all 'cancelled' subjects back to unmarked
+    const cancelledSubjects = markedSubjects.filter((s: any) => s.status === 'cancelled');
+    const otherMarked = markedSubjects.filter((s: any) => s.status !== 'cancelled');
+    
+    setMarkedSubjects(otherMarked);
+    setUnmarkedSubjects(prev => [...prev, ...cancelledSubjects.map((s: any) => { 
+      const { status, ...rest } = s; 
+      return rest as Subject; 
+    })]);
+
+    // Don't set holidayLoading to true, keep it fast UX
+    // setHolidayLoading(true);
+
     try {
       const res = await API.post('/attendance/undo-holiday', { date });
-      await fetchSummary();
-      await fetchSubjectStats();
+      // Sync with server in background
+      fetchSummary();
+      fetchSubjectStats();
       toast.success(res.data.message || '↩️ Holiday undone successfully.');
     } catch (error) {
       console.error('Error undoing holiday:', error);
       toast.error('❌ Failed to undo holiday.');
-    } finally {
-      setHolidayLoading(false);
+      // Rollback
+      setUnmarkedSubjects(prevUnmarked);
+      setMarkedSubjects(prevMarked);
     }
-  }, [date, fetchSummary, fetchSubjectStats]);
+  }, [date, fetchSummary, fetchSubjectStats, unmarkedSubjects, markedSubjects]);
 
   useEffect(() => {
     if (isAuthenticated && !loading) {

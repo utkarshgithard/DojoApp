@@ -13,7 +13,7 @@ export const useSocket = (): SocketContextType | null => {
 import { useAuth } from './authContext';
 
 export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
-  const { token, loading } = useAuth() as any;
+  const { token, loading, profileLoading, userDetails } = useAuth() as any;
   const [socket, setSocket] = useState<Socket | null>(null);
   const [joinedSessions, setJoinedSessions] = useState<Set<string>>(new Set());
   const [sessions, setSessions] = useState<any[]>([]);
@@ -21,8 +21,8 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
   const [userNotifications, setUserNotifications] = useState<Notification[]>([]);
 
   useEffect(() => {
-    // If still loading authentication details or no token exists, don't connect
-    if (loading || !token) {
+    // If still loading authentication details or user profile, or no token/profile exists, don't connect
+    if (loading || profileLoading || !token || !userDetails) {
       setSocket(null);
       setJoinedSessions(new Set());
       setSessionsLoaded(false);
@@ -91,7 +91,7 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
     return () => {
       s.disconnect();
     };
-  }, [token, loading]);
+  }, [token, loading, profileLoading, userDetails]);
 
   // Clear notifications older than 1 minute
   useEffect(() => {

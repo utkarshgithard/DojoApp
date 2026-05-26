@@ -48,7 +48,7 @@ export default function Register() {
     setSent(false);
     try {
       const actionCodeSettings = {
-        url: window.location.origin + '/verify',
+        url: window.location.origin + '/login',
         handleCodeInApp: true,
       };
       await sendSignInLinkToEmail(auth, form.email, actionCodeSettings);

@@ -341,6 +341,9 @@ const Dashboard = () => {
   // Main effect — register / clean up all socket listeners
   // FIX: each listener is a stable reference so socket.off works correctly
   // ---------------------------------------------------------------------------
+  // ---------------------------------------------------------------------------
+  // Initial data and UI state loader
+  // ---------------------------------------------------------------------------
   useEffect(() => {
     if (loading || !isAuthenticated) return;
 
@@ -361,7 +364,22 @@ const Dashboard = () => {
       }
     }
 
-    if (!socket) return () => controller.abort();
+    return () => {
+      controller.abort();
+    };
+  }, [
+    isAuthenticated,
+    loading,
+    loadExistingInvites,
+    loadExistingSessions,
+    setJoinedSessions
+  ]);
+
+  // ---------------------------------------------------------------------------
+  // Socket event listeners registration
+  // ---------------------------------------------------------------------------
+  useEffect(() => {
+    if (loading || !isAuthenticated || !socket) return;
 
     // Register all listeners
     socket.on('connect', onConnect);
@@ -383,7 +401,6 @@ const Dashboard = () => {
 
     // FIX: cleanup mirrors every socket.on — prevents listener accumulation on reconnect
     return () => {
-      controller.abort();
       socket.off('connect', onConnect);
       socket.off('receiveInvite', onReceiveInvite);
       socket.off('sessionScheduled', onSessionScheduled);
@@ -403,14 +420,24 @@ const Dashboard = () => {
     };
   }, [
     socket,
-    // All handlers are stable useCallback refs — safe to list as deps
-    onConnect, onReceiveInvite, onSessionScheduled, onSessionCreated,
-    onSessionStarted, onSessionJoined, onSessionLeft, onSessionEnded,
-    onUserJoinedSession, onUserLeftSession, onJoinError, onInviteAccepted,
-    onInviteDeclined, onInviteExpired, onInviteUndelivered, onSessionExpired,
-    loadExistingInvites, loadExistingSessions, setJoinedSessions,
     isAuthenticated,
-    loading
+    loading,
+    onConnect,
+    onReceiveInvite,
+    onSessionScheduled,
+    onSessionCreated,
+    onSessionStarted,
+    onSessionJoined,
+    onSessionLeft,
+    onSessionEnded,
+    onUserJoinedSession,
+    onUserLeftSession,
+    onJoinError,
+    onInviteAccepted,
+    onInviteDeclined,
+    onInviteExpired,
+    onInviteUndelivered,
+    onSessionExpired
   ]);
 
   // ---------------------------------------------------------------------------

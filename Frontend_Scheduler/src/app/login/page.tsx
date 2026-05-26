@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useContext, useEffect } from 'react';
+import { useState, useContext, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 import { useDarkMode } from '@/context/DarkModeContext';
 import { auth } from '@/lib/firebase';
-import { sendSignInLinkToEmail, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
+import { sendSignInLinkToEmail, GoogleAuthProvider, signInWithPopup, isSignInWithEmailLink, signInWithEmailLink, updateProfile } from 'firebase/auth';
 import { AuthContext } from '@/context/authContext';
 import API from '@/lib/axios';
 
@@ -23,7 +23,7 @@ function GoogleIcon() {
 function Spinner() {
   return (
     <span
-      className="inline-block w-4 h-4 rounded-full border-[1.5px] border-current border-t-transparent animate-spin"
+      className="inline-block w-6 h-6 rounded-full border-[2.5px] border-current border-t-transparent animate-spin"
       aria-hidden="true"
     />
   );
@@ -38,9 +38,82 @@ export default function Login() {
   const [sent, setSent] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
 
+  // Magic link verification states
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [verifyStatus, setVerifyStatus] = useState('');
+  const [verifyError, setVerifyError] = useState<string | null>(null);
+  const [promptEmail, setPromptEmail] = useState(false);
+  const [emailInput, setEmailInput] = useState('');
+
+  const completeSignIn = useCallback(async (emailToUse: string, originalUrl: string) => {
+    try {
+      setVerifyStatus("Signing you in securely...");
+      
+      const result = await signInWithEmailLink(auth, emailToUse, originalUrl);
+      
+      // If we stored a name during registration, update the Firebase profile
+      const storedName = window.localStorage.getItem('nameForSignUp');
+      if (storedName && result.user) {
+        await updateProfile(result.user, { displayName: storedName });
+      }
+
+      // Get the token
+      const token = await result.user.getIdToken();
+      
+      setVerifyStatus("Syncing your academic profile...");
+      
+      // Upsert the user in our PostgreSQL database
+      await API.post('/auth/sync', 
+        { name: storedName || result.user.displayName, email: emailToUse },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      // Clean up localStorage
+      window.localStorage.removeItem('emailForSignIn');
+      window.localStorage.removeItem('nameForSignUp');
+
+      login(token);
+      router.push('/dashboard');
+    } catch (err: any) {
+      console.error(err);
+      setVerifyError(err.message || 'Failed to complete sign in. The link might be expired or already used.');
+      setVerifyStatus("");
+    }
+  }, [login, router]);
+
   useEffect(() => {
-    if (!authLoading && isAuthenticated) router.push('/dashboard');
-  }, [isAuthenticated, authLoading, router]);
+    if (!authLoading && isAuthenticated && !isVerifying) {
+      router.push('/dashboard');
+    }
+  }, [isAuthenticated, authLoading, router, isVerifying]);
+
+  // Store the original URL for promptEmail case
+  const [authUrl, setAuthUrl] = useState('');
+
+  useEffect(() => {
+    if (isSignInWithEmailLink(auth, window.location.href)) {
+      setIsVerifying(true);
+      
+      // Capture the original URL with query params for Firebase verification
+      const originalHref = window.location.href;
+      setAuthUrl(originalHref);
+      
+      // Clean up parameters immediately from the address bar to protect the API key and keep url clean
+      if (typeof window !== 'undefined') {
+        const cleanUrl = window.location.protocol + '//' + window.location.host + window.location.pathname;
+        window.history.replaceState(null, '', cleanUrl);
+      }
+
+      let email = window.localStorage.getItem('emailForSignIn');
+      
+      if (!email) {
+        setPromptEmail(true);
+        setVerifyStatus('');
+      } else {
+        completeSignIn(email, originalHref);
+      }
+    }
+  }, [completeSignIn]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -48,7 +121,7 @@ export default function Login() {
     setSent(false);
     try {
       const actionCodeSettings = {
-        url: window.location.origin + '/verify',
+        url: window.location.origin + '/login',
         handleCodeInApp: true,
       };
       await sendSignInLinkToEmail(auth, email, actionCodeSettings);
@@ -94,6 +167,91 @@ export default function Login() {
       ? 'bg-black border-gray-700 text-white placeholder-gray-600 focus:border-gray-500'
       : 'bg-white border-gray-200 text-gray-900 placeholder-gray-400 focus:border-gray-400'
     }`;
+
+  if (isVerifying) {
+    return (
+      <div className={`min-h-screen flex flex-col transition-colors duration-300 ${dark ? 'bg-black text-white' : 'bg-white text-gray-900'}`}>
+        {/* Top bar */}
+        <div className={`flex justify-between items-center px-5 py-4 border-b ${border}`}>
+          <span className="text-[16px] font-medium tracking-tight">DojoClass</span>
+          <button
+            onClick={() => {
+              setIsVerifying(false);
+              setVerifyError(null);
+              router.push('/login');
+            }}
+            className={`flex items-center gap-1 text-[13px] transition-colors ${muted} hover:text-current`}
+          >
+            <ArrowLeft size={14} /> Back to Login
+          </button>
+        </div>
+
+        {/* Form area */}
+        <div className="flex-1 flex items-center justify-center px-5 py-12">
+          <div className={`w-full max-w-[360px] p-6 rounded-xl border ${border} ${dark ? 'bg-zinc-950' : 'bg-zinc-50/50'} shadow-sm text-center`}>
+            <h1 className="text-[20px] font-medium mb-1.5 tracking-tight">Verification in Progress</h1>
+            <p className={`text-[12.5px] mb-6 ${muted}`}>Syncing secure login details with academic databases</p>
+
+            {verifyStatus && (
+              <div className="flex flex-col items-center justify-center py-6 space-y-4">
+                <Spinner />
+                <p className={`text-[13px] font-medium ${dark ? 'text-gray-300' : 'text-gray-700'} animate-pulse`}>
+                  {verifyStatus}
+                </p>
+              </div>
+            )}
+
+            {verifyError && (
+              <div className="space-y-4 py-2">
+                <p className="text-red-500 text-[13px] leading-relaxed">{verifyError}</p>
+                <button
+                  onClick={() => {
+                    setIsVerifying(false);
+                    setVerifyError(null);
+                    router.push('/login');
+                  }}
+                  className={`w-full py-2.5 rounded-lg text-[13px] font-medium border transition-colors
+                    ${dark
+                      ? 'border-gray-700 text-gray-200 hover:bg-gray-900'
+                      : 'border-gray-200 text-gray-700 hover:bg-gray-50'
+                    }`}
+                >
+                  Return to Login
+                </button>
+              </div>
+            )}
+
+            {promptEmail && (
+              <form onSubmit={(e) => {
+                e.preventDefault();
+                setPromptEmail(false);
+                completeSignIn(emailInput, authUrl);
+              }} className="space-y-4 py-2 text-left">
+                <p className={`text-[12px] leading-relaxed ${muted}`}>
+                  To security-authenticate this browser session, please confirm your email address.
+                </p>
+                <input
+                  type="email"
+                  placeholder="Confirm email address"
+                  className={inputClass}
+                  value={emailInput}
+                  onChange={(e) => setEmailInput(e.target.value)}
+                  required
+                />
+                <button
+                  type="submit"
+                  className={`w-full py-2.5 rounded-lg text-[14px] font-medium transition-opacity hover:opacity-80 active:scale-95
+                    ${dark ? 'bg-white text-black' : 'bg-black text-white'}`}
+                >
+                  Verify & Sign In
+                </button>
+              </form>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={`min-h-screen flex flex-col transition-colors duration-300 ${dark ? 'bg-black text-white' : 'bg-white text-gray-900'}`}>
