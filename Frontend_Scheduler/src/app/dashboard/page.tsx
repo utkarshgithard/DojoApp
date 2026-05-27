@@ -5,7 +5,7 @@ import { useDarkMode } from '@/context/DarkModeContext';
 import { useAttendance } from '@/context/AttendanceContext';
 import SubjectStatsChart from '@/components/SubjectStatsChart';
 import CreateStudySession from '@/components/CreateStudySession';
-import SessionChat from '@/components/SessionChat';
+// SessionChat modal replaced by dedicated /session/[id]/chat page
 import { useSocket } from '@/context/SocketContext';
 import { useAuth } from '@/context/authContext'; // FIX: corrected casing to match disk
 import API from '@/lib/axios';
@@ -41,7 +41,7 @@ const Dashboard = () => {
     }
   }, [isAuthenticated, loading, router]);
 
-  const [chatOpen, setChatOpen] = useState(false);
+  // chatOpen removed — chat now navigates to /session/[id]/chat
   const [createSessionOpen, setCreateSessionOpen] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [attendanceConfirm, setAttendanceConfirm] = useState<{ subject: any; status: string } | null>(null);
@@ -50,7 +50,6 @@ const Dashboard = () => {
   const [undoHolidayConfirm, setUndoHolidayConfirm] = useState(false);
   const [sessionsLoading, setSessionsLoading] = useState(!sessionsLoaded);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
-  const [currentSessionDetails, setCurrentSessionDetails] = useState<Session | null>(null);
   const [friendCode, setFriendCode] = useState('');
   const [friendMessage, setFriendMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
   const friendMessageTimer = useRef<NodeJS.Timeout | null>(null);
@@ -76,11 +75,10 @@ const Dashboard = () => {
   // ---------------------------------------------------------------------------
   // Stable callbacks (useCallback prevents stale closures in socket handlers)
   // ---------------------------------------------------------------------------
-  const openChat = useCallback((sessionId: string, sessionDetails: Session) => {
+  const openChat = useCallback((sessionId: string, _sessionDetails: Session) => {
     setCurrentSessionId(sessionId);
-    setCurrentSessionDetails(sessionDetails);
-    setChatOpen(true);
-  }, []);
+    router.push(`/session/${sessionId}/chat`);
+  }, [router]);
 
   const closeCreateSession = useCallback(() => setCreateSessionOpen(false), []);
 
@@ -104,7 +102,6 @@ const Dashboard = () => {
       localStorage.setItem('joinedSessions', JSON.stringify([...next]));
       return next;
     });
-    if (currentSessionId === sessionId) setChatOpen(false);
   }, [socket, setJoinedSessions, currentSessionId]);
 
   // ---------------------------------------------------------------------------
@@ -263,8 +260,6 @@ const Dashboard = () => {
       localStorage.setItem('joinedSessions', JSON.stringify([...next]));
       return next;
     });
-    if (currentSessionId === data.sessionId) setChatOpen(false);
-
     toast.info(data.endedBy ? `${data.endedBy} ended the session.` : 'The study session has ended.');
   }, [setSessions, setJoinedSessions, currentSessionId]);
 
@@ -663,15 +658,7 @@ const Dashboard = () => {
         </div>
       )}
 
-      {/* Chat Panel */}
-      {chatOpen && currentSessionDetails && (
-        <SessionChat
-          socket={socket}
-          session={currentSessionDetails}
-          isOpen={chatOpen}
-          onClose={() => setChatOpen(false)}
-        />
-      )}
+      {/* Chat Panel: now at /session/[id]/chat — no modal here */}
 
       {/* Premium Custom Confirmation Modals */}
       <DashboardConfirmationModals

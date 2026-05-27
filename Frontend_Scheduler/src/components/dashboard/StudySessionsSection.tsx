@@ -219,16 +219,10 @@ export default function StudySessionsSection({
                     {isJoined && (
                       <>
                         <button
-                          onClick={() => handleLeaveSession(sessionId)}
-                          className={dangerBtn}
-                        >
-                          Leave
-                        </button>
-                        <button
                           onClick={() => openChat(sessionId, session)}
                           className={primaryBtn}
                         >
-                          Chat
+                          Open Chat Room
                         </button>
                       </>
                     )}

@@ -298,15 +298,30 @@ function registerInviteHandlers(io: Server, socket: Socket, user: UserPayload) {
         return;
       }
 
-      // FIX: Idempotency guard — reject if already started by a prior accept
-      if (session.status !== 'scheduled' && session.status !== 'pending') {
-        if (callback) callback({ ok: false, error: 'Invite already responded to or session already active' });
+      const participant = session.participants.find((p) => p.userId === user.id);
+      if (!participant) {
+        if (callback) callback({ ok: false, error: 'You are not invited to this session' });
+        return;
+      }
+
+      if (participant.status === 'accepted') {
+        if (callback) callback({ ok: true, session });
+        return;
+      }
+
+      if (participant.status === 'declined') {
+        if (callback) callback({ ok: false, error: 'Invite already declined' });
+        return;
+      }
+
+      // Reject only if the session is completed or cancelled
+      if (session.status === 'completed' || session.status === 'cancelled') {
+        if (callback) callback({ ok: false, error: 'This session has already ended or been cancelled' });
         return;
       }
 
       // FIX: Check invite TTL
-      const participant = session.participants.find((p) => p.userId === user.id);
-      if (participant?.invitedAt) {
+      if (participant.invitedAt) {
         const age = Date.now() - new Date(participant.invitedAt).getTime();
         if (age > INVITE_TTL_MS) {
           socket.emit('inviteExpired', { sessionId });
@@ -345,6 +360,13 @@ function registerInviteHandlers(io: Server, socket: Socket, user: UserPayload) {
         sessionId,
         roomId: sessionRoom,
         sessionDetails: updatedSession,
+      });
+
+      // Broadcast update to the active session room so in-room participants see this user as accepted/joined
+      io.to(sessionRoom).emit('participantAccepted', {
+        sessionId,
+        userId: user.id,
+        status: 'accepted',
       });
 
       console.log(`✅ ${user.name} accepted invite for session ${sessionId}`);
@@ -390,6 +412,13 @@ function registerInviteHandlers(io: Server, socket: Socket, user: UserPayload) {
         by: user.id,
         name: user.name,
         sessionId,
+      });
+
+      // Broadcast update to the active session room so in-room participants see this user as declined
+      io.to(`session_${sessionId}`).emit('participantDeclined', {
+        sessionId,
+        userId: user.id,
+        status: 'declined',
       });
 
       socket.emit('inviteDeclinedSelf', { sessionId });
@@ -674,6 +703,17 @@ function registerChatHandlers(io: Server, socket: Socket, user: UserPayload) {
     } catch (error) {
       console.error('getSessionMessages error:', error);
     }
+  });
+
+  // Returns the list of userIds currently active (in-room) for a session.
+  // Called by the chat page on mount so it can correctly show who is Active vs Joined.
+  socket.on('getActiveParticipants', ({ sessionId }: { sessionId: string }) => {
+    if (!sessionId) return;
+    const active = activeSessions.get(sessionId);
+    socket.emit('activeParticipants', {
+      sessionId,
+      userIds: active ? [...active.participants] : [],
+    });
   });
 }
 

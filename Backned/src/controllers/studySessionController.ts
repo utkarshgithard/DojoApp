@@ -126,7 +126,7 @@ export async function getMyInvites(req: AuthenticatedRequest, res: Response): Pr
     const userId = req.userId!;
     const invites = await prisma.studySession.findMany({
       where: {
-        status: 'pending',
+        status: { in: ['pending', 'scheduled', 'in_progress'] },
         participants: {
           some: { userId, status: 'invited' },
         },
