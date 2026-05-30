@@ -461,6 +461,7 @@ function registerSessionHandlers(io: Server, socket: Socket, user: UserPayload) 
         if (!cachedMessages || cachedMessages.length === 0) {
           const dbMessages = await prisma.message.findMany({
             where: { sessionId },
+            include: { user: { select: { avatarUrl: true } } },
             orderBy: { ts: 'asc' },
             take: MAX_MESSAGES_PER_SESSION,
           });
@@ -471,6 +472,7 @@ function registerSessionHandlers(io: Server, socket: Socket, user: UserPayload) 
             name: m.name,
             text: m.text,
             ts: m.ts.toISOString(),
+            avatarUrl: m.user?.avatarUrl ?? undefined,
             // E2EE fields
             ciphertext: m.ciphertext ?? undefined,
             iv: m.iv ?? undefined,
@@ -527,6 +529,7 @@ function registerSessionHandlers(io: Server, socket: Socket, user: UserPayload) 
       if (!cachedMessages || cachedMessages.length === 0) {
         const dbMessages = await prisma.message.findMany({
           where: { sessionId },
+          include: { user: { select: { avatarUrl: true } } },
           orderBy: { ts: 'asc' },
           take: MAX_MESSAGES_PER_SESSION,
         });
@@ -537,6 +540,7 @@ function registerSessionHandlers(io: Server, socket: Socket, user: UserPayload) 
           name: m.name,
           text: m.text,
           ts: m.ts.toISOString(),
+          avatarUrl: m.user?.avatarUrl ?? undefined,
           // E2EE fields
           ciphertext: m.ciphertext ?? undefined,
           iv: m.iv ?? undefined,
@@ -650,6 +654,46 @@ function registerSessionHandlers(io: Server, socket: Socket, user: UserPayload) 
       console.log(`🏁 Session ${sessionId} ended by ${user.name} — ${deleted.count} message(s) permanently deleted.`);
     } catch (err) {
       console.error('endSession error:', err);
+    }
+  });
+
+  // Extend session duration (creator adds extra time in multiples of 5 minutes)
+  socket.on('extendSession', async ({ sessionId, extraMinutes }: { sessionId: string; extraMinutes: number }) => {
+    if (!sessionId || !extraMinutes) return;
+
+    // Validate extraMinutes is a multiple of 5
+    if (extraMinutes % 5 !== 0 || extraMinutes <= 0) {
+      return socket.emit('sessionError', { message: 'Extra time must be a positive multiple of 5 minutes' });
+    }
+
+    try {
+      const session = await prisma.studySession.findUnique({ where: { id: sessionId } });
+      if (!session) return;
+
+      // Only the creator can extend the session
+      if (session.creatorId !== user.id) {
+        return socket.emit('sessionError', { message: 'Only the session creator can extend the session' });
+      }
+
+      // Update the duration in database
+      const updatedSession = await prisma.studySession.update({
+        where: { id: sessionId },
+        data: {
+          duration: session.duration + extraMinutes,
+        },
+      });
+
+      // Broadcast the duration extension to everyone in the session
+      io.to(`session_${sessionId}`).emit('sessionExtended', {
+        sessionId,
+        duration: updatedSession.duration,
+        extraMinutes,
+        extendedBy: user.name,
+      });
+
+      console.log(`⏱️ Session ${sessionId} extended by ${extraMinutes} minutes (New duration: ${updatedSession.duration}m) by ${user.name}`);
+    } catch (err) {
+      console.error('extendSession error:', err);
     }
   });
 }
@@ -773,6 +817,7 @@ function registerChatHandlers(io: Server, socket: Socket, user: UserPayload) {
       if (!chatHistory || chatHistory.length === 0) {
         const dbMessages = await prisma.message.findMany({
           where: { sessionId },
+          include: { user: { select: { avatarUrl: true } } },
           orderBy: { ts: 'asc' },
           take: MAX_MESSAGES_PER_SESSION,
         });
@@ -783,6 +828,7 @@ function registerChatHandlers(io: Server, socket: Socket, user: UserPayload) {
           name: m.name,
           text: m.text,
           ts: m.ts.toISOString(),
+          avatarUrl: m.user?.avatarUrl ?? undefined,
           // E2EE fields
           ciphertext: m.ciphertext ?? undefined,
           iv: m.iv ?? undefined,

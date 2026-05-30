@@ -2,10 +2,10 @@
 
 import { useAuth } from '@/context/authContext';
 import { useRouter } from 'next/navigation';
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import API from "@/lib/axios";
 import { useDarkMode } from '@/context/DarkModeContext';
-import { User, Palette, Copy, Check, Settings, Mail, BookOpen } from 'lucide-react';
+import { User, Palette, Copy, Check, Settings, Mail, BookOpen, Camera } from 'lucide-react';
 import { toast } from 'sonner';
 import { auth } from '@/lib/firebase';
 
@@ -17,12 +17,14 @@ export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState('profile');
   const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [userData, setUserData] = useState({
     name: '',
     email: '',
     bio: '',
     department: '',
+    avatarUrl: '',
   });
 
   // Populate local state from auth context's userDetails (already fetched at app startup)
@@ -34,6 +36,7 @@ export default function SettingsPage() {
         email: userDetails.email || '',
         bio: userDetails.bio || '',
         department: userDetails.department || '',
+        avatarUrl: userDetails.avatarUrl || '',
       });
     }
   }, [userDetails]);
@@ -50,13 +53,31 @@ export default function SettingsPage() {
     setUserData(prev => ({ ...prev, [name]: value }));
   };
 
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (!file.type.startsWith('image/')) {
+        return toast.error('Please upload an image file');
+      }
+      if (file.size > 1.5 * 1024 * 1024) {
+        return toast.error('Image size must be less than 1.5MB');
+      }
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setUserData(prev => ({ ...prev, avatarUrl: reader.result as string }));
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   const handleSave = async () => {
     setSaving(true);
     try {
       const res = await API.put('/auth/profile', {
         name: userData.name,
         bio: userData.bio,
-        department: userData.department
+        department: userData.department,
+        avatarUrl: userData.avatarUrl,
       });
       setDetails(res.data.user);
       setUserDetails(res.data.user);
@@ -177,8 +198,18 @@ export default function SettingsPage() {
                 ) : (
                   <div className="space-y-6">
                     <div className="flex items-center gap-4 border-b pb-5 border-gray-100 dark:border-gray-900">
-                      <div className="relative w-14 h-14 rounded-full overflow-hidden border border-gray-200 dark:border-gray-800 text-[20px] font-semibold flex items-center justify-center bg-gray-50 dark:bg-gray-900 shrink-0">
-                        {auth.currentUser?.photoURL ? (
+                      <div 
+                        onClick={() => fileInputRef.current?.click()}
+                        className="group relative w-16 h-16 rounded-full overflow-hidden border border-gray-200 dark:border-gray-800 text-[20px] font-semibold flex items-center justify-center bg-gray-50 dark:bg-gray-900 shrink-0 cursor-pointer select-none shadow-sm transition-transform active:scale-95"
+                        title="Upload profile photo"
+                      >
+                        {userData.avatarUrl ? (
+                          <img
+                            src={userData.avatarUrl}
+                            alt={userData.name}
+                            className="w-full h-full object-cover animate-in fade-in duration-300"
+                          />
+                        ) : auth.currentUser?.photoURL ? (
                           <img
                             src={auth.currentUser.photoURL}
                             alt={userData.name}
@@ -190,10 +221,33 @@ export default function SettingsPage() {
                         ) : (
                           '👤'
                         )}
+                        
+                        {/* Hover Overlay with Camera Icon */}
+                        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-0.5 text-white">
+                          <Camera size={15} />
+                          <span className="text-[8px] uppercase tracking-wider font-bold">Edit</span>
+                        </div>
                       </div>
+
+                      {/* Hidden File Input */}
+                      <input 
+                        type="file"
+                        ref={fileInputRef}
+                        onChange={handleFileChange}
+                        accept="image/*"
+                        className="hidden"
+                      />
+
                       <div>
                         <h2 className="text-[15px] font-semibold tracking-tight">{userData.name || 'User'}</h2>
                         <p className={`text-[12.5px] ${muted}`}>{userData.email}</p>
+                        <button
+                          type="button"
+                          onClick={() => fileInputRef.current?.click()}
+                          className="text-[11px] font-medium text-indigo-500 hover:text-indigo-400 mt-1 transition-colors"
+                        >
+                          Change Photo
+                        </button>
                       </div>
                     </div>
 

@@ -43,8 +43,17 @@ const SubjectStatsChart = () => {
 
     if (!stats || stats.length === 0) {
         return (
-            <div className="text-center py-12">
-                <p className="text-[13px] text-gray-500">No subject statistics available</p>
+            <div className="flex flex-col items-center justify-center py-10 px-4 text-center">
+                <div className={`p-3 rounded-full mb-3 ${darkMode ? 'bg-zinc-950 text-zinc-500 border border-zinc-800' : 'bg-zinc-50 text-zinc-400 border border-zinc-100'}`}>
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="12" cy="12" r="10" strokeDasharray="3 3" />
+                        <path d="M12 6v6l4 2" />
+                    </svg>
+                </div>
+                <p className={`text-[13px] font-semibold ${darkMode ? 'text-zinc-300' : 'text-zinc-700'}`}>No stats available</p>
+                <p className={`text-[11px] text-gray-500 max-w-[240px] mt-1 leading-normal`}>
+                    Your visual metrics and subject attendance breakdown will generate once you start marking your classes.
+                </p>
             </div>
         );
     }

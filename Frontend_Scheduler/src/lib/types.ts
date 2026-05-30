@@ -11,6 +11,7 @@ export interface User {
   createdAt: string;
   bio?: string;
   department?: string;
+  avatarUrl?: string;
 }
 
 export interface Friend {
@@ -18,6 +19,7 @@ export interface Friend {
   name: string;
   email: string;
   friendCode: string;
+  avatarUrl?: string;
 }
 
 export interface Subject {
@@ -59,6 +61,7 @@ export interface Participant {
     id: string;
     name: string;
     email: string;
+    avatarUrl?: string;
   };
 }
 
@@ -70,6 +73,7 @@ export interface Message {
   /** Plaintext message body. For E2EE messages this is populated after decryption. */
   text: string;
   ts: string | Date;
+  avatarUrl?: string;
   // Socket.io legacy compat
   _id?: string;
   // ── E2EE fields (present only for encrypted messages) ──

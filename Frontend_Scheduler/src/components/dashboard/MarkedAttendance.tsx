@@ -2,6 +2,7 @@
  
 import React from 'react';
 import { format } from 'date-fns';
+import { useDarkMode } from '@/context/DarkModeContext';
 
 interface MarkedAttendanceProps {
   date: string;
@@ -29,6 +30,8 @@ export default function MarkedAttendance({
   border,
   muted,
 }: MarkedAttendanceProps) {
+  const { darkMode } = useDarkMode() as any;
+  const dark = darkMode;
   const isToday = date === getLocalDateString(new Date());
   const formattedDate = date ? format(new Date(date + 'T00:00:00'), 'PPP') : '';
 
@@ -52,9 +55,18 @@ export default function MarkedAttendance({
           ))}
         </div>
       ) : markedSubjects.length === 0 ? (
-        <p className={`text-[13px] ${muted} py-4`}>
-          {isToday ? "No attendance marked yet." : `No attendance marked on ${formattedDate}.`}
-        </p>
+        <div className="flex flex-col items-center justify-center py-8 px-4 text-center border border-dashed rounded-xl border-zinc-200 dark:border-zinc-800 bg-zinc-50/10 dark:bg-zinc-950/10">
+          <div className={`p-2.5 rounded-full mb-2.5 ${dark ? 'bg-zinc-950 text-zinc-500 border border-zinc-800' : 'bg-zinc-50 text-zinc-400 border border-zinc-100'}`}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 20h9" />
+              <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+            </svg>
+          </div>
+          <p className={`text-[12.5px] font-semibold ${dark ? 'text-zinc-300' : 'text-zinc-700'}`}>No marked logs</p>
+          <p className={`text-[11.5px] ${muted} max-w-[220px] mt-0.5 leading-normal`}>
+            {isToday ? "No attendance marked yet. Log classes above to get started." : `No attendance marked on ${formattedDate}.`}
+          </p>
+        </div>
       ) : (
         <div className="space-y-2.5">
           {markedSubjects.map((subject: any) => (

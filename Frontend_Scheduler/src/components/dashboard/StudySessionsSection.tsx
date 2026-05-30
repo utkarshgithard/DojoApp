@@ -51,15 +51,22 @@ export default function StudySessionsSection({
   dangerBtn,
   dark,
 }: StudySessionsSectionProps) {
+  // Client-side filter: only show invites that are less than 15 minutes old
+  const activeInvites = invites.filter((invite) => {
+    if (!invite.invitedAt) return true;
+    const age = Date.now() - new Date(invite.invitedAt).getTime();
+    return age <= 15 * 60 * 1000;
+  });
+
   return (
     <section className={cardClass}>
       <p className={`text-[11px] uppercase tracking-widest ${muted} mb-2`}>Co-learning</p>
       <div className="flex justify-between items-center mb-4">
         <h2 className="text-[16px] font-medium tracking-tight flex items-center gap-2">
           <span>Study Sessions</span>
-          {newInviteCount > 0 && (
+          {activeInvites.length > 0 && (
             <span className="inline-flex items-center justify-center w-5 h-5 text-xs font-bold text-white bg-black dark:bg-white dark:text-black border border-current rounded-full">
-              {newInviteCount}
+              {activeInvites.length}
             </span>
           )}
         </h2>
@@ -90,10 +97,21 @@ export default function StudySessionsSection({
               </div>
             ))}
           </div>
-        ) : invites.length === 0 ? (
-          <p className={`text-[13px] ${muted} py-2`}>No pending invites.</p>
+        ) : activeInvites.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-7 px-4 text-center border border-dashed rounded-xl border-zinc-200 dark:border-zinc-800 bg-zinc-50/10 dark:bg-zinc-950/10">
+            <div className={`p-2.5 rounded-full mb-2.5 ${dark ? 'bg-zinc-950 text-zinc-500 border border-zinc-800' : 'bg-zinc-50 text-zinc-400 border border-zinc-100'}`}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <rect width="20" height="16" x="2" y="4" rx="2" />
+                <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
+              </svg>
+            </div>
+            <p className={`text-[12.5px] font-semibold ${dark ? 'text-zinc-300' : 'text-zinc-700'}`}>No pending invites</p>
+            <p className={`text-[11px] ${muted} max-w-[220px] mt-0.5 leading-normal`}>
+              When friends invite you to study sessions, they will show up here.
+            </p>
+          </div>
         ) : (
-          (invites as Invite[]).map((invite, idx) => (
+          (activeInvites as Invite[]).map((invite, idx) => (
             <div
               key={invite.id || idx}
               className={`border rounded-lg p-4 flex justify-between items-center mb-3 ${border}`}
@@ -155,7 +173,20 @@ export default function StudySessionsSection({
             ))}
           </div>
         ) : activeSessions.length === 0 ? (
-          <p className={`text-[13px] ${muted} py-2`}>No active sessions.</p>
+          <div className="flex flex-col items-center justify-center py-8 px-4 text-center border border-dashed rounded-xl border-zinc-200 dark:border-zinc-800 bg-zinc-50/10 dark:bg-zinc-950/10">
+            <div className={`p-2.5 rounded-full mb-2.5 ${dark ? 'bg-zinc-950 text-zinc-500 border border-zinc-800' : 'bg-zinc-50 text-zinc-400 border border-zinc-100'}`}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <rect width="18" height="18" x="3" y="4" rx="2" ry="2" />
+                <line x1="16" x2="16" y1="2" y2="6" />
+                <line x1="8" x2="8" y1="2" y2="6" />
+                <line x1="3" x2="21" y1="10" y2="10" />
+              </svg>
+            </div>
+            <p className={`text-[12.5px] font-semibold ${dark ? 'text-zinc-300' : 'text-zinc-700'}`}>No active sessions</p>
+            <p className={`text-[11px] ${muted} max-w-[220px] mt-0.5 leading-normal`}>
+              Create a new study session to invite friends and learn together.
+            </p>
+          </div>
         ) : (
           activeSessions.map((session, idx) => {
             const sessionId = session.id;

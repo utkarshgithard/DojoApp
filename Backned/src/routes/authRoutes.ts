@@ -20,6 +20,7 @@ userRouter.get('/userDetails', verifyToken, async (req: AuthenticatedRequest, re
         createdAt: true,
         bio: true,
         department: true,
+        avatarUrl: true,
       },
     });
     res.json({ user, success: true, message: 'User Found' });
@@ -95,7 +96,7 @@ userRouter.get('/friends-List', verifyToken, async (req: AuthenticatedRequest, r
         friends: {
           include: {
             friend: {
-              select: { id: true, name: true, friendCode: true, email: true },
+              select: { id: true, name: true, friendCode: true, email: true, avatarUrl: true },
             },
           },
         },
@@ -159,7 +160,7 @@ userRouter.post('/add', verifyToken, async (req: AuthenticatedRequest, res: Resp
 // PUT /api/auth/profile — update user profile
 userRouter.put('/profile', verifyToken, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
-    const { name, bio, department } = req.body;
+    const { name, bio, department, avatarUrl } = req.body;
     const userId = req.userId!;
 
     const updatedUser = await prisma.user.update({
@@ -168,6 +169,7 @@ userRouter.put('/profile', verifyToken, async (req: AuthenticatedRequest, res: R
         name: name !== undefined ? name : undefined,
         bio: bio !== undefined ? bio : undefined,
         department: department !== undefined ? department : undefined,
+        avatarUrl: avatarUrl !== undefined ? avatarUrl : undefined,
       },
       select: {
         id: true,
@@ -177,6 +179,7 @@ userRouter.put('/profile', verifyToken, async (req: AuthenticatedRequest, res: R
         friendCode: true,
         bio: true,
         department: true,
+        avatarUrl: true,
       }
     });
 

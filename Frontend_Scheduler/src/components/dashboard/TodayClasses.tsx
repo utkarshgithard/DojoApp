@@ -4,6 +4,7 @@ import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Sun, Undo2 } from 'lucide-react';
 import { format } from 'date-fns';
+import { useDarkMode } from '@/context/DarkModeContext';
 
 interface TodayClassesProps {
   date: string;
@@ -43,6 +44,8 @@ export default function TodayClasses({
   muted,
   secondaryBtn,
 }: TodayClassesProps) {
+  const { darkMode } = useDarkMode() as any;
+  const dark = darkMode;
   const isToday = date === getLocalDateString(new Date());
   const formattedDate = date ? format(new Date(date + 'T00:00:00'), 'PPP') : '';
 
@@ -99,9 +102,18 @@ export default function TodayClasses({
           ))}
         </div>
       ) : unmarkedSubjects.length === 0 ? (
-        <p className={`text-[13px] ${muted} py-4`}>
-          {isToday ? "No classes scheduled for today." : `No classes scheduled on ${formattedDate}.`}
-        </p>
+        <div className="flex flex-col items-center justify-center py-8 px-4 text-center border border-dashed rounded-xl border-zinc-200 dark:border-zinc-800 bg-zinc-50/10 dark:bg-zinc-950/10">
+          <div className={`p-2.5 rounded-full mb-2.5 ${dark ? 'bg-zinc-950 text-zinc-500 border border-zinc-800' : 'bg-zinc-50 text-zinc-400 border border-zinc-100'}`}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <path d="m9 12 2 2 4-4" />
+            </svg>
+          </div>
+          <p className={`text-[12.5px] font-semibold ${dark ? 'text-zinc-300' : 'text-zinc-700'}`}>No classes scheduled</p>
+          <p className={`text-[11.5px] ${muted} max-w-[220px] mt-0.5 leading-normal`}>
+            {isToday ? "Enjoy your day off! No classes are scheduled for today." : `No classes are scheduled on ${formattedDate}.`}
+          </p>
+        </div>
       ) : (
         <div className="space-y-3">
           {unmarkedSubjects.map((subject: any) => (

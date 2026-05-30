@@ -20,21 +20,32 @@ import {
   Lock,
 } from "lucide-react";
 import { useE2EE } from "@/context/E2EEContext";
+import { auth } from "@/lib/firebase";
+import { toast } from "sonner";
 
 // ---------------------------------------------------------------------------
 // Helper: Avatar initial bubble
 // ---------------------------------------------------------------------------
 function Avatar({
   name,
+  avatarUrl,
   size = "md",
   dark,
 }: {
   name: string;
+  avatarUrl?: string;
   size?: "sm" | "md";
   dark: boolean;
 }) {
-  const initial = name ? name.charAt(0).toUpperCase() : "?";
   const sizeClass = size === "sm" ? "w-7 h-7 text-[11px]" : "w-9 h-9 text-[13px]";
+  if (avatarUrl) {
+    return (
+      <div className={`${sizeClass} rounded-full overflow-hidden shrink-0 border border-gray-250 dark:border-gray-800 shadow-sm`}>
+        <img src={avatarUrl} alt={name} className="w-full h-full object-cover" />
+      </div>
+    );
+  }
+  const initial = name ? name.charAt(0).toUpperCase() : "?";
   return (
     <div
       className={`${sizeClass} rounded-full flex items-center justify-center font-semibold shrink-0 select-none
@@ -63,6 +74,113 @@ function TypingDots() {
 }
 
 // ---------------------------------------------------------------------------
+// Helper: Countdown Widget (Shadcn-style, backward counting)
+// ---------------------------------------------------------------------------
+function CountdownWidget({
+  secs,
+  isOvertime,
+  isNearEnd,
+  isCreator,
+  dark,
+  onAddFiveMinutes,
+}: {
+  secs: number;
+  isOvertime: boolean;
+  isNearEnd: boolean;
+  isCreator: boolean;
+  dark: boolean;
+  onAddFiveMinutes: (mins: number) => void;
+}) {
+  const absSecs = Math.abs(secs);
+  const h = Math.floor(absSecs / 3600);
+  const m = Math.floor((absSecs % 3600) / 60);
+  const s = absSecs % 60;
+
+  const pad = (num: number) => String(num).padStart(2, "0");
+
+  const border = dark ? "border-zinc-800" : "border-gray-200";
+  const bgCard = dark ? "bg-zinc-950/60" : "bg-zinc-50/60";
+
+  let dotColor = isOvertime ? "bg-red-500" : isNearEnd ? "bg-amber-500" : "bg-emerald-500";
+  let label = isOvertime ? "Overtime" : isNearEnd ? "Ending Soon" : "Remaining";
+
+  return (
+    <div className={`p-3.5 rounded-xl border ${border} ${bgCard} flex flex-col gap-3 shadow-sm transition-all`}>
+      {/* Header status */}
+      <div className="flex items-center justify-between">
+        <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+          {label}
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className={`w-1.5 h-1.5 rounded-full ${dotColor} ${!isOvertime ? "animate-pulse" : "animate-ping"}`} />
+          <span className={`text-[10px] font-semibold uppercase ${isOvertime ? "text-red-400 font-bold" : "text-gray-500"}`}>
+            Live
+          </span>
+        </span>
+      </div>
+
+      {/* Digits row */}
+      <div className="flex items-center justify-center gap-1.5 select-none">
+        {/* Hours */}
+        <div className="flex flex-col items-center">
+          <div className={`w-10 h-10 rounded-lg flex items-center justify-center font-mono text-[18px] font-bold border ${dark ? "bg-zinc-900 border-zinc-800 text-white" : "bg-white border-gray-250 text-gray-800"} shadow-sm`}>
+            {pad(h)}
+          </div>
+          <span className="text-[9px] font-medium text-gray-400 dark:text-gray-500 mt-1 uppercase">h</span>
+        </div>
+        
+        <span className="font-mono text-gray-400 dark:text-gray-600 text-[18px] font-bold -mt-3.5">:</span>
+
+        {/* Minutes */}
+        <div className="flex flex-col items-center">
+          <div className={`w-10 h-10 rounded-lg flex items-center justify-center font-mono text-[18px] font-bold border ${dark ? "bg-zinc-900 border-zinc-800 text-white" : "bg-white border-gray-250 text-gray-800"} shadow-sm`}>
+            {pad(m)}
+          </div>
+          <span className="text-[9px] font-medium text-gray-400 dark:text-gray-500 mt-1 uppercase">m</span>
+        </div>
+
+        <span className="font-mono text-gray-400 dark:text-gray-600 text-[18px] font-bold -mt-3.5">:</span>
+
+        {/* Seconds */}
+        <div className="flex flex-col items-center">
+          <div className={`w-10 h-10 rounded-lg flex items-center justify-center font-mono text-[18px] font-bold border ${dark ? "bg-zinc-900 border-zinc-800 text-white" : "bg-white border-gray-250 text-gray-800"} shadow-sm`}>
+            {pad(s)}
+          </div>
+          <span className="text-[9px] font-medium text-gray-400 dark:text-gray-500 mt-1 uppercase">s</span>
+        </div>
+      </div>
+
+      {/* Creator actions */}
+      {isCreator && (
+        <div className="flex flex-col gap-1.5 pt-1.5 border-t border-dashed dark:border-zinc-800/80 border-gray-200">
+          <p className="text-[9.5px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide">Extend Session</p>
+          <div className="grid grid-cols-2 gap-1.5">
+            <button
+              onClick={() => onAddFiveMinutes(5)}
+              className={`py-1.5 rounded-lg text-[11px] font-semibold border transition-all active:scale-95 flex items-center justify-center gap-1
+                ${dark 
+                  ? "border-zinc-800 text-zinc-300 bg-zinc-900 hover:bg-zinc-850 hover:text-white" 
+                  : "border-gray-200 text-gray-700 bg-white hover:bg-gray-50 hover:text-black"}`}
+            >
+              +5 Min
+            </button>
+            <button
+              onClick={() => onAddFiveMinutes(15)}
+              className={`py-1.5 rounded-lg text-[11px] font-semibold border transition-all active:scale-95 flex items-center justify-center gap-1
+                ${dark 
+                  ? "border-zinc-800 text-zinc-300 bg-zinc-900 hover:bg-zinc-850 hover:text-white" 
+                  : "border-gray-200 text-gray-700 bg-white hover:bg-gray-50 hover:text-black"}`}
+            >
+              +15 Min
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Main Page
 // ---------------------------------------------------------------------------
 export default function SessionChatPage() {
@@ -71,7 +189,7 @@ export default function SessionChatPage() {
   const sessionId = params?.id as string;
 
   const { socket, sessions, setJoinedSessions } = useSocket() as any;
-  const { userId: currentUserId, userName: currentUserName } = useAuth() as any;
+  const { userId: currentUserId, userName: currentUserName, userDetails } = useAuth() as any;
   const { darkMode } = useDarkMode() as any;
   const e2ee = useE2EE();
 
@@ -104,6 +222,9 @@ export default function SessionChatPage() {
   const [focusMode, setFocusMode] = useState(false);
   const [showParticipants, setShowParticipants] = useState(false); // mobile drawer
   const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // Live session timer (seconds elapsed / seconds until start)
+  const [sessionElapsed, setSessionElapsed] = useState(0);
 
   // Session-ended overlay
   const [sessionEndedBy, setSessionEndedBy] = useState<string | null>(null);
@@ -143,6 +264,12 @@ export default function SessionChatPage() {
       socket.emit("endSession", { sessionId });
       // Don't navigate immediately — wait for sessionEnded event so the
       // admin also sees the same overlay as every other participant.
+    }
+  };
+
+  const handleExtendSession = (extraMinutes: number) => {
+    if (socket && sessionId) {
+      socket.emit("extendSession", { sessionId, extraMinutes });
     }
   };
 
@@ -205,6 +332,35 @@ export default function SessionChatPage() {
     }
   }, []);
 
+  // Track previous message count for history vs live messages scroll timing
+  const prevMessagesLength = useRef(0);
+
+  // Declarative scroll-to-bottom on layout change or messages change
+  useEffect(() => {
+    if (loadingSession) return;
+    if (messages.length === 0) return;
+
+    const isNewMessage = messages.length > prevMessagesLength.current;
+    // Large jump in message length signifies history load, 1 signifies single new message
+    const isHistory = messages.length - prevMessagesLength.current > 1 || prevMessagesLength.current === 0;
+    const smooth = isNewMessage && !isHistory;
+
+    // Scroll immediately
+    scrollToBottom(smooth);
+
+    // Re-trigger scroll after short delays to ensure DOM has fully painted the new node heights
+    const t1 = setTimeout(() => scrollToBottom(smooth), 50);
+    const t2 = setTimeout(() => scrollToBottom(smooth), 150);
+
+    prevMessagesLength.current = messages.length;
+
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+    };
+  }, [messages, loadingSession, scrollToBottom]);
+
+
   // ---------------------------------------------------------------------------
   // Re-join/Initialize room — can be called on mount, reconnect, or manually via Refresh
   // ---------------------------------------------------------------------------
@@ -237,13 +393,12 @@ export default function SessionChatPage() {
     }
   }, [socket, sessionId]);
 
-  // Manual refresh handler with spin visual feedback
+  // Manual refresh handler — keeps spinner going until messages event fires
   const handleRefresh = () => {
     setIsRefreshing(true);
     doJoin();
-    setTimeout(() => {
-      setIsRefreshing(false);
-    }, 600);
+    // Safety fallback: clear after 8s in case server never responds
+    setTimeout(() => setIsRefreshing(false), 8000);
   };
 
   // ---------------------------------------------------------------------------
@@ -255,6 +410,8 @@ export default function SessionChatPage() {
     // ── Register ALL listeners FIRST so no server response is missed ──
     const onHistory = async (data: { sessionId: string; messages: Message[] }) => {
       if (data.sessionId !== sessionId) return;
+      // Stop the refresh spinner — messages have arrived
+      setIsRefreshing(false);
       const decryptFn = decryptRef.current;
       const msgs = decryptFn
         ? await Promise.all(
@@ -376,6 +533,24 @@ export default function SessionChatPage() {
       setEndCountdown(5);
     };
 
+    const onSessionExtended = (data: { sessionId: string; duration: number; extraMinutes: number; extendedBy?: string }) => {
+      if (data.sessionId !== sessionId) return;
+      setSession((prev) => {
+        if (!prev) return null;
+        return {
+          ...prev,
+          duration: data.duration,
+        };
+      });
+      // Reset the auto-ended ref since the duration was extended
+      hasAutoEndedRef.current = false;
+      toast.success(`Session extended by ${data.extraMinutes} minutes by ${data.extendedBy || "the host"}!`);
+    };
+
+    const onSessionError = (data: { message: string }) => {
+      toast.error(data.message);
+    };
+
     // Register all listeners before emitting anything
     socket.on("sessionMessages", onHistory);
     socket.on("newChatMessage", onNew);
@@ -387,6 +562,8 @@ export default function SessionChatPage() {
     socket.on("participantAccepted", onParticipantAccepted);
     socket.on("participantDeclined", onParticipantDeclined);
     socket.on("sessionEnded", onSessionEnded);
+    socket.on("sessionExtended", onSessionExtended);
+    socket.on("sessionError", onSessionError);
 
     // Re-join automatically on socket reconnect (network drop, backend restart)
     socket.on("connect", doJoin);
@@ -407,6 +584,8 @@ export default function SessionChatPage() {
       socket.off("participantAccepted", onParticipantAccepted);
       socket.off("participantDeclined", onParticipantDeclined);
       socket.off("sessionEnded", onSessionEnded);
+      socket.off("sessionExtended", onSessionExtended);
+      socket.off("sessionError", onSessionError);
       Object.values(timeouts).forEach(clearTimeout);
     };
   }, [socket, sessionId, router, scrollToBottom, doJoin]);
@@ -476,6 +655,45 @@ export default function SessionChatPage() {
   const isScheduled = session?.status === "scheduled";
 
   // ---------------------------------------------------------------------------
+  // Overtime + near-end derived values (recalculated every second via sessionElapsed)
+  // ---------------------------------------------------------------------------
+  const sessionDurationSecs = (session?.duration ?? 0) * 60;
+  // How many seconds remain (negative = overtime)
+  const remainingSecs = sessionDurationSecs > 0 ? sessionDurationSecs - sessionElapsed : Infinity;
+  const isNearEnd = isLive && remainingSecs > 0 && remainingSecs <= 5 * 60; // last 5 min
+  const isOvertime = isLive && sessionDurationSecs > 0 && sessionElapsed >= sessionDurationSecs;
+  const overtimeSecs = isOvertime ? sessionElapsed - sessionDurationSecs : 0;
+
+  // ---------------------------------------------------------------------------
+  // Live session elapsed timer
+  // ---------------------------------------------------------------------------
+  useEffect(() => {
+    if (!session) return;
+    const tick = () => {
+      if (session.status === "in_progress" && session.actualStartTime) {
+        setSessionElapsed(Math.floor((Date.now() - new Date(session.actualStartTime).getTime()) / 1000));
+      } else if (session.status === "scheduled") {
+        const diff = Math.floor((new Date(session.startAt).getTime() - Date.now()) / 1000);
+        setSessionElapsed(diff > 0 ? -diff : 0); // negative = countdown
+      }
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [session]);
+
+  // Format seconds → "1h 23m 45s" or "23m 45s" or "45s"
+  const formatElapsed = (secs: number) => {
+    const abs = Math.abs(secs);
+    const h = Math.floor(abs / 3600);
+    const m = Math.floor((abs % 3600) / 60);
+    const s = abs % 60;
+    if (h > 0) return `${h}h ${String(m).padStart(2, "0")}m ${String(s).padStart(2, "0")}s`;
+    if (m > 0) return `${m}m ${String(s).padStart(2, "0")}s`;
+    return `${s}s`;
+  };
+
+  // ---------------------------------------------------------------------------
   // Countdown auto-redirect when session has ended
   // ---------------------------------------------------------------------------
   useEffect(() => {
@@ -487,6 +705,21 @@ export default function SessionChatPage() {
     const t = setTimeout(() => setEndCountdown((c) => c - 1), 1000);
     return () => clearTimeout(t);
   }, [sessionEndedBy, endCountdown, router]);
+
+  // ---------------------------------------------------------------------------
+  // Auto-end session when duration exceeded (creator only, fires once)
+  // ---------------------------------------------------------------------------
+  const hasAutoEndedRef = useRef(false);
+  useEffect(() => {
+    if (!isOvertime) return;
+    if (hasAutoEndedRef.current) return;
+    // Only the creator auto-ends — others just see the banner
+    if (String(session?.creatorId) !== String(currentUserId)) return;
+    hasAutoEndedRef.current = true;
+    if (socket && sessionId) {
+      socket.emit("endSession", { sessionId });
+    }
+  }, [isOvertime, session?.creatorId, currentUserId, socket, sessionId]);
 
   // ---------------------------------------------------------------------------
   // Session-Ended full-screen overlay
@@ -666,14 +899,19 @@ export default function SessionChatPage() {
 
         {/* Right: Controls */}
         <div className="flex items-center gap-2 shrink-0">
-          {/* Mobile: toggle participants panel */}
+          {/* Participants Logo with Overlapping Count Badge */}
           <button
             onClick={() => setShowParticipants((p) => !p)}
-            className={`flex md:hidden items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[12px] font-medium border transition-colors ${dark ? "border-gray-800 text-gray-300 hover:bg-gray-900" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}
-            aria-label="Toggle participants"
+            className={`relative p-2 rounded-lg border transition-all active:scale-95 flex items-center justify-center shrink-0
+              ${dark ? "border-gray-800 text-gray-350 hover:bg-gray-900 hover:text-white bg-zinc-950/40" : "border-gray-200 text-gray-600 hover:bg-gray-50 hover:text-black bg-zinc-50/40"}`}
+            aria-label="Toggle participants panel"
           >
-            <Users size={13} />
-            <span>{participants.length}</span>
+            <Users size={15} />
+            {participants.length > 0 && (
+              <span className="absolute -top-1.5 -right-1.5 px-1 py-0.5 min-w-[18px] h-[18px] rounded-full bg-red-500 text-white font-mono font-bold text-[10.5px] flex items-center justify-center shadow-sm select-none animate-in zoom-in duration-350">
+                {participants.length}
+              </span>
+            )}
           </button>
 
           {/* Refresh Button */}
@@ -767,15 +1005,39 @@ export default function SessionChatPage() {
             hidden md:flex
           `}
         >
-          <div className={`px-4 py-3 border-b ${border} shrink-0`}>
-            <p className={`text-[10px] uppercase tracking-widest font-semibold ${muted}`}>
-              Participants
-            </p>
-            <p className="text-[13px] font-medium mt-0.5">
-              {participants.length} {participants.length === 1 ? "person" : "people"}
-            </p>
+          <div className={`px-4 py-3.5 border-b ${border} shrink-0 space-y-2`}>
+            {/* Participants count */}
+            <div className="flex items-center justify-between">
+              <p className={`text-[10px] uppercase tracking-widest font-semibold ${muted}`}>Participants</p>
+              <div className="relative mr-2 flex items-center justify-center select-none">
+                <Users size={14} className={muted} />
+                {participants.length > 0 && (
+                  <span className="absolute -top-2 -right-2.5 px-1 py-0.5 min-w-[16px] h-[16px] rounded-full bg-red-500 text-white font-mono font-bold text-[9.5px] flex items-center justify-center shadow-sm animate-in zoom-in duration-300">
+                    {participants.length}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* Live session timer */}
+            {isLive && session?.actualStartTime && (
+              <CountdownWidget
+                secs={isOvertime ? overtimeSecs : remainingSecs}
+                isOvertime={isOvertime}
+                isNearEnd={isNearEnd}
+                isCreator={String(session.creatorId) === String(currentUserId)}
+                dark={dark}
+                onAddFiveMinutes={handleExtendSession}
+              />
+            )}
+            {isScheduled && (
+              <div className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg ${dark ? "bg-yellow-500/10 text-yellow-400" : "bg-yellow-50 text-yellow-600"}`}>
+                <span className="text-[11px] font-mono font-semibold tracking-tight">Starts in {formatElapsed(sessionElapsed)}</span>
+              </div>
+            )}
+
             {/* E2EE status */}
-            <div className={`flex items-center gap-1 mt-1.5 ${e2ee?.isReady ? (dark ? "text-emerald-400" : "text-emerald-600") : (dark ? "text-gray-600" : "text-gray-400")}`}>
+            <div className={`flex items-center gap-1 ${e2ee?.isReady ? (dark ? "text-emerald-400" : "text-emerald-600") : (dark ? "text-gray-600" : "text-gray-400")}`}>
               <Lock size={9} />
               <span className="text-[9px] font-semibold uppercase tracking-wider">
                 {e2ee?.isReady ? "End-to-End Encrypted" : "Establishing keys…"}
@@ -807,29 +1069,47 @@ export default function SessionChatPage() {
                 ? "Joined"
                 : p.status;
 
+              const isCreator = String(pId) === String(session?.creatorId);
+
               return (
                 <div
                   key={p.id}
-                  className={`flex items-center gap-2.5 px-4 py-2.5 transition-colors ${dark ? "hover:bg-gray-950/60" : "hover:bg-gray-50"}`}
+                  className={`flex items-center gap-3 px-4 py-3 mx-2 my-0.5 rounded-xl transition-colors
+                    ${dark ? "hover:bg-gray-900/70" : "hover:bg-gray-50"}`}
                 >
+                  {/* Avatar with presence ring */}
                   <div className="relative shrink-0">
-                    <Avatar name={pName} size="sm" dark={dark} />
-                    {/* Presence dot */}
+                    {p.user?.avatarUrl ? (
+                      <div className="w-8 h-8 rounded-full overflow-hidden shrink-0 border border-gray-200 dark:border-gray-800 shadow-sm">
+                        <img src={p.user.avatarUrl} alt={pName} className="w-full h-full object-cover" />
+                      </div>
+                    ) : (
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-[12px] select-none
+                        ${isInRoom
+                          ? dark ? "bg-emerald-500/20 text-emerald-300 ring-1 ring-emerald-500/40" : "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-400/50"
+                          : dark ? "bg-gray-800 text-gray-300" : "bg-gray-100 text-gray-600"
+                        }`}>
+                        {pName.charAt(0).toUpperCase()}
+                      </div>
+                    )}
                     <span
-                      className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 transition-colors duration-500 ${dark ? "border-black" : "border-white"} ${dotColor}`}
+                      className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 transition-colors duration-500 ${dark ? "border-[#0a0a0a]" : "border-white"} ${dotColor}`}
                     />
                   </div>
 
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-1.5">
-                      <p className={`text-[12.5px] font-medium truncate ${
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <p className={`text-[12.5px] font-semibold truncate ${
                         isMe
                           ? (dark ? "text-white" : "text-gray-900")
-                          : (dark ? "text-gray-300" : "text-gray-700")
+                          : (dark ? "text-gray-200" : "text-gray-800")
                       }`}>
                         {isMe ? "You" : pName}
                       </p>
-                      {isMe && (
+                      {isCreator && (
+                        <span title="Session creator" className="text-[11px] leading-none">👑</span>
+                      )}
+                      {isMe && !isCreator && (
                         <span className={`text-[9px] px-1 py-0.5 rounded font-semibold uppercase tracking-wide border ${dark ? "border-gray-700 text-gray-500" : "border-gray-200 text-gray-400"}`}>
                           me
                         </span>
@@ -837,11 +1117,15 @@ export default function SessionChatPage() {
                     </div>
 
                     {isTypingNow ? (
-                      <p className={`text-[11px] ${dark ? "text-indigo-400" : "text-indigo-500"} flex items-center`}>
+                      <p className={`text-[10.5px] ${dark ? "text-indigo-400" : "text-indigo-500"} flex items-center gap-0.5`}>
                         typing <TypingDots />
                       </p>
                     ) : (
-                      <p className={`text-[11px] capitalize ${muted}`}>
+                      <p className={`text-[10.5px] capitalize ${
+                        isInRoom
+                          ? dark ? "text-emerald-400" : "text-emerald-600"
+                          : muted
+                      }`}>
                         {statusLabel}
                       </p>
                     )}
@@ -913,6 +1197,20 @@ export default function SessionChatPage() {
                 <p className="text-[13px] font-semibold">Participants ({participants.length})</p>
                 <button onClick={() => setShowParticipants(false)} className={`text-[12px] ${muted} hover:text-current`}>Close</button>
               </div>
+
+              {/* Mobile Countdown Widget */}
+              {isLive && session?.actualStartTime && (
+                <div className="px-4 py-3 border-b border-gray-200 dark:border-zinc-800">
+                  <CountdownWidget
+                    secs={isOvertime ? overtimeSecs : remainingSecs}
+                    isOvertime={isOvertime}
+                    isNearEnd={isNearEnd}
+                    isCreator={String(session.creatorId) === String(currentUserId)}
+                    dark={dark}
+                    onAddFiveMinutes={handleExtendSession}
+                  />
+                </div>
+              )}
               {sortedParticipants.map((p) => {
                 const pId = String(p.userId || p.user?.id || "");
                 const isMe = pId === String(currentUserId);
@@ -934,7 +1232,7 @@ export default function SessionChatPage() {
                 return (
                   <div key={p.id} className={`flex items-center gap-2.5 px-4 py-3`}>
                     <div className="relative shrink-0">
-                      <Avatar name={pName} size="sm" dark={dark} />
+                      <Avatar name={pName} avatarUrl={p.user?.avatarUrl} size="sm" dark={dark} />
                       <span className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 transition-colors duration-500 ${dark ? "border-black" : "border-white"} ${dotColor}`} />
                     </div>
                     <div className="min-w-0">
@@ -960,20 +1258,55 @@ export default function SessionChatPage() {
           {/* Message List */}
           <div
             ref={listRef}
-            className="flex-1 overflow-y-auto px-4 py-5 space-y-4"
+            className="flex-1 overflow-y-auto px-4 py-5 space-y-4 relative"
           >
-            {messages.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-full gap-3 text-center py-16">
-                <div className={`w-12 h-12 rounded-full flex items-center justify-center ${dark ? "bg-gray-900" : "bg-gray-100"}`}>
-                  <span className="text-2xl">💬</span>
+            {/* Refresh overlay — shown while waiting for messages to load */}
+            {isRefreshing && (
+              <div className={`absolute inset-0 z-10 flex flex-col items-center justify-center gap-3
+                ${dark ? "bg-black/70" : "bg-white/80"} backdrop-blur-[2px] transition-all`}>
+                <Loader2 size={22} className={`animate-spin ${dark ? "text-gray-400" : "text-gray-500"}`} />
+                <p className={`text-[12.5px] font-medium ${dark ? "text-gray-400" : "text-gray-500"}`}>Loading messages…</p>
+              </div>
+            )}
+
+            {messages.length === 0 && !isRefreshing ? (
+              <div className="flex flex-col items-center justify-center h-full gap-5 text-center py-16">
+                {/* Minimal SVG speech-bubble illustration */}
+                <div className={dark ? "text-gray-700" : "text-gray-300"}>
+                  <svg width="72" height="64" viewBox="0 0 72 64" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                    {/* Back bubble */}
+                    <rect x="20" y="8" width="46" height="32" rx="10" stroke="currentColor" strokeWidth="1.8" />
+                    <path d="M52 40 L58 50 L44 40" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+                    {/* Front bubble */}
+                    <rect x="6" y="20" width="40" height="28" rx="9" stroke="currentColor" strokeWidth="1.8"
+                      className={dark ? "fill-black" : "fill-white"} />
+                    <path d="M16 48 L10 58 L26 48" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"
+                      className={dark ? "fill-black" : "fill-white"} />
+                    {/* Dots inside front bubble */}
+                    <circle cx="18" cy="34" r="2.2" fill="currentColor" opacity="0.5" />
+                    <circle cx="26" cy="34" r="2.2" fill="currentColor" opacity="0.5" />
+                    <circle cx="34" cy="34" r="2.2" fill="currentColor" opacity="0.5" />
+                  </svg>
                 </div>
-                <div>
-                  <p className={`text-[14px] font-medium ${dark ? "text-gray-300" : "text-gray-700"}`}>
-                    {isLive ? "Start the conversation!" : "Chat will be available when the session goes live."}
+                <div className="flex flex-col gap-1.5">
+                  <p className={`text-[14.5px] font-semibold tracking-tight ${dark ? "text-gray-200" : "text-gray-800"}`}>
+                    {isLive ? "No messages yet" : "Chat starts when session goes live"}
                   </p>
-                  <p className={`text-[12px] ${muted} mt-1`}>
-                    {isLive ? "Say hello to your study buddies 👋" : "Hang tight…"}
+                  <p className={`text-[12.5px] ${muted}`}>
+                    {isLive
+                      ? "Say hello to kick things off! 👋"
+                      : "Hang tight until the session begins…"}
                   </p>
+                  {isLive && (
+                    <button
+                      onClick={handleRefresh}
+                      className={`mt-2 self-center flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11.5px] font-medium border transition-all active:scale-95
+                        ${dark ? "border-gray-800 text-gray-400 hover:bg-gray-900 hover:text-gray-200" : "border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-gray-800"}`}
+                    >
+                      <RefreshCw size={11} className={isRefreshing ? "animate-spin" : ""} />
+                      Refresh chat
+                    </button>
+                  )}
                 </div>
               </div>
             ) : (
@@ -981,6 +1314,10 @@ export default function SessionChatPage() {
                 const isOwn = String(m.userId) === String(currentUserId);
                 const prevMsg = index > 0 ? messages[index - 1] : null;
                 const showSender = !prevMsg || prevMsg.userId !== m.userId;
+
+                const avatarUrlToRender = m.avatarUrl || (isOwn 
+                  ? (userDetails?.avatarUrl || auth.currentUser?.photoURL || undefined) 
+                  : (session?.participants?.find((p) => String(p.userId || p.user?.id) === String(m.userId))?.user?.avatarUrl || undefined));
 
                 return (
                   <div
@@ -990,7 +1327,7 @@ export default function SessionChatPage() {
                     {/* Avatar — only on first message in a group */}
                     <div className="shrink-0 mt-0.5">
                       {showSender ? (
-                        <Avatar name={m.name || "?"} size="sm" dark={dark} />
+                        <Avatar name={m.name || "?"} avatarUrl={avatarUrlToRender} size="sm" dark={dark} />
                       ) : (
                         <div className="w-7 h-7" />
                       )}

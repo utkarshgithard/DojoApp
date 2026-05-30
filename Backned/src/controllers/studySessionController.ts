@@ -65,7 +65,7 @@ export async function createSession(req: AuthenticatedRequest, res: Response): P
       },
     },
     include: {
-      participants: { include: { user: { select: { id: true, name: true, email: true } } } },
+      participants: { include: { user: { select: { id: true, name: true, email: true, avatarUrl: true } } } },
       creator: { select: { id: true, name: true, email: true } },
     },
   });
@@ -108,7 +108,7 @@ export async function getMySessions(req: AuthenticatedRequest, res: Response): P
       },
       include: {
         creator: { select: { id: true, name: true, email: true } },
-        participants: { include: { user: { select: { id: true, name: true, email: true } } } },
+        participants: { include: { user: { select: { id: true, name: true, email: true, avatarUrl: true } } } },
       },
       orderBy: { startAt: 'asc' },
     });
@@ -124,16 +124,21 @@ export async function getMySessions(req: AuthenticatedRequest, res: Response): P
 export async function getMyInvites(req: AuthenticatedRequest, res: Response): Promise<void> {
   try {
     const userId = req.userId!;
+    const INVITE_TTL_MS = 15 * 60 * 1000;
     const invites = await prisma.studySession.findMany({
       where: {
         status: { in: ['pending', 'scheduled', 'in_progress'] },
         participants: {
-          some: { userId, status: 'invited' },
+          some: { 
+            userId, 
+            status: 'invited',
+            invitedAt: { gte: new Date(Date.now() - INVITE_TTL_MS) }
+          },
         },
       },
       include: {
         creator: { select: { id: true, name: true, email: true } },
-        participants: { include: { user: { select: { id: true, name: true, email: true } } } },
+        participants: { include: { user: { select: { id: true, name: true, email: true, avatarUrl: true } } } },
       },
     });
 
@@ -171,7 +176,7 @@ export async function respondInvite(req: AuthenticatedRequest, res: Response): P
       where: { id },
       include: {
         creator: { select: { id: true, name: true, email: true } },
-        participants: { include: { user: { select: { id: true, name: true, email: true } } } },
+        participants: { include: { user: { select: { id: true, name: true, email: true, avatarUrl: true } } } },
       },
     });
 
