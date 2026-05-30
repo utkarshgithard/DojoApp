@@ -191,4 +191,44 @@ userRouter.put('/profile', verifyToken, async (req: AuthenticatedRequest, res: R
   }
 });
 
+// PUT /api/auth/public-key — store/update caller's ECDH public key (E2EE)
+userRouter.put('/public-key', verifyToken, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const { publicKey } = req.body;
+    if (!publicKey || typeof publicKey !== 'string') {
+      res.status(400).json({ error: 'publicKey (string) is required' });
+      return;
+    }
+    await prisma.userPublicKey.upsert({
+      where: { userId: req.userId! },
+      create: { userId: req.userId!, publicKey },
+      update: { publicKey },
+    });
+    res.json({ success: true });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to store public key' });
+  }
+});
+
+// GET /api/auth/public-keys?userIds=id1,id2,... — bulk-fetch ECDH public keys (E2EE sender wrapping)
+userRouter.get('/public-keys', verifyToken, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const raw = req.query.userIds as string;
+    if (!raw) {
+      res.status(400).json({ error: 'userIds query param required' });
+      return;
+    }
+    const ids = raw.split(',').map((id) => id.trim()).filter(Boolean).slice(0, 50); // cap at 50
+    const rows = await prisma.userPublicKey.findMany({ where: { userId: { in: ids } } });
+    const keys: Record<string, string> = {};
+    for (const row of rows) keys[row.userId] = row.publicKey;
+    res.json({ keys });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to fetch public keys' });
+  }
+});
+
 export default userRouter;
+

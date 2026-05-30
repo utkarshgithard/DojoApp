@@ -67,10 +67,18 @@ export interface Message {
   sessionId: string;
   userId: string;
   name: string;
+  /** Plaintext message body. For E2EE messages this is populated after decryption. */
   text: string;
   ts: string | Date;
   // Socket.io legacy compat
   _id?: string;
+  // ── E2EE fields (present only for encrypted messages) ──
+  /** base64 AES-GCM ciphertext of the message body */
+  ciphertext?: string;
+  /** base64 AES-GCM 12-byte IV */
+  iv?: string;
+  /** { [userId]: base64WrappedRoomKey } — one entry per recipient */
+  encryptedKeys?: Record<string, string>;
 }
 
 export interface StudySession {

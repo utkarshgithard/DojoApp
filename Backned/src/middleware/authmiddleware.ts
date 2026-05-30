@@ -51,8 +51,13 @@ export const verifyToken = async (
       req.user = user;
     }
     next();
-  } catch (err) {
-    console.error('Token verification error:', err);
+  } catch (err: any) {
+    const isExpired = err?.code === 'auth/id-token-expired' || err?.errorInfo?.code === 'auth/id-token-expired';
+    if (isExpired) {
+      console.log(`ℹ️ Auth token expired: ${err.message || 'Firebase ID token has expired.'} (Axios client will automatically refresh and retry)`);
+    } else {
+      console.error('Token verification error:', err);
+    }
     res.status(401).json({ error: 'Invalid or expired token', success: false });
   }
 };

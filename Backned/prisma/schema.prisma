@@ -34,6 +34,17 @@ model User {
   createdSessions     StudySession[]  @relation("SessionCreator")
   participantIn       Participant[]
   messages            Message[]
+  publicKey           UserPublicKey?
+}
+
+/// Stores the user's ECDH P-256 public key for E2EE room key distribution.
+/// Updated each time the user opens the chat (ephemeral keys per session).
+model UserPublicKey {
+  userId    String   @id
+  publicKey String   // base64 raw ECDH P-256 public key
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model UserFriend {
@@ -156,12 +167,21 @@ enum ParticipantStatus {
 }
 
 model Message {
-  id        String   @id @default(uuid())
-  sessionId String
-  userId    String
-  name      String
-  text      String
-  ts        DateTime @default(now())
+  id            String   @id @default(uuid())
+  sessionId     String
+  userId        String
+  name          String
+  /// Plaintext body (empty string for E2EE messages; kept for backward compat)
+  text          String   @default("")
+  ts            DateTime @default(now())
+
+  // ── E2EE fields (null for legacy plaintext messages) ──
+  /// base64 AES-GCM ciphertext of the message body
+  ciphertext    String?
+  /// base64 AES-GCM 12-byte IV used to encrypt ciphertext
+  iv            String?
+  /// JSON map of { userId: base64WrappedRoomKey } — one entry per recipient
+  encryptedKeys String?
 
   session StudySession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   user    User         @relation(fields: [userId], references: [id])

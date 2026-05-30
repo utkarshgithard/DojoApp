@@ -35,6 +35,16 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
 
     s.on('connect', () => {
       console.log('✅ Socket connected for session restoration:', s.id);
+      // Restore joined sessions from localStorage on reconnect
+      try {
+        const saved = localStorage.getItem('joinedSessions');
+        if (saved) {
+          const ids: string[] = JSON.parse(saved);
+          if (ids.length > 0) {
+            setJoinedSessions(new Set(ids));
+          }
+        }
+      } catch (_) {}
     });
 
     s.on('sessionJoined', (data: { sessionId: string; sessionDetails: any }) => {

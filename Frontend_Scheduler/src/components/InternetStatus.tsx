@@ -4,7 +4,6 @@ import { WifiOff } from "lucide-react"; // icon
 
 const InternetStatus = () => {
   const [isOnline, setIsOnline] = useState(true);
-  const [time, setTime] = useState(new Date());
 
   useEffect(() => {
     // Check connection status
@@ -16,14 +15,10 @@ const InternetStatus = () => {
     window.addEventListener("online", updateOnlineStatus);
     window.addEventListener("offline", updateOnlineStatus);
 
-    // Update time every second
-    const timer = setInterval(() => setTime(new Date()), 1000);
-
     // Cleanup
     return () => {
       window.removeEventListener("online", updateOnlineStatus);
       window.removeEventListener("offline", updateOnlineStatus);
-      clearInterval(timer);
     };
   }, []);
 

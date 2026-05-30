@@ -266,7 +266,7 @@ export default function LandingPage() {
               Get In Touch
             </h3>
             <p className="text-[12.5px] leading-relaxed">
-              Have feedback, features you'd like to request, or run into any issues? Reach out directly, and let's make your academic journey smoother together!
+              Have feedback, features you would like to request, or run into any issues? Reach out directly, and let's make your academic journey smoother together!
             </p>
             <div className="space-y-2.5 pt-1">
               <a

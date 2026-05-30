@@ -41,7 +41,7 @@ const CHAT_RATE_WINDOW_MS = 1_000;           // per second
 const MAX_MESSAGE_LENGTH = 2_000;            // characters
 const MAX_MESSAGES_PER_SESSION = 500;
 
-// --- Helper: Check if user is an accepted participant ---
+// --- Helper: Check if user is an accepted participant or the session creator ---
 async function getParticipantStatus(sessionId: string, userId: string) {
   if (!sessionId || !userId) return { ok: false, reason: 'missing_params' };
 
@@ -52,13 +52,19 @@ async function getParticipantStatus(sessionId: string, userId: string) {
 
   if (!session) return { ok: false, reason: 'not_found' };
 
+  // The creator is always allowed, even without a participant record
+  const isCreator = session.creatorId === userId;
+
   const participant = session.participants.find((p) => p.userId === userId);
-  const accepted = participant?.status === 'accepted';
+  // Cast to string so we can safely compare even if 'joined' isn't in the Prisma enum
+  const participantStatus = participant?.status as string | undefined;
+  const accepted = isCreator || participantStatus === 'accepted' || participantStatus === 'joined';
 
   return {
     ok: accepted,
     status: session.status,
     creatorId: session.creatorId,
+    isCreator,
     participant,
     session,
   };
@@ -89,24 +95,7 @@ function isRateLimited(socketId: string): boolean {
   return false;
 }
 
-// --- Helper: Mark session completed if all participants left ---
-async function maybeCompleteSession(io: Server, sessionId: string) {
-  const active = activeSessions.get(sessionId);
-  if (active && active.participants.size === 0) {
-    activeSessions.delete(sessionId);
-    sessionMessages.delete(sessionId); // Clear messages when session ends
-    try {
-      await prisma.studySession.update({
-        where: { id: sessionId },
-        data: { status: 'completed' },
-      });
-      io.to(`session_${sessionId}`).emit('sessionEnded', { sessionId });
-      console.log(`📕 Session ${sessionId} marked completed (all participants left)`);
-    } catch (err) {
-      console.error('maybeCompleteSession error:', err);
-    }
-  }
-}
+// Automatic session completion on disconnect was removed to prevent chat history wiping on page refreshes.
 
 // --- Main Setup ---
 
@@ -163,6 +152,7 @@ export function setupSocketHandlers(io: Server) {
       registerInviteHandlers(io, socket, user);
       registerSessionHandlers(io, socket, user);
       registerChatHandlers(io, socket, user);
+      registerE2EEHandlers(io, socket, user);
 
       // 4. Cleanup on disconnect
       // Remove maybeCompleteSession from handleDisconnect entirely.
@@ -455,8 +445,7 @@ function registerSessionHandlers(io: Server, socket: Socket, user: UserPayload) 
 
       // FIX: Prevent duplicate room joins — socket would receive broadcasts multiple times
       if (socket.rooms.has(sessionRoom)) {
-        console.log(`ℹ️ ${user.name} already in room ${sessionRoom}, skipping re-join`);
-        // Still re-send current state so client can re-hydrate if needed
+        console.log(`ℹ️ ${user.name} already in room ${sessionRoom}, re-hydrating client`);
         const sessionData = await prisma.studySession.findUnique({
           where: { id: sessionId },
         });
@@ -467,9 +456,33 @@ function registerSessionHandlers(io: Server, socket: Socket, user: UserPayload) 
           sessionDetails: sessionData,
           participantCount: active?.participants.size ?? 1,
         });
+        // Load from DB if in-memory cache is empty
+        let cachedMessages = sessionMessages.get(sessionId);
+        if (!cachedMessages || cachedMessages.length === 0) {
+          const dbMessages = await prisma.message.findMany({
+            where: { sessionId },
+            orderBy: { ts: 'asc' },
+            take: MAX_MESSAGES_PER_SESSION,
+          });
+          cachedMessages = dbMessages.map((m) => ({
+            id: m.id,
+            sessionId: m.sessionId,
+            userId: m.userId,
+            name: m.name,
+            text: m.text,
+            ts: m.ts.toISOString(),
+            // E2EE fields
+            ciphertext: m.ciphertext ?? undefined,
+            iv: m.iv ?? undefined,
+            encryptedKeys: m.encryptedKeys ? JSON.parse(m.encryptedKeys) : undefined,
+          }));
+          if (cachedMessages.length > 0) {
+            sessionMessages.set(sessionId, cachedMessages);
+          }
+        }
         socket.emit('sessionMessages', {
           sessionId,
-          messages: sessionMessages.get(sessionId) || [],
+          messages: cachedMessages,
         });
         return;
       }
@@ -509,10 +522,33 @@ function registerSessionHandlers(io: Server, socket: Socket, user: UserPayload) 
         participantCount: active.participants.size,
       });
 
-      // Send chat history separately — client should NOT call getSessionMessages again on mount
+      // Send chat history — load from DB if in-memory cache is empty (e.g. after server restart)
+      let cachedMessages = sessionMessages.get(sessionId);
+      if (!cachedMessages || cachedMessages.length === 0) {
+        const dbMessages = await prisma.message.findMany({
+          where: { sessionId },
+          orderBy: { ts: 'asc' },
+          take: MAX_MESSAGES_PER_SESSION,
+        });
+        cachedMessages = dbMessages.map((m) => ({
+          id: m.id,
+          sessionId: m.sessionId,
+          userId: m.userId,
+          name: m.name,
+          text: m.text,
+          ts: m.ts.toISOString(),
+          // E2EE fields
+          ciphertext: m.ciphertext ?? undefined,
+          iv: m.iv ?? undefined,
+          encryptedKeys: m.encryptedKeys ? JSON.parse(m.encryptedKeys) : undefined,
+        }));
+        if (cachedMessages.length > 0) {
+          sessionMessages.set(sessionId, cachedMessages);
+        }
+      }
       socket.emit('sessionMessages', {
         sessionId,
-        messages: sessionMessages.get(sessionId) || [],
+        messages: cachedMessages,
       });
 
       console.log(`✅ ${user.name} joined session ${sessionId} (${active.participants.size} in room)`);
@@ -541,9 +577,6 @@ function registerSessionHandlers(io: Server, socket: Socket, user: UserPayload) 
         name: user.name,
         participantCount: active.participants.size,
       });
-
-      // FIX: Mark session completed in DB when last participant leaves
-      await maybeCompleteSession(io, sessionId);
     }
 
     socket.emit('sessionLeft', { sessionId });
@@ -590,24 +623,31 @@ function registerSessionHandlers(io: Server, socket: Socket, user: UserPayload) 
         return socket.emit('sessionError', { message: 'Only the session creator can end the session' });
       }
 
-      await prisma.studySession.update({
-        where: { id: sessionId },
-        data: { status: 'completed' },
-      });
+      // Run status update + message wipe in parallel for speed
+      const [, deleted] = await Promise.all([
+        prisma.studySession.update({
+          where: { id: sessionId },
+          data: { status: 'completed' },
+        }),
+        prisma.message.deleteMany({
+          where: { sessionId },
+        }),
+      ]);
 
+      // Clear in-memory caches
       const active = activeSessions.get(sessionId);
       if (active) {
         active.participants.clear();
         activeSessions.delete(sessionId);
       }
-      sessionMessages.delete(sessionId); // Clear messages from memory!
+      sessionMessages.delete(sessionId);
 
       io.to(`session_${sessionId}`).emit('sessionEnded', {
         sessionId,
         endedBy: user.name,
       });
 
-      console.log(`🏁 Session ${sessionId} ended by ${user.name}`);
+      console.log(`🏁 Session ${sessionId} ended by ${user.name} — ${deleted.count} message(s) permanently deleted.`);
     } catch (err) {
       console.error('endSession error:', err);
     }
@@ -619,11 +659,25 @@ function registerSessionHandlers(io: Server, socket: Socket, user: UserPayload) 
 // =============================================================================
 function registerChatHandlers(io: Server, socket: Socket, user: UserPayload) {
 
-  socket.on('sendChatMessage', async ({ sessionId, text }: { sessionId: string; text: string }) => {
-    if (!text?.trim() || !sessionId) return;
+  socket.on('sendChatMessage', async (payload: {
+    sessionId: string;
+    text?: string;
+    // E2EE fields (present when client has E2EE enabled)
+    ciphertext?: string;
+    iv?: string;
+    encryptedKeys?: Record<string, string>;
+  }) => {
+    const { sessionId, text, ciphertext, iv, encryptedKeys } = payload;
+
+    const isE2EE = !!(ciphertext && iv && encryptedKeys);
+
+    // Require either plaintext or a full E2EE payload
+    if (!isE2EE && !text?.trim()) return;
+    if (!sessionId) return;
 
     // FIX: Enforce message length limit
-    if (text.trim().length > MAX_MESSAGE_LENGTH) {
+    const messageContent = isE2EE ? ciphertext : text!.trim();
+    if (messageContent.length > MAX_MESSAGE_LENGTH) {
       return socket.emit('chatError', { msg: `Message too long (max ${MAX_MESSAGE_LENGTH} characters)` });
     }
 
@@ -633,32 +687,31 @@ function registerChatHandlers(io: Server, socket: Socket, user: UserPayload) {
     }
 
     try {
-      const verification = await getParticipantStatus(sessionId, user.id);
-      if (!verification.ok) {
+      // Fast in-memory authorization check — avoids a DB round-trip on every message
+      const activeRoom = activeSessions.get(sessionId);
+      if (!activeRoom || !activeRoom.participants.has(user.id)) {
         return socket.emit('chatError', { msg: 'Not authorized to send messages' });
       }
-      if (verification.status !== 'in_progress') {
-        return socket.emit('chatError', { msg: 'Chat is only available while the session is live' });
-      }
 
-      // Use in-memory storage for messages
+      // Build the message immediately with a temp ID so we can broadcast instantly
+      const tempId = `${user.id}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+      const message: any = {
+        id: tempId,
+        sessionId,
+        userId: user.id,
+        name: user.name,
+        text: isE2EE ? '' : (text!.trim()),
+        ts: new Date().toISOString(),
+        // E2EE fields (undefined for plaintext messages)
+        ...(isE2EE && { ciphertext, iv, encryptedKeys }),
+      };
+
+      // Add to in-memory cache immediately
       if (!sessionMessages.has(sessionId)) {
         sessionMessages.set(sessionId, []);
       }
       const chatHistory = sessionMessages.get(sessionId)!;
-      
-      const message = {
-        id: Math.random().toString(36).substring(7),
-        sessionId,
-        userId: user.id,
-        name: user.name,
-        text: text.trim(),
-        ts: new Date().toISOString()
-      };
-      
       chatHistory.push(message);
-      
-      // Optional: keep memory footprint small
       if (chatHistory.length > MAX_MESSAGES_PER_SESSION) {
         chatHistory.shift();
       }
@@ -676,7 +729,29 @@ function registerChatHandlers(io: Server, socket: Socket, user: UserPayload) {
         });
       }
 
+      // ── Broadcast instantly — no waiting for DB ──
       io.to(`session_${sessionId}`).emit('newChatMessage', message);
+
+      // ── Persist to DB in the background (fire and forget) ──
+      prisma.message.create({
+        data: {
+          sessionId,
+          userId: user.id,
+          name: user.name,
+          text: isE2EE ? '' : (text!.trim()),
+          ...(isE2EE && {
+            ciphertext,
+            iv,
+            encryptedKeys: JSON.stringify(encryptedKeys),
+          }),
+        },
+      }).then((dbMessage) => {
+        // Update the in-memory entry with the real DB id
+        const idx = chatHistory.findIndex((m) => m.id === tempId);
+        if (idx !== -1) chatHistory[idx].id = dbMessage.id;
+      }).catch((err) => {
+        console.error('Failed to persist message to DB:', err);
+      });
     } catch (error) {
       console.error('sendChatMessage error:', error);
       socket.emit('chatError', { msg: 'Failed to send message' });
@@ -693,12 +768,33 @@ function registerChatHandlers(io: Server, socket: Socket, user: UserPayload) {
       const verification = await getParticipantStatus(sessionId, user.id);
       if (!verification.ok) return;
 
-      const chatHistory = sessionMessages.get(sessionId) || [];
-      // If we implement pagination, we'd slice here. For now, just send all.
+      // Load from DB if in-memory cache is empty
+      let chatHistory = sessionMessages.get(sessionId);
+      if (!chatHistory || chatHistory.length === 0) {
+        const dbMessages = await prisma.message.findMany({
+          where: { sessionId },
+          orderBy: { ts: 'asc' },
+          take: MAX_MESSAGES_PER_SESSION,
+        });
+        chatHistory = dbMessages.map((m) => ({
+          id: m.id,
+          sessionId: m.sessionId,
+          userId: m.userId,
+          name: m.name,
+          text: m.text,
+          ts: m.ts.toISOString(),
+          // E2EE fields
+          ciphertext: m.ciphertext ?? undefined,
+          iv: m.iv ?? undefined,
+          encryptedKeys: m.encryptedKeys ? JSON.parse(m.encryptedKeys) : undefined,
+        }));
+        if (chatHistory.length > 0) {
+          sessionMessages.set(sessionId, chatHistory);
+        }
+      }
       socket.emit('sessionMessages', {
         sessionId,
         messages: chatHistory,
-        pagination: { before, hasMore: false },
       });
     } catch (error) {
       console.error('getSessionMessages error:', error);
@@ -713,6 +809,42 @@ function registerChatHandlers(io: Server, socket: Socket, user: UserPayload) {
     socket.emit('activeParticipants', {
       sessionId,
       userIds: active ? [...active.participants] : [],
+    });
+  });
+}
+
+// =============================================================================
+// E2EE KEY EXCHANGE HANDLERS (server is a pure relay — never sees key material)
+// =============================================================================
+function registerE2EEHandlers(io: Server, socket: Socket, user: UserPayload) {
+
+  /**
+   * A client announces their ECDH public key when joining a session.
+   * Server relays to all existing members so they can distribute the room key.
+   */
+  socket.on('e2ee:announce', ({ sessionId, publicKey }: { sessionId: string; publicKey: string }) => {
+    if (!sessionId || !publicKey) return;
+    socket.to(`session_${sessionId}`).emit('e2ee:memberJoined', {
+      userId: user.id,
+      publicKey,
+      sessionId,
+    });
+  });
+
+  /**
+   * An existing member sends a wrapped room key to a specific new joiner.
+   * Server relays directly to the target user's personal socket room (user.id).
+   * The server never decrypts the encryptedRoomKey blob.
+   */
+  socket.on('e2ee:keyPackage', ({ sessionId, toUserId, encryptedRoomKey }: {
+    sessionId: string;
+    toUserId: string;
+    encryptedRoomKey: string;
+  }) => {
+    if (!toUserId || !encryptedRoomKey) return;
+    io.to(toUserId).emit('e2ee:keyPackage', {
+      fromUserId: user.id,
+      encryptedRoomKey,
     });
   });
 }
@@ -740,9 +872,6 @@ async function handleDisconnect(io: Server, socket: Socket, user: UserPayload) {
         participantCount: active.participants.size,
         reason: 'disconnected',
       });
-
-      // FIX: Complete session in DB if no one is left
-      await maybeCompleteSession(io, sessionId);
     }
   }
 }

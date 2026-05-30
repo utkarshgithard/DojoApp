@@ -24,7 +24,17 @@ API.interceptors.response.use(
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
       try {
-        const user = auth.currentUser;
+        let user = auth.currentUser;
+        if (!user) {
+          // Wait for Firebase to finish initializing
+          user = await new Promise((resolve) => {
+            const unsubscribe = auth.onAuthStateChanged((u) => {
+              unsubscribe();
+              resolve(u);
+            });
+          });
+        }
+
         if (user) {
           console.log('🔄 Axios Interceptor: Token expired (401). Refreshing ID token...');
           const newToken = await user.getIdToken(true); // Force refresh token

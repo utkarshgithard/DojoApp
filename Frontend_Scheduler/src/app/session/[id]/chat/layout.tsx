@@ -1,10 +1,5 @@
-import { Metadata } from "next";
-
-export const metadata: Metadata = {
-  title: "Study Room Chat",
-  description: "Real-time chat for your study session with friends.",
-  robots: { index: false, follow: false },
-};
+"use client";
+import { E2EEProvider } from "@/context/E2EEContext";
 
 export default function SessionChatLayout({
   children,
@@ -12,5 +7,6 @@ export default function SessionChatLayout({
   children: React.ReactNode;
 }) {
   // No Navbar, no top padding — full viewport chat experience
-  return <>{children}</>;
+  // E2EEProvider is scoped here so it only runs on the chat page
+  return <E2EEProvider>{children}</E2EEProvider>;
 }
