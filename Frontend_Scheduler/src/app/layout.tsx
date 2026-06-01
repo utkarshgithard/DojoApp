@@ -10,7 +10,7 @@ const geist = Geist({ subsets: ["latin"], variable: "--font-sans" });
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://www.dojoclass.space"),
+  metadataBase: new URL("https://dojoclass.space"),
   title: {
     default: "DojoClass — Smart Attendance Tracker for College Students",
     template: "%s | DojoClass",
@@ -35,7 +35,7 @@ export const metadata: Metadata = {
   openGraph: {
     type: "website",
     locale: "en_IN",
-    url: "https://www.dojoclass.space",
+    url: "https://dojoclass.space",
     siteName: "DojoClass",
     title: "DojoClass — Smart Attendance Tracker for College Students",
     description:
@@ -69,7 +69,7 @@ export const metadata: Metadata = {
   },
   manifest: "/manifest.json",
   alternates: {
-    canonical: "https://www.dojoclass.space",
+    canonical: "https://dojoclass.space",
   },
 };
 

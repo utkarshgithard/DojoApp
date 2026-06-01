@@ -16,6 +16,6 @@ export default function robots(): MetadataRoute.Robots {
         ],
       },
     ],
-    sitemap: "https://www.dojoclass.space/sitemap.xml",
+    sitemap: "https://dojoclass.space/sitemap.xml",
   };
 }

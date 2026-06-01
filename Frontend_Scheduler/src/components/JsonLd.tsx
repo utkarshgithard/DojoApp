@@ -3,7 +3,7 @@ export default function JsonLd() {
     "@context": "https://schema.org",
     "@type": "WebApplication",
     name: "DojoClass",
-    url: "https://www.dojoclass.space",
+    url: "https://dojoclass.space",
     description:
       "Track your college attendance by subject, plan weekly schedules, and never fall below 75%. Free smart attendance tracker app built for students.",
     applicationCategory: "EducationalApplication",
@@ -21,15 +21,15 @@ export default function JsonLd() {
       "Know how many classes you can bunk",
       "75% attendance threshold alerts",
     ],
-    screenshot: "https://www.dojoclass.space/opengraph-image",
+    screenshot: "https://dojoclass.space/opengraph-image",
   };
 
   const organizationSchema = {
     "@context": "https://schema.org",
     "@type": "Organization",
     name: "DojoClass",
-    url: "https://www.dojoclass.space",
-    logo: "https://www.dojoclass.space/icon.svg",
+    url: "https://dojoclass.space",
+    logo: "https://dojoclass.space/icon.svg",
     contactPoint: {
       "@type": "ContactPoint",
       email: "bceutkarsh@gmail.com",
