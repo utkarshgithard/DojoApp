@@ -1,11 +1,16 @@
 import type { Metadata } from "next";
-import { Inter, Geist } from "next/font/google";
+import { Inter, Geist, Playfair_Display } from "next/font/google";
 import "./globals.css";
 import ClientProviders from "@/components/ClientProviders";
 import { cn } from "@/lib/utils";
 import JsonLd from "@/components/JsonLd";
 
 const geist = Geist({ subsets: ["latin"], variable: "--font-sans" });
+const playfair = Playfair_Display({
+  subsets: ["latin"],
+  variable: "--font-serif",
+  weight: ["400", "500", "600", "700", "800"],
+});
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -79,7 +84,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={cn("font-sans", geist.variable)}>
+    <html lang="en" className={cn("font-sans", geist.variable, playfair.variable)}>
       <head>
         <meta name="google-site-verification" content="MH-qCpIalYR4S1flnD1CRaPx_tUMSziNE9Y6cLpgdnI" />
       </head>
