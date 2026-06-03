@@ -150,7 +150,7 @@ export default function WeeklyScheduleSetup() {
   }
 
   return (
-    <div className={`min-h-screen transition-colors duration-300 pt-[96px] pb-32 ${dark ? 'bg-black text-white' : 'bg-white text-gray-900'}`}>
+    <div className={`min-h-screen transition-colors duration-300 pt-[96px] md:pt-[24px] pb-32 ${dark ? 'bg-black text-white' : 'bg-white text-gray-900'}`}>
       <div className="max-w-[750px] w-full mx-auto px-5">
         <form onSubmit={handleSubmit} className="space-y-6">
           

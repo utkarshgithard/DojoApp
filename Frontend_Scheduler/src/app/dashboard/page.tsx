@@ -114,7 +114,7 @@ const Dashboard = () => {
   }
 
   return (
-    <div className={`min-h-screen flex flex-col transition-colors duration-300 pt-[76px] ${dark ? 'bg-black text-white' : 'bg-white text-gray-900'}`}>
+    <div className={`min-h-screen flex flex-col transition-colors duration-300 pt-[76px] md:pt-[20px] ${dark ? 'bg-black text-white' : 'bg-white text-gray-900'}`}>
 
       {/* Main Container */}
       <div className="flex-1 max-w-[1100px] w-full mx-auto px-5 py-8">
