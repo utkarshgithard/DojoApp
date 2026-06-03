@@ -2,6 +2,10 @@ import { Server, Socket } from 'socket.io';
 import prisma from './lib/prisma.js';
 import { verifySocketTokenAsync } from './middleware/authmiddleware.js';
 
+// Shared DB readiness flag — set to true by server.ts once DB is connected
+let _dbReady = false;
+export function setDbReady(ready: boolean) { _dbReady = ready; }
+
 // --- Types & Interfaces ---
 
 interface UserPayload {
@@ -102,6 +106,13 @@ function isRateLimited(socketId: string): boolean {
 export function setupSocketHandlers(io: Server) {
   io.on('connection', async (socket: Socket) => {
     try {
+      // 0. Guard: reject socket connections while DB is unavailable
+      if (!_dbReady) {
+        console.warn('⚠️ Socket rejected: database not ready yet');
+        socket.emit('error', { message: 'Server is starting up. Please try again in a few seconds.' });
+        return socket.disconnect(true);
+      }
+
       // 1. Authenticate via Firebase token
       const token = (socket.handshake.auth?.token || socket.handshake.query?.token) as string | undefined;
       const userId = await verifySocketTokenAsync(token);
@@ -155,10 +166,7 @@ export function setupSocketHandlers(io: Server) {
       registerE2EEHandlers(io, socket, user);
 
       // 4. Cleanup on disconnect
-      // Remove maybeCompleteSession from handleDisconnect entirely.
-      // Only call it from the explicit leaveSession and endSession handlers.
-
-      async function handleDisconnect(io: Server, socket: Socket, user: UserPayload) {
+      socket.on('disconnect', () => {
         chatRateLimits.delete(socket.id);
 
         for (const [sessionId, active] of activeSessions.entries()) {
@@ -174,15 +182,16 @@ export function setupSocketHandlers(io: Server) {
               reason: 'disconnected',
             });
 
-            // ✅ DO NOT call maybeCompleteSession here — a refresh is a disconnect too.
-            // Only clean up the in-memory set if empty, but leave DB status as-is.
+            // DO NOT complete session on disconnect — a page refresh is also a disconnect.
+            // Leave DB status as-is so users can rejoin.
             if (active.participants.size === 0) {
               activeSessions.delete(sessionId);
-              // DB stays 'in_progress' so users can rejoin after refresh
             }
           }
         }
-      }
+
+        console.log(`🔌 Disconnected: ${user.name} (${user.id}) socket=${socket.id}`);
+      });
 
     } catch (err) {
       console.error('Socket connection error:', err);

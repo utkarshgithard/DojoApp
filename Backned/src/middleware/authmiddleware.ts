@@ -26,11 +26,23 @@ export const verifyToken = async (
   }
 
   const token = authHeader.replace('Bearer ', '');
+  let decodedToken;
 
   try {
-    const decodedToken = await admin.auth().verifyIdToken(token);
+    decodedToken = await admin.auth().verifyIdToken(token);
     req.userId = decodedToken.uid;
+  } catch (err: any) {
+    const isExpired = err?.code === 'auth/id-token-expired' || err?.errorInfo?.code === 'auth/id-token-expired';
+    if (isExpired) {
+      console.log(`ℹ️ Auth token expired: ${err.message || 'Firebase ID token has expired.'} (Axios client will automatically refresh and retry)`);
+    } else {
+      console.error('Token verification error:', err);
+    }
+    res.status(401).json({ error: 'Invalid or expired token', success: false });
+    return;
+  }
 
+  try {
     const user = await prisma.user.findUnique({
       where: { id: decodedToken.uid },
       select: {
@@ -43,22 +55,13 @@ export const verifyToken = async (
       },
     });
 
-    if (!user) {
-      // In a strict setup, you might return 401 here. 
-      // But during registration, the token is valid but user doesn't exist yet in Prisma.
-      // So we'll attach userId and let the route handle it.
-    } else {
+    if (user) {
       req.user = user;
     }
     next();
   } catch (err: any) {
-    const isExpired = err?.code === 'auth/id-token-expired' || err?.errorInfo?.code === 'auth/id-token-expired';
-    if (isExpired) {
-      console.log(`ℹ️ Auth token expired: ${err.message || 'Firebase ID token has expired.'} (Axios client will automatically refresh and retry)`);
-    } else {
-      console.error('Token verification error:', err);
-    }
-    res.status(401).json({ error: 'Invalid or expired token', success: false });
+    console.error('Database query error in verifyToken:', err);
+    res.status(500).json({ error: 'Database query failure. Please try again later.', success: false });
   }
 };
 

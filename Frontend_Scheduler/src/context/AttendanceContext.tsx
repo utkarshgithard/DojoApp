@@ -25,31 +25,46 @@ export const AttendanceProvider = ({ children }: { children: React.ReactNode }) 
   const [holidayLoading, setHolidayLoading] = useState(false);
   const [friendsLoading, setFriendsLoading] = useState(true);
 
-  const fetchCalendarData = useCallback(async () => {
+  const fetchCalendarData = useCallback(async (retryCount = 0) => {
     try {
       const res = await API.get("/schedule/calender");
       setCalendarData(res.data.schedule);
-    } catch (err) {
-      console.error("Error fetching calendar:", err);
+    } catch (err: any) {
+      if ((err?.response?.status === 503 || err?.response?.status === 500) && retryCount < 3) {
+        console.warn(`⏳ Server or database not ready, retrying fetchCalendarData in 3s (attempt ${retryCount + 1}/3)...`);
+        setTimeout(() => fetchCalendarData(retryCount + 1), 3000);
+      } else {
+        console.error("Error fetching calendar:", err);
+      }
     }
   }, []);
 
-  const fetchSubjectStats = useCallback(async () => {
+  const fetchSubjectStats = useCallback(async (retryCount = 0) => {
     try {
       const res = await API.get("/subject/stats");
       setSubjectStats(res.data.data);
-    } catch (err) {
-      console.error("Error fetching subject stats:", err);
+    } catch (err: any) {
+      if ((err?.response?.status === 503 || err?.response?.status === 500) && retryCount < 3) {
+        console.warn(`⏳ Server or database not ready, retrying fetchSubjectStats in 3s (attempt ${retryCount + 1}/3)...`);
+        setTimeout(() => fetchSubjectStats(retryCount + 1), 3000);
+      } else {
+        console.error("Error fetching subject stats:", err);
+      }
     }
   }, []);
 
-  const fetchFriends = useCallback(async () => {
+  const fetchFriends = useCallback(async (retryCount = 0) => {
     setFriendsLoading(true);
     try {
       const res = await API.get("auth/friends-List");
       setFriends(res.data.friends);
-    } catch (err) {
-      console.error("Failed to load friends", err);
+    } catch (err: any) {
+      if ((err?.response?.status === 503 || err?.response?.status === 500) && retryCount < 3) {
+        console.warn(`⏳ Server or database not ready, retrying fetchFriends in 3s (attempt ${retryCount + 1}/3)...`);
+        setTimeout(() => fetchFriends(retryCount + 1), 3000);
+      } else {
+        console.error("Failed to load friends", err);
+      }
     } finally {
       setFriendsLoading(false);
     }
@@ -58,7 +73,7 @@ export const AttendanceProvider = ({ children }: { children: React.ReactNode }) 
   const fetchSubjects = useCallback(async (latestMarkedSubjects: Subject[] = []) => {
     try {
       const res = await API.get(`/subject?date=${date}`);
-      const allSubjects: Subject[] = res.data.unmarkedSubjects || [];
+      const allSubjects: Subject[] = res.data?.unmarkedSubjects || [];
       const filteredSubjects = allSubjects.filter(
         (subject) =>
           !latestMarkedSubjects.some(
@@ -72,27 +87,43 @@ export const AttendanceProvider = ({ children }: { children: React.ReactNode }) 
     }
   }, [date]);
 
-  const fetchSummary = useCallback(async () => {
+  const fetchSummary = useCallback(async (retryCount = 0) => {
     setAttendanceLoading(true);
     try {
       const res = await API.get(`/attendance/summary?date=${date}`);
-      const summaryArray: Subject[] = res.data.summary;
+
+      // Guard: backend might return a 503-style object if DB isn't ready yet
+      if (!res.data?.summary) {
+        if (retryCount < 3) {
+          setTimeout(() => fetchSummary(retryCount + 1), 3000);
+        }
+        return;
+      }
+
+      const summaryArray: Subject[] = res.data.summary || [];
       setMarkedSubjects(summaryArray);
       await fetchSubjects(summaryArray);
-    } catch (error) {
-      console.error('Error fetching summary:', error);
+    } catch (error: any) {
+      // Retry on 503 or 500 (server starting or DB down) — up to 3 times, 3s apart
+      if ((error?.response?.status === 503 || error?.response?.status === 500) && retryCount < 3) {
+        console.warn(`⏳ Server or database not ready, retrying fetchSummary in 3s (attempt ${retryCount + 1}/3)...`);
+        setTimeout(() => fetchSummary(retryCount + 1), 3000);
+      } else {
+        console.error('Error fetching summary:', error);
+      }
     } finally {
       setAttendanceLoading(false);
     }
   }, [date, fetchSubjects]);
 
-  const loadExistingInvites = useCallback(async () => {
+  const loadExistingInvites = useCallback(async (signal?: AbortSignal) => {
     try {
-      const response = await API.get('/study-session/invites');
-      console.log('📥 Loaded existing invites:', response.data);
-      setInvites(response.data);
-    } catch (error) {
-      console.error('❌ Error loading invites:', error);
+      const response = await API.get('/study-session/invites', { signal });
+      setInvites(response.data || []);
+    } catch (error: any) {
+      if (error.name !== 'CanceledError' && error.name !== 'AbortError') {
+        console.error('❌ Error loading invites:', error);
+      }
     }
   }, [setInvites]);
 

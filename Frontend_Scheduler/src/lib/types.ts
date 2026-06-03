@@ -220,7 +220,7 @@ export interface AttendanceContextType {
   sessions: any[];
   setSessions: React.Dispatch<React.SetStateAction<any[]>>;
   invites: any[];
-  loadExistingInvites: () => Promise<void>;
+  loadExistingInvites: (signal?: AbortSignal) => Promise<void>;
   setInvites: React.Dispatch<React.SetStateAction<any[]>>;
   subjectStats: SubjectStats[];
   setSubjectStats: React.Dispatch<React.SetStateAction<SubjectStats[]>>;

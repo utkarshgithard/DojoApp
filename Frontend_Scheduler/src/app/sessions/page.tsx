@@ -69,7 +69,7 @@ export default function SessionsPage() {
       setSessionsLoading(true);
     }
     try {
-      const response = await API.get('/study-session/mine', { signal });
+      const response = await API.get('/study-session/mine?status=active', { signal });
       if (!signal?.aborted) {
         setSessions(response.data);
         setSessionsLoaded(true);
@@ -93,7 +93,7 @@ export default function SessionsPage() {
   const onConnect = useCallback(async () => {
     if (!socket) return;
     try {
-      const response = await API.get('/study-session/mine');
+      const response = await API.get('/study-session/mine?status=active');
       setSessions(response.data);
 
       const saved = localStorage.getItem('joinedSessions');
@@ -249,7 +249,7 @@ export default function SessionsPage() {
   useEffect(() => {
     if (loading || !isAuthenticated) return;
     const controller = new AbortController();
-    loadExistingInvites();
+    loadExistingInvites(controller.signal);
     loadExistingSessions(controller.signal);
 
     const saved = localStorage.getItem('joinedSessions');

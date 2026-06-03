@@ -50,7 +50,7 @@ const Dashboard = () => {
 
     const fetchActiveSession = async () => {
       try {
-        const res = await API.get('/study-session/mine');
+        const res = await API.get('/study-session/mine?status=active');
         const active = res.data.find(
           (s: any) =>
             s.status === 'in_progress' &&

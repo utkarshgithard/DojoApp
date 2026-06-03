@@ -1,5 +1,6 @@
 import { Response } from 'express';
 import prisma from '../lib/prisma.js';
+import { SessionStatus } from '@prisma/client';
 import { AuthenticatedRequest } from '../middleware/authmiddleware.js';
 import { Server as SocketServer } from 'socket.io';
 
@@ -95,12 +96,23 @@ export async function createSession(req: AuthenticatedRequest, res: Response): P
   res.status(201).json(doc);
 }
 
-// GET /api/study-session/mine
+// GET /api/study-session/mine?status=active
 export async function getMySessions(req: AuthenticatedRequest, res: Response): Promise<void> {
   try {
     const userId = req.userId!;
+    const { status } = req.query as { status?: string };
+
+    // When status=active, only return sessions that are still relevant
+    const activeStatuses: SessionStatus[] = [
+      SessionStatus.scheduled,
+      SessionStatus.pending,
+      SessionStatus.in_progress,
+    ];
+    const statusFilter = status === 'active' ? { status: { in: activeStatuses } } : {};
+
     const sessions = await prisma.studySession.findMany({
       where: {
+        ...statusFilter,
         OR: [
           { creatorId: userId },
           { participants: { some: { userId } } },
