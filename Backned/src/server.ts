@@ -62,6 +62,7 @@ const rawFrontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
 const cleanFrontendUrl = rawFrontendUrl.endsWith('/') ? rawFrontendUrl.slice(0, -1) : rawFrontendUrl;
 
 export const io = new Server(server, {
+  maxHttpBufferSize: 1.5e7, // 15MB
   cors: {
     origin: [
       cleanFrontendUrl,

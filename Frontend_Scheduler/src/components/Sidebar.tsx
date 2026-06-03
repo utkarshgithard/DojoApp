@@ -80,14 +80,12 @@ const Sidebar = () => {
       {/* Brand logo/name */}
       <div className={`h-[76px] flex items-center px-6 border-b ${border}`}>
         <Link href="/dashboard" className="flex items-center gap-2.5">
-          <div className={`w-8 h-8 flex items-center justify-center ${dark ? 'text-white' : 'text-black'}`}>
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" className="w-full h-full">
-              <path fill="none" stroke="currentColor" strokeWidth="8" strokeLinecap="round" strokeLinejoin="round" d="M 25 28 Q 60 22 95 28" />
-              <path fill="none" stroke="currentColor" strokeWidth="8" strokeLinecap="round" strokeLinejoin="round" d="M 32 40 H 88" />
-              <path fill="none" stroke="currentColor" strokeWidth="8" strokeLinecap="round" strokeLinejoin="round" d="M 46 40 V 95" />
-              <path fill="none" stroke="currentColor" strokeWidth="8" strokeLinecap="round" strokeLinejoin="round" d="M 74 40 V 95" />
-              <path fill="none" stroke="currentColor" strokeWidth="8" strokeLinecap="round" strokeLinejoin="round" d="M 46 54 H 74" />
-            </svg>
+          <div className="w-8 h-8 flex items-center justify-center shrink-0">
+            <img
+              src="/favicon-6-Photoroom.png"
+              alt="DojoClass Logo"
+              className="w-full h-full object-contain"
+            />
           </div>
           <span className="text-[17px] font-semibold tracking-tight">DojoClass</span>
         </Link>

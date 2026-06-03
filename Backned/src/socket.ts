@@ -42,7 +42,7 @@ const INVITE_TTL_MS = 15 * 60 * 1000;       // 15 minutes
 const TYPING_TIMEOUT_MS = 5_000;             // clear "typing" after 5s silence
 const CHAT_RATE_LIMIT = 5;                   // max messages per window
 const CHAT_RATE_WINDOW_MS = 1_000;           // per second
-const MAX_MESSAGE_LENGTH = 2_000;            // characters
+const MAX_MESSAGE_LENGTH = 15_000_000;       // characters
 const MAX_MESSAGES_PER_SESSION = 500;
 
 // --- Helper: Check if user is an accepted participant or the session creator ---

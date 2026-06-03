@@ -18,6 +18,11 @@ import {
   PhoneOff,
   RefreshCw,
   Lock,
+  Paperclip,
+  Download,
+  FileText,
+  X,
+  Image as ImageIcon,
 } from "lucide-react";
 import { useE2EE } from "@/context/E2EEContext";
 import { auth } from "@/lib/firebase";
@@ -70,6 +75,124 @@ function TypingDots() {
         />
       ))}
     </span>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Helpers: File sharing UI & size formatting
+// ---------------------------------------------------------------------------
+interface SharedFile {
+  name: string;
+  type: string;
+  size: number;
+  data: string; // base64 data URL
+  caption?: string;
+}
+
+function formatFileSize(bytes: number) {
+  if (bytes === 0) return "0 Bytes";
+  const k = 1024;
+  const sizes = ["Bytes", "KB", "MB", "GB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
+}
+
+function FileMessageBubble({
+  file,
+  isOwn,
+  dark,
+}: {
+  file: SharedFile;
+  isOwn: boolean;
+  dark: boolean;
+}) {
+  const isImage = file.type?.startsWith("image/");
+
+  return (
+    <div className="flex flex-col gap-1.5 max-w-full">
+      {/* File card */}
+      <div className={`p-2.5 rounded-xl border flex items-center gap-3 text-left w-[240px] sm:w-[280px] max-w-full
+        ${isOwn
+          ? dark
+            ? "border-black/10 bg-black/5 text-black"
+            : "border-white/10 bg-white/10 text-white"
+          : dark
+            ? "border-zinc-800 bg-zinc-900/50 text-zinc-200"
+            : "border-gray-200 bg-gray-50 text-gray-800"
+        }`}
+      >
+        <div className={`p-2 rounded-lg shrink-0
+          ${isOwn
+            ? dark
+              ? "bg-black/10 text-black"
+              : "bg-white/10 text-white"
+            : dark
+              ? "bg-zinc-800 text-zinc-300"
+              : "bg-gray-150 text-gray-600"
+          }`}
+        >
+          {isImage ? (
+            <ImageIcon size={18} />
+          ) : (
+            <FileText size={18} />
+          )}
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-[12.5px] font-semibold truncate" title={file.name}>
+            {file.name}
+          </p>
+          <p className={`text-[10px] ${isOwn ? "opacity-75" : "text-gray-400 dark:text-gray-500"}`}>
+            {formatFileSize(file.size)}
+          </p>
+        </div>
+        <a
+          href={file.data}
+          download={file.name}
+          className={`p-2 rounded-lg border transition-all active:scale-95 flex items-center justify-center shrink-0
+            ${isOwn
+              ? dark
+                ? "border-black/20 hover:bg-black/15 text-black"
+                : "border-white/20 hover:bg-white/15 text-white"
+              : dark
+                ? "border-zinc-800 hover:bg-zinc-850 text-zinc-300 hover:text-white bg-zinc-900"
+                : "border-gray-250 hover:bg-gray-150 text-gray-600 hover:text-black bg-white"
+            }`}
+          title="Download file"
+        >
+          <Download size={14} />
+        </a>
+      </div>
+
+      {/* Image Preview (if image) */}
+      {isImage && (
+        <div className={`relative mt-1 max-w-[240px] sm:max-w-[280px] rounded-lg overflow-hidden border bg-black/5 dark:bg-white/5 shadow-sm
+          ${isOwn
+            ? dark ? "border-black/10" : "border-white/10"
+            : dark ? "border-zinc-800" : "border-gray-200"
+          }`}
+        >
+          <img
+            src={file.data}
+            alt={file.name}
+            className="max-h-48 w-full object-contain cursor-pointer hover:opacity-95 transition-opacity"
+            onClick={() => {
+              const newTab = window.open();
+              if (newTab) {
+                newTab.document.write(`<img src="${file.data}" alt="${file.name}" style="max-width:100%; max-height:100vh; display:block; margin:auto;" />`);
+                newTab.document.title = file.name;
+              }
+            }}
+          />
+        </div>
+      )}
+
+      {/* Caption (if any) */}
+      {file.caption && (
+        <p className="mt-1 text-[13.5px] leading-relaxed break-words text-left">
+          {file.caption}
+        </p>
+      )}
+    </div>
   );
 }
 
@@ -218,6 +341,16 @@ export default function SessionChatPage() {
   const listRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // File upload state
+  const [selectedFile, setSelectedFile] = useState<{
+    name: string;
+    type: string;
+    size: number;
+    data: string;
+  } | null>(null);
+  const [isReadingFile, setIsReadingFile] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   // UI state
   const [focusMode, setFocusMode] = useState(false);
   const [showParticipants, setShowParticipants] = useState(false); // mobile drawer
@@ -239,6 +372,45 @@ export default function SessionChatPage() {
       setJoinedUsers((prev) => new Set([...prev, String(currentUserId)]));
     }
   }, [currentUserId]);
+
+  // ---------------------------------------------------------------------------
+  // File upload handlers
+  // ---------------------------------------------------------------------------
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Limit file size to 10MB to avoid hitting socket/database limits
+    const maxSizeBytes = 10 * 1024 * 1024;
+    if (file.size > maxSizeBytes) {
+      toast.error("File is too large. Maximum size allowed is 10MB.");
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
+
+    setIsReadingFile(true);
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const dataUrl = event.target?.result as string;
+      setSelectedFile({
+        name: file.name,
+        type: file.type,
+        size: file.size,
+        data: dataUrl,
+      });
+      setIsReadingFile(false);
+    };
+    reader.onerror = () => {
+      toast.error("Failed to read file.");
+      setIsReadingFile(false);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleCancelFile = () => {
+    setSelectedFile(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
 
   // ---------------------------------------------------------------------------
   // Leave session handler — emits to socket, cleans up, navigates away
@@ -596,11 +768,29 @@ export default function SessionChatPage() {
   const disabled = !socket || session?.status !== "in_progress";
 
   const send = async () => {
-    if (!text.trim() || disabled || !socket) return;
+    if ((!text.trim() && !selectedFile) || disabled || !socket) return;
     const trimmed = text.trim();
+    
+    // Clear input/file states immediately
     setText("");
+    setSelectedFile(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+    
     socket.emit("typing", { sessionId, isTyping: false });
     inputRef.current?.focus();
+
+    let messageBody = trimmed;
+
+    if (selectedFile) {
+      const filePayload = JSON.stringify({
+        name: selectedFile.name,
+        type: selectedFile.type,
+        size: selectedFile.size,
+        data: selectedFile.data,
+        caption: trimmed
+      });
+      messageBody = `[FILE_SHARE]:${filePayload}`;
+    }
 
     // Try E2EE encryption first
     if (encryptRef.current && e2ee?.isReady) {
@@ -608,7 +798,7 @@ export default function SessionChatPage() {
         .map((p) => String(p.userId || p.user?.id || ""))
         .filter(Boolean);
       try {
-        const payload = await encryptRef.current(trimmed, memberIds);
+        const payload = await encryptRef.current(messageBody, memberIds);
         if (payload) {
           socket.emit("sendChatMessage", { sessionId, ...payload, text: "" });
           return;
@@ -619,7 +809,7 @@ export default function SessionChatPage() {
     }
 
     // Fallback: plaintext (E2EE not yet ready or context unavailable)
-    socket.emit("sendChatMessage", { sessionId, text: trimmed });
+    socket.emit("sendChatMessage", { sessionId, text: messageBody });
   };
 
   const handleTyping = (val: string) => {
@@ -1381,6 +1571,20 @@ export default function SessionChatPage() {
                               </span>
                             );
                           }
+                          if (t?.startsWith("[FILE_SHARE]:")) {
+                            try {
+                              const fileInfo = JSON.parse(t.substring(13));
+                              return (
+                                <FileMessageBubble
+                                  file={fileInfo}
+                                  isOwn={isOwn}
+                                  dark={dark}
+                                />
+                              );
+                            } catch (e) {
+                              return <span className="text-red-500">Corrupted file message</span>;
+                            }
+                          }
                           return <>{t}</>;
                         })()}
                       </div>
@@ -1422,7 +1626,63 @@ export default function SessionChatPage() {
                   : "This session has ended"}
               </p>
             )}
+
+            {/* Selected File Preview Card */}
+            {selectedFile && (
+              <div className={`p-2 mb-2 rounded-xl border ${border} flex items-center justify-between bg-zinc-50/50 dark:bg-zinc-900/50 animate-in slide-in-from-bottom-2 duration-200`}>
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className={`p-2 rounded-lg ${dark ? "bg-zinc-800 text-zinc-300" : "bg-gray-150 text-gray-600"}`}>
+                    {selectedFile.type.startsWith("image/") ? (
+                      <ImageIcon size={16} />
+                    ) : (
+                      <FileText size={16} />
+                    )}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[12px] font-semibold truncate max-w-[200px] sm:max-w-xs">{selectedFile.name}</p>
+                    <p className={`text-[10px] ${muted}`}>{formatFileSize(selectedFile.size)}</p>
+                  </div>
+                </div>
+                <button
+                  onClick={handleCancelFile}
+                  className={`p-1.5 rounded-lg hover:bg-red-500/10 hover:text-red-500 transition-colors ${muted}`}
+                  aria-label="Remove selected file"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            )}
+
             <div className="flex gap-2 items-end">
+              {/* Hidden File Input */}
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleFileSelect}
+                className="hidden"
+                disabled={disabled || isReadingFile}
+              />
+              
+              {/* Attachment Button */}
+              <button
+                type="button"
+                disabled={disabled || isReadingFile}
+                onClick={() => fileInputRef.current?.click()}
+                className={`p-2.5 rounded-xl border transition-all active:scale-95 flex items-center justify-center shrink-0
+                  ${dark 
+                    ? "border-gray-800 text-gray-350 hover:bg-gray-900 hover:text-white bg-zinc-950/40" 
+                    : "border-gray-200 text-gray-600 hover:bg-gray-50 hover:text-black bg-zinc-50/40"}
+                  disabled:opacity-40 disabled:cursor-not-allowed`}
+                title="Attach a file (Max 10MB)"
+                aria-label="Attach file"
+              >
+                {isReadingFile ? (
+                  <Loader2 size={15} className="animate-spin text-gray-400" />
+                ) : (
+                  <Paperclip size={15} />
+                )}
+              </button>
+
               <input
                 ref={inputRef}
                 disabled={disabled}
@@ -1437,7 +1697,9 @@ export default function SessionChatPage() {
                 placeholder={
                   disabled
                     ? "Chat available when session is live…"
-                    : "Type a message…"
+                    : selectedFile
+                      ? "Add a caption..."
+                      : "Type a message…"
                 }
                 className={`flex-1 px-3.5 py-2.5 text-[13.5px] rounded-xl border outline-none transition-colors resize-none disabled:opacity-40
                   ${dark
@@ -1447,7 +1709,7 @@ export default function SessionChatPage() {
                 autoComplete="off"
               />
               <button
-                disabled={disabled || !text.trim()}
+                disabled={disabled || (!text.trim() && !selectedFile) || isReadingFile}
                 onClick={send}
                 className={`px-4 py-2.5 rounded-xl text-[13px] font-medium flex items-center gap-1.5 transition-all active:scale-95 shrink-0
                   ${dark ? "bg-white text-black hover:bg-gray-100" : "bg-black text-white hover:bg-gray-900"}
