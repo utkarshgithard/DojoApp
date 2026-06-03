@@ -1,39 +1,43 @@
 "use client";
 
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useDarkMode } from '@/context/DarkModeContext';
 import { useAttendance } from '@/context/AttendanceContext';
 import SubjectStatsChart from '@/components/SubjectStatsChart';
-import CreateStudySession from '@/components/CreateStudySession';
-// SessionChat modal replaced by dedicated /session/[id]/chat page
-import { useSocket } from '@/context/SocketContext';
-import { useAuth } from '@/context/authContext'; // FIX: corrected casing to match disk
-import API from '@/lib/axios';
-import SessionStatus from '@/components/SessionStatus';
-import { DashboardInvite as Invite, StudySession as Session } from '@/lib/types';
+import { useAuth } from '@/context/authContext';
 import TodayClasses from '@/components/dashboard/TodayClasses';
 import MarkedAttendance from '@/components/dashboard/MarkedAttendance';
-import FriendsSection from '@/components/dashboard/FriendsSection';
-import StudySessionsSection from '@/components/dashboard/StudySessionsSection';
 import DashboardConfirmationModals from '@/components/dashboard/DashboardConfirmationModals';
-import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
 import { Calendar } from '@/components/ui/calendar';
-import { Button } from '@/components/ui/button';
 import { format } from 'date-fns';
-import { CalendarIcon, Sun, Moon, Plus, LogOut, ArrowRight, UserPlus, Users, MessageSquare, Undo2 } from 'lucide-react';
+import { CalendarIcon, Users } from 'lucide-react';
+import API from '@/lib/axios';
+import { useSocket } from '@/context/SocketContext';
 
-// ---------------------------------------------------------------------------
-// Dashboard
-// ---------------------------------------------------------------------------
 const Dashboard = () => {
   const router = useRouter();
-  const { darkMode, toggleDarkMode } = useDarkMode() as any;
-  const { date, setDate, unmarkedSubjects, markedSubjects, handleAttendance, invites, loadExistingInvites, setInvites, friends, markHoliday, undoHoliday, attendanceLoading, holidayLoading, friendsLoading } = useAttendance() as any;
-  const { socket, joinedSessions, setJoinedSessions, sessions, setSessions, sessionsLoaded, setSessionsLoaded } = useSocket() as any;
+  const { darkMode } = useDarkMode() as any;
+  const { 
+    date, 
+    setDate, 
+    unmarkedSubjects, 
+    markedSubjects, 
+    handleAttendance, 
+    markHoliday, 
+    undoHoliday, 
+    attendanceLoading, 
+    holidayLoading 
+  } = useAttendance() as any;
 
-  // FIX: userId from verified auth context — never decode JWT client-side
-  const { userId: currentUserId, isAuthenticated, loading, logout, userName, profileLoading } = useAuth() as any;
+  const { isAuthenticated, loading, userName, profileLoading, userId: currentUserId } = useAuth() as any;
+
+  const [calendarOpen, setCalendarOpen] = useState(false);
+  const [attendanceConfirm, setAttendanceConfirm] = useState<{ subject: any; status: string } | null>(null);
+  const [holidayConfirm, setHolidayConfirm] = useState(false);
+  const [undoHolidayConfirm, setUndoHolidayConfirm] = useState(false);
+  const [fetchedActiveSession, setFetchedActiveSession] = useState<any>(null);
+  const { sessions } = useSocket() as any;
 
   useEffect(() => {
     if (!loading && !isAuthenticated) {
@@ -41,454 +45,50 @@ const Dashboard = () => {
     }
   }, [isAuthenticated, loading, router]);
 
-  // chatOpen removed — chat now navigates to /session/[id]/chat
-  const [createSessionOpen, setCreateSessionOpen] = useState(false);
-  const [calendarOpen, setCalendarOpen] = useState(false);
-  const [attendanceConfirm, setAttendanceConfirm] = useState<{ subject: any; status: string } | null>(null);
-  const [sessionEndConfirm, setSessionEndConfirm] = useState<{ sessionId: string } | null>(null);
-  const [holidayConfirm, setHolidayConfirm] = useState(false);
-  const [undoHolidayConfirm, setUndoHolidayConfirm] = useState(false);
-  const [sessionsLoading, setSessionsLoading] = useState(!sessionsLoaded);
-  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
-  const [friendCode, setFriendCode] = useState('');
-  const [friendMessage, setFriendMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
-  const friendMessageTimer = useRef<NodeJS.Timeout | null>(null);
-  const sessionsLoadedRef = useRef(sessionsLoaded);
-
-  useEffect(() => {
-    sessionsLoadedRef.current = sessionsLoaded;
-  }, [sessionsLoaded]);
-
-  // FIX: per-invite pending state to prevent double-tap and allow retry on failure
-  const [pendingInviteId, setPendingInviteId] = useState<string | null>(null);
-
-  // FIX: notification badge counter
-  const [newInviteCount, setNewInviteCount] = useState(0);
-
-
-  // FIX: keep a ref to joinedSessions so the 'connect' handler always sees the latest value
-  const joinedSessionsRef = useRef<Set<string>>(joinedSessions);
-  useEffect(() => {
-    joinedSessionsRef.current = joinedSessions;
-  }, [joinedSessions]);
-
-  // ---------------------------------------------------------------------------
-  // Stable callbacks (useCallback prevents stale closures in socket handlers)
-  // ---------------------------------------------------------------------------
-  const openChat = useCallback((sessionId: string, _sessionDetails: Session) => {
-    setCurrentSessionId(sessionId);
-    router.push(`/session/${sessionId}/chat`);
-  }, [router]);
-
-  const closeCreateSession = useCallback(() => setCreateSessionOpen(false), []);
-
-  const handleJoinSession = useCallback((sessionId: string) => {
-    if (!socket || !sessionId) return;
-    socket.emit('joinSession', { sessionId });
-    setJoinedSessions((prev: Set<string>) => {
-      const next = new Set([...prev, sessionId]);
-      // FIX: localStorage only stores UI open/close state, NOT used to drive socket emissions
-      localStorage.setItem('joinedSessions', JSON.stringify([...next]));
-      return next;
-    });
-  }, [socket, setJoinedSessions]);
-
-  const handleLeaveSession = useCallback((sessionId: string) => {
-    if (!socket || !sessionId) return;
-    socket.emit('leaveSession', { sessionId });
-    setJoinedSessions((prev: Set<string>) => {
-      const next = new Set(prev);
-      next.delete(sessionId);
-      localStorage.setItem('joinedSessions', JSON.stringify([...next]));
-      return next;
-    });
-  }, [socket, setJoinedSessions, currentSessionId]);
-
-  // ---------------------------------------------------------------------------
-  // Friend message auto-clear
-  // ---------------------------------------------------------------------------
-  const showFriendMessage = (text: string, type: 'success' | 'error') => {
-    setFriendMessage({ text, type });
-    if (friendMessageTimer.current) clearTimeout(friendMessageTimer.current);
-    // FIX: auto-clear after 3 seconds instead of staying forever
-    friendMessageTimer.current = setTimeout(() => setFriendMessage(null), 3000);
-  };
-
-  // ---------------------------------------------------------------------------
-  // Add friend
-  // ---------------------------------------------------------------------------
-  const handleAddFriend = async () => {
-    if (!friendCode) return;
-    try {
-      const res = await API.post('/auth/add', { friendCode });
-      showFriendMessage(res.data.message, 'success');
-      setFriendCode('');
-    } catch (error: any) {
-      showFriendMessage(error.response?.data?.error || 'Failed to add friend', 'error');
-    }
-  };
-
-  // ---------------------------------------------------------------------------
-  // Data loaders (with unmount guard to prevent state update on unmounted component)
-  // ---------------------------------------------------------------------------
-  const loadExistingSessions = useCallback(async (signal?: AbortSignal) => {
-    if (!sessionsLoadedRef.current) {
-      setSessionsLoading(true);
-    }
-    try {
-      const response = await API.get('/study-session/mine', { signal });
-      if (!signal?.aborted) {
-        setSessions(response.data);
-        setSessionsLoaded(true);
-      }
-    } catch (error: any) {
-      if (error.name !== 'CanceledError' && error.name !== 'AbortError') {
-        console.error('Error loading existing sessions:', error);
-      }
-    } finally {
-      if (!signal?.aborted) setSessionsLoading(false);
-    }
-  }, [setSessions, setSessionsLoaded]);
-
-  // ---------------------------------------------------------------------------
-  // Active sessions derived value
-  // ---------------------------------------------------------------------------
-  const activeSessions: Session[] = (sessions as Session[]).filter(
-    (s) => s.status === 'scheduled' || s.status === 'in_progress'
-  );
-
-  // ---------------------------------------------------------------------------
-  // Socket event handlers — defined with useCallback so they can be cleanly
-  // added/removed and don't close over stale state
-  // ---------------------------------------------------------------------------
-  const onConnect = useCallback(async () => {
-    if (!socket) return;
-    try {
-      // Ask the server which sessions this user is actually in
-      const response = await API.get('/study-session/mine');
-      const liveSessions = (response.data as Session[]).filter(
-        (s) =>
-          s.status === 'in_progress' &&
-          s.participants?.some(
-            (p) => String(p.userId || p.user?.id) === String(currentUserId) &&
-              p.status === 'accepted'
-          )
-      );
-      setSessions(response.data);
-
-      // Only rejoin sessions that are confirmed live and user is accepted
-      const liveIds = new Set(liveSessions.map((s) => s.id));
-      setJoinedSessions(liveIds);
-      localStorage.setItem('joinedSessions', JSON.stringify([...liveIds]));
-
-      liveIds.forEach((sessionId) => {
-        socket.emit('joinSession', { sessionId });
-      });
-    } catch (err) {
-      console.error('Reconnect session restore failed:', err);
-    }
-  }, [socket, currentUserId, setSessions, setJoinedSessions]);
-
-  const onReceiveInvite = useCallback((inviteData: Invite) => {
-    // FIX: push invite directly from socket payload — no API round-trip needed for initial display
-    setInvites((prev: Invite[]) => {
-      const exists = prev.some((i) => i.id === inviteData.id);
-      if (exists) return prev;
-      return [inviteData, ...prev];
-    });
-    setNewInviteCount((c) => c + 1);
-
-    // Browser notification for background tabs
-    if (typeof window !== 'undefined' && Notification?.permission === 'granted') {
-      new Notification(`Study invite from ${inviteData.name}`, {
-        body: inviteData.subject || 'Join a study session',
-      });
-    }
-  }, [setInvites]);
-
-  const onSessionScheduled = useCallback((data: any) => {
-    setSessions((prev: Session[]) => {
-      const exists = prev.find((s) => s.id === data.sessionId);
-      return exists
-        ? prev.map((s) => (s.id === data.sessionId ? data.sessionDetails : s))
-        : [...prev, data.sessionDetails];
-    });
-  }, [setSessions]);
-
-  const onSessionCreated = useCallback((data: any) => {
-    setSessions((prev: Session[]) => {
-      const exists = prev.find((s) => s.id === data.sessionId);
-      return exists ? prev : [...prev, data.sessionDetails];
-    });
-    closeCreateSession();
-  }, [setSessions, closeCreateSession]);
-
-  const onSessionStarted = useCallback((data: any) => {
-    setSessions((prev: Session[]) =>
-      prev.map((s) => (s.id === data.sessionId ? { ...s, status: 'in_progress' } : s))
-    );
-  }, [setSessions]);
-
-  const onSessionJoined = useCallback((data: any) => {
-    setJoinedSessions((prev: Set<string>) => {
-      const next = new Set([...prev, data.sessionId]);
-      localStorage.setItem('joinedSessions', JSON.stringify([...next]));
-      return next;
-    });
-    setSessions((prev: Session[]) =>
-      prev.map((s) => (s.id === data.sessionId ? data.sessionDetails : s))
-    );
-  }, [setJoinedSessions, setSessions]);
-
-  const onSessionLeft = useCallback((data: any) => {
-    setJoinedSessions((prev: Set<string>) => {
-      const next = new Set(prev);
-      next.delete(data.sessionId);
-      localStorage.setItem('joinedSessions', JSON.stringify([...next]));
-      return next;
-    });
-  }, [setJoinedSessions]);
-
-  // FIX: handle sessionEnded — remove from active view instead of leaving stale "Join" button
-  const onSessionEnded = useCallback((data: any) => {
-    setSessions((prev: Session[]) =>
-      prev.map((s) => (s.id === data.sessionId ? { ...s, status: 'completed' } : s))
-    );
-    setJoinedSessions((prev: Set<string>) => {
-      const next = new Set(prev);
-      next.delete(data.sessionId);
-      localStorage.setItem('joinedSessions', JSON.stringify([...next]));
-      return next;
-    });
-    toast.info(data.endedBy ? `${data.endedBy} ended the session.` : 'The study session has ended.');
-  }, [setSessions, setJoinedSessions, currentSessionId]);
-
-  const onUserJoinedSession = useCallback((data: any) => {
-    setSessions((prev: Session[]) =>
-      prev.map((session) =>
-        session.id === data.sessionId
-          ? {
-            ...session,
-            participants: session.participants?.map((p) =>
-              (p.userId || p.user?.id) === data.userId ? { ...p, status: 'joined' } : p
-            ),
-          }
-          : session
-      )
-    );
-  }, [setSessions]);
-
-  const onUserLeftSession = useCallback((data: any) => {
-    setSessions((prev: Session[]) =>
-      prev.map((session) =>
-        session.id === data.sessionId
-          ? {
-            ...session,
-            participants: session.participants?.map((p) =>
-              (p.userId || p.user?.id) === data.userId ? { ...p, status: 'accepted' } : p
-            ),
-          }
-          : session
-      )
-    );
-  }, [setSessions]);
-
-  // FIX: use Sonner toast instead of blocking alert()
-  const onJoinError = useCallback((data: any) => {
-    toast.error(`Could not join session: ${data.message}`);
-  }, []);
-
-  const onInviteAccepted = useCallback((data: any) => {
-    setSessions((prev: Session[]) => {
-      const exists = prev.find((s) => s.id === data.sessionId);
-      return exists
-        ? prev.map((s) => (s.id === data.sessionId ? data.sessionDetails : s))
-        : [...prev, data.sessionDetails];
-    });
-    // FIX: pass sessionDetails directly — don't rely on sessions state which may not have updated yet
-    handleJoinSession(data.sessionId);
-    openChat(data.sessionId, data.sessionDetails);
-  }, [setSessions, handleJoinSession, openChat]);
-
-  const onInviteDeclined = useCallback((data: any) => {
-    setInvites((prev: Invite[]) => prev.filter((inv) => inv.from !== data.by));
-    toast.info(`${data.name} declined your invite.`);
-  }, [setInvites]);
-
-  // FIX: handle inviteExpired from updated server
-  const onInviteExpired = useCallback((data: any) => {
-    setInvites((prev: Invite[]) => prev.filter((inv) => inv.id !== data.sessionId));
-    toast.warning("Invite expired: This invite has expired and is no longer valid.");
-  }, [setInvites]);
-
-  // FIX: handle inviteUndelivered from updated server
-  const onInviteUndelivered = useCallback((data: any) => {
-    toast.info("Friend is offline. They'll see the invite when they reconnect.");
-  }, []);
-
-  const onSessionExpired = useCallback((data: any) => {
-    setSessions((prev: Session[]) =>
-      prev.map((s) => (s.id === data.sessionId ? data.sessionDetails : s))
-    );
-  }, [setSessions]);
-
-  // ---------------------------------------------------------------------------
-  // Main effect — register / clean up all socket listeners
-  // FIX: each listener is a stable reference so socket.off works correctly
-  // ---------------------------------------------------------------------------
-  // ---------------------------------------------------------------------------
-  // Initial data and UI state loader
-  // ---------------------------------------------------------------------------
   useEffect(() => {
     if (loading || !isAuthenticated) return;
 
-    // FIX: AbortController cancels in-flight API calls if component unmounts mid-request
-    const controller = new AbortController();
-
-    loadExistingInvites();
-    loadExistingSessions(controller.signal);
-
-    // FIX: restore UI state only — do NOT auto-emit joinSession from localStorage
-    const saved = localStorage.getItem('joinedSessions');
-    if (saved) {
+    const fetchActiveSession = async () => {
       try {
-        const ids: string[] = JSON.parse(saved);
-        setJoinedSessions(new Set(ids));
-      } catch {
-        localStorage.removeItem('joinedSessions');
+        const res = await API.get('/study-session/mine');
+        const active = res.data.find(
+          (s: any) =>
+            s.status === 'in_progress' &&
+            s.participants?.some(
+              (p: any) => String(p.userId || p.user?.id) === String(currentUserId) &&
+                p.status === 'accepted'
+            )
+        );
+        setFetchedActiveSession(active || null);
+      } catch (err) {
+        console.error('Failed to fetch active session for dashboard banner:', err);
       }
+    };
+
+    fetchActiveSession();
+  }, [isAuthenticated, loading, currentUserId]);
+
+  const activeSession = React.useMemo(() => {
+    // If we have socket sessions (e.g. they were loaded by sessions page or updated in real-time)
+    if (sessions && sessions.length > 0) {
+      const active = sessions.find(
+        (s: any) =>
+          s.status === 'in_progress' &&
+          s.participants?.some(
+            (p: any) => String(p.userId || p.user?.id) === String(currentUserId) &&
+              p.status === 'accepted'
+          )
+      );
+      if (active) return active;
     }
+    // Fallback to the initially fetched session
+    return fetchedActiveSession;
+  }, [sessions, fetchedActiveSession, currentUserId]);
 
-    return () => {
-      controller.abort();
-    };
-  }, [
-    isAuthenticated,
-    loading,
-    loadExistingInvites,
-    loadExistingSessions,
-    setJoinedSessions
-  ]);
-
-  // ---------------------------------------------------------------------------
-  // Socket event listeners registration
-  // ---------------------------------------------------------------------------
-  useEffect(() => {
-    if (loading || !isAuthenticated || !socket) return;
-
-    // Register all listeners
-    socket.on('connect', onConnect);
-    socket.on('receiveInvite', onReceiveInvite);
-    socket.on('sessionScheduled', onSessionScheduled);
-    socket.on('sessionCreated', onSessionCreated);
-    socket.on('sessionStarted', onSessionStarted);
-    socket.on('sessionJoined', onSessionJoined);
-    socket.on('sessionLeft', onSessionLeft);
-    socket.on('sessionEnded', onSessionEnded);
-    socket.on('userJoinedSession', onUserJoinedSession);
-    socket.on('userLeftSession', onUserLeftSession);
-    socket.on('joinError', onJoinError);
-    socket.on('inviteAccepted', onInviteAccepted);
-    socket.on('inviteDeclined', onInviteDeclined);
-    socket.on('inviteExpired', onInviteExpired);
-    socket.on('inviteUndelivered', onInviteUndelivered);
-    socket.on('sessionExpired', onSessionExpired);
-
-    // FIX: cleanup mirrors every socket.on — prevents listener accumulation on reconnect
-    return () => {
-      socket.off('connect', onConnect);
-      socket.off('receiveInvite', onReceiveInvite);
-      socket.off('sessionScheduled', onSessionScheduled);
-      socket.off('sessionCreated', onSessionCreated);
-      socket.off('sessionStarted', onSessionStarted);
-      socket.off('sessionJoined', onSessionJoined);
-      socket.off('sessionLeft', onSessionLeft);
-      socket.off('sessionEnded', onSessionEnded);
-      socket.off('userJoinedSession', onUserJoinedSession);
-      socket.off('userLeftSession', onUserLeftSession);
-      socket.off('joinError', onJoinError);
-      socket.off('inviteAccepted', onInviteAccepted);
-      socket.off('inviteDeclined', onInviteDeclined);
-      socket.off('inviteExpired', onInviteExpired);
-      socket.off('inviteUndelivered', onInviteUndelivered);
-      socket.off('sessionExpired', onSessionExpired);
-    };
-  }, [
-    socket,
-    isAuthenticated,
-    loading,
-    onConnect,
-    onReceiveInvite,
-    onSessionScheduled,
-    onSessionCreated,
-    onSessionStarted,
-    onSessionJoined,
-    onSessionLeft,
-    onSessionEnded,
-    onUserJoinedSession,
-    onUserLeftSession,
-    onJoinError,
-    onInviteAccepted,
-    onInviteDeclined,
-    onInviteExpired,
-    onInviteUndelivered,
-    onSessionExpired
-  ]);
-
-  // ---------------------------------------------------------------------------
-  // Invite actions
-  // ---------------------------------------------------------------------------
-  const handleAcceptInvite = (invite: Invite) => {
-    if (!socket || pendingInviteId) return;
-
-    // FIX: set pending state to disable buttons and prevent double-tap
-    setPendingInviteId(invite.id);
-
-    socket.emit('acceptInvite', { sessionDetails: invite }, (res: any) => {
-      setPendingInviteId(null);
-
-      if (res?.ok) {
-        // FIX: only remove from state AFTER server confirms success
-        setInvites((prev: Invite[]) => prev.filter((inv) => inv.id !== invite.id));
-        setNewInviteCount((c) => Math.max(0, c - 1));
-        handleJoinSession(invite.id);
-        openChat(invite.id, res.session || invite);
-      } else {
-        toast.error(`Could not accept invite: ${res?.error || 'Something went wrong. Please try again.'}`);
-        // Invite stays visible so user can retry
-      }
-    });
-  };
-
-  const handleDeclineInvite = (invite: Invite) => {
-    if (!socket || pendingInviteId === invite.id) return;
-    socket.emit('declineInvite', { fromUserId: invite.from, sessionId: invite.id });
-    setInvites((prev: Invite[]) => prev.filter((inv) => inv.id !== invite.id));
-    setNewInviteCount((c) => Math.max(0, c - 1));
-  };
-
-  // ---------------------------------------------------------------------------
-  // Cleanup timers on unmount
-  // ---------------------------------------------------------------------------
-  useEffect(() => {
-    return () => {
-      if (friendMessageTimer.current) clearTimeout(friendMessageTimer.current);
-    };
-  }, []);
-
-  // ---------------------------------------------------------------------------
-  // JSX
-  // ---------------------------------------------------------------------------
   const dark = darkMode;
   const border = dark ? 'border-gray-800' : 'border-gray-200';
   const muted = dark ? 'text-gray-400' : 'text-gray-500';
   const cardClass = `border rounded-xl p-5 ${border} ${dark ? 'bg-black' : 'bg-white'}`;
-
-  const inputClass = `w-full px-3.5 py-2 text-sm rounded-lg border outline-none transition-colors
-    ${dark
-      ? 'bg-black border-gray-800 text-white placeholder-gray-700 focus:border-gray-600'
-      : 'bg-white border-gray-200 text-gray-900 placeholder-gray-400 focus:border-gray-400'
-    }`;
 
   const primaryBtn = `px-3.5 py-1.5 rounded-lg text-[13px] font-medium transition-opacity hover:opacity-80 active:scale-95
     ${dark ? 'bg-white text-black' : 'bg-black text-white'}
@@ -504,6 +104,14 @@ const Dashboard = () => {
 
   const hasClasses = unmarkedSubjects.length > 0 || markedSubjects.length > 0;
   const isAlreadyHoliday = unmarkedSubjects.length === 0 && markedSubjects.length > 0 && markedSubjects.every((s: any) => s.status === 'cancelled');
+
+  if (loading) {
+    return (
+      <div className={`min-h-screen flex justify-center items-center transition-colors duration-300 ${dark ? 'bg-black text-white' : 'bg-white text-gray-900'}`}>
+        <span className="inline-block w-6 h-6 rounded-full border-[2px] border-current border-t-transparent animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className={`min-h-screen flex flex-col transition-colors duration-300 pt-[76px] ${dark ? 'bg-black text-white' : 'bg-white text-gray-900'}`}>
@@ -521,7 +129,7 @@ const Dashboard = () => {
                 {userName ? `${userName}'s Workspace` : 'Dojo Workspace'}
               </h1>
             )}
-            <p className={`text-[13px] ${muted}`}>Track classes, manage friends, and host joint study sessions</p>
+            <p className={`text-[13px] ${muted}`}>Track classes and view weekly attendance insights</p>
           </div>
 
           {/* Pick Date */}
@@ -558,6 +166,53 @@ const Dashboard = () => {
           </div>
         </div>
 
+        {/* Ongoing Session Banner */}
+        {activeSession && (
+          <div className={`mb-8 p-4 rounded-xl border flex flex-col sm:flex-row justify-between items-center gap-4 relative overflow-hidden ${
+            dark 
+              ? 'border-green-500/30 bg-green-500/5 text-white' 
+              : 'border-green-200 bg-green-50/50 text-gray-900'
+          } shadow-sm animate-in fade-in duration-300`}>
+            {/* Pulsing indicator */}
+            <div className="absolute top-2.5 right-2.5 flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-green-500 animate-ping" />
+              <span className="w-2 h-2 rounded-full bg-green-500 absolute" />
+            </div>
+
+            <div className="flex items-center gap-3">
+              <div className={`p-2.5 rounded-lg shrink-0 ${dark ? 'bg-green-500/10 text-green-400' : 'bg-green-100 text-green-600'}`}>
+                <Users size={20} />
+              </div>
+              <div>
+                <p className="font-semibold text-[14.5px] tracking-tight">Ongoing Study Session Live</p>
+                <p className={`text-[12.5px] mt-0.5 ${muted}`}>
+                  Subject: <span className="font-medium text-current">{activeSession.subject}</span> &bull; {activeSession.duration} mins
+                </p>
+              </div>
+            </div>
+
+            <button
+              onClick={() => router.push(`/session/${activeSession.id}/chat`)}
+              className={`animate-vibrate px-4 py-2 rounded-lg text-[13px] font-semibold transition-all hover:opacity-90 active:scale-95 shadow-md ${
+                dark ? 'bg-green-500 text-black hover:bg-green-400' : 'bg-green-600 text-white hover:bg-green-700'
+              }`}
+            >
+              Join Session
+            </button>
+
+            <style dangerouslySetInnerHTML={{__html: `
+              @keyframes vibrate {
+                0%, 100% { transform: translateX(0) translateY(0); }
+                10%, 30%, 50%, 70%, 90% { transform: translateX(-1px) translateY(1px); }
+                20%, 40%, 60%, 80% { transform: translateX(1px) translateY(-1px); }
+              }
+              .animate-vibrate {
+                animation: vibrate 0.8s ease-in-out infinite;
+              }
+            `}} />
+          </div>
+        )}
+
         {/* Two column grid */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* ---- LEFT COLUMN ---- */}
@@ -587,48 +242,10 @@ const Dashboard = () => {
               border={border}
               muted={muted}
             />
-
-            <FriendsSection
-              friendCode={friendCode}
-              setFriendCode={setFriendCode}
-              handleAddFriend={handleAddFriend}
-              friendMessage={friendMessage}
-              friends={friends}
-              friendsLoading={friendsLoading}
-              cardClass={cardClass}
-              border={border}
-              muted={muted}
-              inputClass={inputClass}
-              primaryBtn={primaryBtn}
-            />
           </div>
 
           {/* ---- RIGHT COLUMN ---- */}
           <div className="space-y-8">
-            <StudySessionsSection
-              newInviteCount={newInviteCount}
-              setCreateSessionOpen={setCreateSessionOpen}
-              sessionsLoading={sessionsLoading}
-              invites={invites}
-              handleAcceptInvite={handleAcceptInvite}
-              handleDeclineInvite={handleDeclineInvite}
-              pendingInviteId={pendingInviteId}
-              activeSessions={activeSessions}
-              joinedSessions={joinedSessions}
-              currentUserId={currentUserId}
-              handleJoinSession={handleJoinSession}
-              handleLeaveSession={handleLeaveSession}
-              openChat={openChat}
-              setSessionEndConfirm={setSessionEndConfirm}
-              cardClass={cardClass}
-              border={border}
-              muted={muted}
-              primaryBtn={primaryBtn}
-              secondaryBtn={secondaryBtn}
-              dangerBtn={dangerBtn}
-              dark={dark}
-            />
-
             {/* Stats */}
             <section className={cardClass}>
               <p className={`text-[11px] uppercase tracking-widest ${muted} mb-2`}>Visual Insights</p>
@@ -639,35 +256,14 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* Create Session Modal */}
-      {createSessionOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className={`rounded-xl border p-6 w-full max-w-md ${dark ? 'bg-black border-gray-800 text-white' : 'bg-white border-gray-200 text-gray-900'}`}>
-            <div className="flex justify-between items-center mb-4 border-b pb-3 border-gray-150 dark:border-gray-900">
-              <h3 className="text-[16px] font-medium tracking-tight">Create Study Session</h3>
-              <button
-                onClick={closeCreateSession}
-                className={`text-[18px] leading-none transition-colors ${muted} hover:text-current`}
-                aria-label="Close"
-              >
-                &times;
-              </button>
-            </div>
-            <CreateStudySession socket={socket} onClose={closeCreateSession} />
-          </div>
-        </div>
-      )}
-
-      {/* Chat Panel: now at /session/[id]/chat — no modal here */}
-
-      {/* Premium Custom Confirmation Modals */}
+      {/* Confirmation Modals */}
       <DashboardConfirmationModals
         attendanceConfirm={attendanceConfirm}
         setAttendanceConfirm={setAttendanceConfirm}
         handleAttendance={handleAttendance}
-        sessionEndConfirm={sessionEndConfirm}
-        setSessionEndConfirm={setSessionEndConfirm}
-        socket={socket}
+        sessionEndConfirm={null}
+        setSessionEndConfirm={() => {}}
+        socket={null}
         holidayConfirm={holidayConfirm}
         setHolidayConfirm={setHolidayConfirm}
         markHoliday={markHoliday}

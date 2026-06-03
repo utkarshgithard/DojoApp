@@ -137,6 +137,10 @@ export default function WeeklyScheduleSetup() {
       : 'border-gray-200 text-gray-700 hover:bg-gray-50'
     } disabled:opacity-40`;
 
+  const primaryBtnInHeader = `px-4 py-2 rounded-lg text-[13px] font-semibold transition-all hover:opacity-85 active:scale-95
+    ${dark ? 'bg-white text-black' : 'bg-black text-white'}
+    disabled:opacity-40`;
+
   if (authLoading) {
     return (
       <div className={`min-h-screen flex justify-center items-center transition-colors duration-300 ${dark ? 'bg-black text-white' : 'bg-white text-gray-900'}`}>
@@ -146,20 +150,22 @@ export default function WeeklyScheduleSetup() {
   }
 
   return (
-    <div className={`min-h-screen transition-colors duration-300 pt-[96px] pb-20 ${dark ? 'bg-black text-white' : 'bg-white text-gray-900'}`}>
+    <div className={`min-h-screen transition-colors duration-300 pt-[96px] pb-32 ${dark ? 'bg-black text-white' : 'bg-white text-gray-900'}`}>
       <div className="max-w-[750px] w-full mx-auto px-5">
-        
-        {/* Page Header */}
-        <div className="mb-8 border-b pb-5 border-gray-100 dark:border-gray-900">
-          <p className={`text-[11px] uppercase tracking-widest ${muted} mb-1 flex items-center gap-1.5`}>
-            <Clock size={12} />
-            <span>Schedule Builder</span>
-          </p>
-          <h1 className="text-[22px] font-medium tracking-tight">Set Schedule</h1>
-          <p className={`text-[13px] ${muted} mt-0.5`}>Configure classes for each day of the week to automatically track daily attendance metrics.</p>
-        </div>
-
         <form onSubmit={handleSubmit} className="space-y-6">
+          
+          {/* Sticky Page Header */}
+          <div className={`sticky top-[76px] md:top-0 z-30 mb-8 border-b pb-4 pt-2 border-gray-100 dark:border-gray-900 -mx-5 px-5 ${dark ? 'bg-black/90' : 'bg-white/90'} backdrop-blur-md flex items-center justify-between gap-4`}>
+            <div>
+              <p className={`text-[10px] uppercase tracking-widest ${muted} mb-0.5 flex items-center gap-1.5`}>
+                <Clock size={11} />
+                <span>Schedule Builder</span>
+              </p>
+              <h1 className="text-[20px] font-semibold tracking-tight">Add Classes</h1>
+              <p className={`text-[12px] ${muted} mt-0.5 hidden sm:block`}>Configure classes for each day of the week to automatically track daily attendance metrics.</p>
+            </div>
+          </div>
+
           {weekdays.map((day) => (
             <div key={day} className={cardClass}>
               {/* Day title */}
@@ -269,16 +275,19 @@ export default function WeeklyScheduleSetup() {
             </div>
           ))}
 
-          {/* Form Submit Footer */}
-          <div className="pt-4">
-            <button
-              type="submit"
-              disabled={submitting}
-              className={primaryBtn}
-            >
-              {submitting ? 'Saving schedule...' : 'Save Weekly Schedule'}
-            </button>
+          {/* Fixed Bottom Save Bar */}
+          <div className={`fixed bottom-0 left-0 md:left-64 right-0 z-40 border-t ${border} ${dark ? 'bg-black/90' : 'bg-white/90'} backdrop-blur-md p-2.5 shadow-[0_-10px_40px_rgba(0,0,0,0.05)]`}>
+            <div className="max-w-[750px] w-full mx-auto flex justify-center">
+              <button
+                type="submit"
+                disabled={submitting}
+                className={`w-full sm:w-auto px-12 py-2.5 rounded-xl text-[14.5px] font-semibold transition-all hover:opacity-85 active:scale-95 shadow-md ${dark ? 'bg-white text-black' : 'bg-black text-white'} disabled:opacity-40`}
+              >
+                {submitting ? 'Saving...' : 'Save Schedule'}
+              </button>
+            </div>
           </div>
+
         </form>
       </div>
     </div>

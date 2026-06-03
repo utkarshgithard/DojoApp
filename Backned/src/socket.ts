@@ -280,7 +280,7 @@ function registerInviteHandlers(io: Server, socket: Socket, user: UserPayload) {
       // to prevent double-accept race condition
       const session = await prisma.studySession.findUnique({
         where: { id: sessionId },
-        include: { participants: true },
+        include: { participants: true, creator: true },
       });
 
       if (!session) {
@@ -330,7 +330,7 @@ function registerInviteHandlers(io: Server, socket: Socket, user: UserPayload) {
       const updatedSession = await prisma.studySession.update({
         where: { id: sessionId },
         data: { status: 'in_progress', actualStartTime: new Date() },
-        include: { participants: true },
+        include: { participants: true, creator: true },
       });
 
       // Notify ALL participants to refresh / show "Join" button
@@ -448,6 +448,7 @@ function registerSessionHandlers(io: Server, socket: Socket, user: UserPayload) 
         console.log(`ℹ️ ${user.name} already in room ${sessionRoom}, re-hydrating client`);
         const sessionData = await prisma.studySession.findUnique({
           where: { id: sessionId },
+          include: { participants: true, creator: true },
         });
         const active = activeSessions.get(sessionId);
         socket.emit('sessionJoined', {
@@ -493,12 +494,14 @@ function registerSessionHandlers(io: Server, socket: Socket, user: UserPayload) 
 
       let sessionData = await prisma.studySession.findUnique({
         where: { id: sessionId },
+        include: { participants: true, creator: true },
       });
 
       if (sessionData?.status === 'scheduled') {
         sessionData = await prisma.studySession.update({
           where: { id: sessionId },
           data: { status: 'in_progress', actualStartTime: new Date() },
+          include: { participants: true, creator: true },
         });
         io.to(sessionRoom).emit('sessionStarted', { sessionId, sessionDetails: sessionData });
       }
@@ -681,6 +684,7 @@ function registerSessionHandlers(io: Server, socket: Socket, user: UserPayload) 
         data: {
           duration: session.duration + extraMinutes,
         },
+        include: { participants: true, creator: true },
       });
 
       // Broadcast the duration extension to everyone in the session

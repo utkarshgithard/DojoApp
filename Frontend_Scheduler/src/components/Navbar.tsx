@@ -3,7 +3,7 @@
 import React, { useState, useContext, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
-import { Moon, Sun, Menu, X, LogOut, LayoutDashboard, Calendar, Clock, Settings, User } from 'lucide-react';
+import { Moon, Sun, Menu, X, LogOut, LayoutDashboard, Calendar, Clock, Settings, User, Users, UserPlus } from 'lucide-react';
 import { useDarkMode } from '@/context/DarkModeContext';
 import { AuthContext } from '@/context/authContext';
 import { auth } from '@/lib/firebase';
@@ -80,7 +80,7 @@ const Navbar = () => {
   return (
     <nav
       className={`
-        fixed top-0 left-0 w-full z-50 transition-transform duration-300 ease-in-out 
+        md:hidden fixed top-0 left-0 w-full z-50 transition-transform duration-300 ease-in-out 
         ${showNavbar ? 'translate-y-0' : '-translate-y-full'}
         ${dark ? 'bg-black/80 text-white' : 'bg-white/80 text-gray-900'}
         backdrop-blur-md border-b ${border}
@@ -90,6 +90,15 @@ const Navbar = () => {
         {/* Brand logo on the left */}
         <div className="flex items-center gap-3">
           <Link href="/dashboard" className="flex items-center gap-2" onClick={closeMenu}>
+            <div className={`w-6 h-6 flex items-center justify-center ${dark ? 'text-white' : 'text-black'}`}>
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" className="w-full h-full">
+                <path fill="none" stroke="currentColor" strokeWidth="8" strokeLinecap="round" strokeLinejoin="round" d="M 25 28 Q 60 22 95 28" />
+                <path fill="none" stroke="currentColor" strokeWidth="8" strokeLinecap="round" strokeLinejoin="round" d="M 32 40 H 88" />
+                <path fill="none" stroke="currentColor" strokeWidth="8" strokeLinecap="round" strokeLinejoin="round" d="M 46 40 V 95" />
+                <path fill="none" stroke="currentColor" strokeWidth="8" strokeLinecap="round" strokeLinejoin="round" d="M 74 40 V 95" />
+                <path fill="none" stroke="currentColor" strokeWidth="8" strokeLinecap="round" strokeLinejoin="round" d="M 46 54 H 74" />
+              </svg>
+            </div>
             <span className="text-[16px] font-medium tracking-tight">DojoClass</span>
           </Link>
         </div>
@@ -105,12 +114,28 @@ const Navbar = () => {
             Dashboard
           </Link>
           <Link
+            href="/sessions"
+            className={`text-[13px] font-medium transition-colors ${
+              pathname === '/sessions' ? textActive : textMuted
+            }`}
+          >
+            Sessions
+          </Link>
+          <Link
+            href="/friends"
+            className={`text-[13px] font-medium transition-colors ${
+              pathname === '/friends' ? textActive : textMuted
+            }`}
+          >
+            Friends
+          </Link>
+          <Link
             href="/setup-schedule"
             className={`text-[13px] font-medium transition-colors ${
               pathname === '/setup-schedule' ? textActive : textMuted
             }`}
           >
-            Schedule
+            Add Classes
           </Link>
           <Link
             href="/calendar"
@@ -303,6 +328,26 @@ const Navbar = () => {
             <span>Dashboard</span>
           </Link>
           <Link
+            href="/sessions"
+            onClick={closeMenu}
+            className={`flex items-center gap-2.5 text-[14px] font-medium py-1 ${
+              pathname === '/sessions' ? textActive : textMuted
+            }`}
+          >
+            <Users size={15} />
+            <span>Sessions</span>
+          </Link>
+          <Link
+            href="/friends"
+            onClick={closeMenu}
+            className={`flex items-center gap-2.5 text-[14px] font-medium py-1 ${
+              pathname === '/friends' ? textActive : textMuted
+            }`}
+          >
+            <UserPlus size={15} />
+            <span>Friends</span>
+          </Link>
+          <Link
             href="/setup-schedule"
             onClick={closeMenu}
             className={`flex items-center gap-2.5 text-[14px] font-medium py-1 ${
@@ -310,7 +355,7 @@ const Navbar = () => {
             }`}
           >
             <Clock size={15} />
-            <span>Schedule</span>
+            <span>Add Classes</span>
           </Link>
           <Link
             href="/calendar"
