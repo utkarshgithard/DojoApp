@@ -6,6 +6,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import { Moon, Sun, Menu, X, LogOut, LayoutDashboard, Calendar, Clock, Settings, User, Users, UserPlus } from 'lucide-react';
 import { useDarkMode } from '@/context/DarkModeContext';
 import { AuthContext } from '@/context/authContext';
+import { useAttendance } from '@/context/AttendanceContext';
 import { auth } from '@/lib/firebase';
 
 const Navbar = () => {
@@ -13,6 +14,14 @@ const Navbar = () => {
   const { logout, isAuthenticated, loading, userName, profileLoading, setUserName } = useContext(AuthContext) as any;
   const router = useRouter();
   const pathname = usePathname();
+
+  const attendance = useAttendance();
+  const invites = attendance?.invites || [];
+  const activeInvitesCount = invites.filter((invite: any) => {
+    if (!invite.invitedAt) return true;
+    const age = Date.now() - new Date(invite.invitedAt).getTime();
+    return age <= 15 * 60 * 1000;
+  }).length;
 
   const [isOpen, setIsOpen] = useState(false);
   const [showNavbar, setShowNavbar] = useState(true);
@@ -167,15 +176,23 @@ const Navbar = () => {
           </button>
 
           {/* Mobile hamburger menu toggle button - placed immediately to the left of the profile */}
-          <button
-            onClick={toggleMenu}
-            className={`p-1.5 rounded border transition-colors md:hidden ${
-              dark ? 'border-gray-800 text-white hover:bg-gray-900' : 'border-gray-200 text-gray-900 hover:bg-gray-50'
-            }`}
-            aria-label="Menu"
-          >
-            {isOpen ? <X size={16} /> : <Menu size={16} />}
-          </button>
+          <div className="relative md:hidden">
+            <button
+              onClick={toggleMenu}
+              className={`p-1.5 rounded border transition-colors ${
+                dark ? 'border-gray-800 text-white hover:bg-gray-900' : 'border-gray-200 text-gray-900 hover:bg-gray-50'
+              }`}
+              aria-label="Menu"
+            >
+              {isOpen ? <X size={16} /> : <Menu size={16} />}
+            </button>
+            {activeInvitesCount > 0 && !isOpen && (
+              <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-red-500 border border-white dark:border-black animate-ping" />
+            )}
+            {activeInvitesCount > 0 && !isOpen && (
+              <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-red-500 border border-white dark:border-black" />
+            )}
+          </div>
 
           {isMounted && isAuthenticated && (
             <div className="relative">
@@ -328,12 +345,17 @@ const Navbar = () => {
           <Link
             href="/sessions"
             onClick={closeMenu}
-            className={`flex items-center gap-2.5 text-[14px] font-medium py-1 ${
+            className={`flex items-center gap-2.5 text-[14px] font-medium py-1 w-full ${
               pathname === '/sessions' ? textActive : textMuted
             }`}
           >
             <Users size={15} />
             <span>Sessions</span>
+            {activeInvitesCount > 0 && (
+              <span className="ml-auto inline-flex items-center justify-center w-5 h-5 text-[10px] font-bold text-white bg-red-500 rounded-full animate-pulse">
+                {activeInvitesCount}
+              </span>
+            )}
           </Link>
           <Link
             href="/friends"

@@ -22,7 +22,6 @@ export default function SessionsPage() {
 
   const [createSessionOpen, setCreateSessionOpen] = useState(false);
   const [pendingInviteId, setPendingInviteId] = useState<string | null>(null);
-  const [newInviteCount, setNewInviteCount] = useState(0);
   const [sessionsLoading, setSessionsLoading] = useState(!sessionsLoaded);
   const [sessionEndConfirm, setSessionEndConfirm] = useState<{ sessionId: string } | null>(null);
   
@@ -110,20 +109,7 @@ export default function SessionsPage() {
     }
   }, [socket, setSessions, setJoinedSessions]);
 
-  const onReceiveInvite = useCallback((inviteData: Invite) => {
-    setInvites((prev: Invite[]) => {
-      const exists = prev.some((i) => i.id === inviteData.id);
-      if (exists) return prev;
-      return [inviteData, ...prev];
-    });
-    setNewInviteCount((c) => c + 1);
-
-    if (typeof window !== 'undefined' && Notification?.permission === 'granted') {
-      new Notification(`Study invite from ${inviteData.name}`, {
-        body: inviteData.subject || 'Join a study session',
-      });
-    }
-  }, [setInvites]);
+  // Removed duplicate onReceiveInvite (now handled globally in AttendanceContext.tsx)
 
   const onSessionScheduled = useCallback((data: any) => {
     setSessions((prev: Session[]) => {
@@ -270,7 +256,6 @@ export default function SessionsPage() {
     if (loading || !isAuthenticated || !socket) return;
 
     socket.on('connect', onConnect);
-    socket.on('receiveInvite', onReceiveInvite);
     socket.on('sessionScheduled', onSessionScheduled);
     socket.on('sessionCreated', onSessionCreated);
     socket.on('sessionStarted', onSessionStarted);
@@ -281,14 +266,11 @@ export default function SessionsPage() {
     socket.on('userLeftSession', onUserLeftSession);
     socket.on('joinError', onJoinError);
     socket.on('inviteAccepted', onInviteAccepted);
-    socket.on('inviteDeclined', onInviteDeclined);
-    socket.on('inviteExpired', onInviteExpired);
     socket.on('inviteUndelivered', onInviteUndelivered);
     socket.on('sessionExpired', onSessionExpired);
 
     return () => {
       socket.off('connect', onConnect);
-      socket.off('receiveInvite', onReceiveInvite);
       socket.off('sessionScheduled', onSessionScheduled);
       socket.off('sessionCreated', onSessionCreated);
       socket.off('sessionStarted', onSessionStarted);
@@ -299,8 +281,6 @@ export default function SessionsPage() {
       socket.off('userLeftSession', onUserLeftSession);
       socket.off('joinError', onJoinError);
       socket.off('inviteAccepted', onInviteAccepted);
-      socket.off('inviteDeclined', onInviteDeclined);
-      socket.off('inviteExpired', onInviteExpired);
       socket.off('inviteUndelivered', onInviteUndelivered);
       socket.off('sessionExpired', onSessionExpired);
     };
@@ -309,7 +289,6 @@ export default function SessionsPage() {
     isAuthenticated,
     loading,
     onConnect,
-    onReceiveInvite,
     onSessionScheduled,
     onSessionCreated,
     onSessionStarted,
@@ -320,8 +299,6 @@ export default function SessionsPage() {
     onUserLeftSession,
     onJoinError,
     onInviteAccepted,
-    onInviteDeclined,
-    onInviteExpired,
     onInviteUndelivered,
     onSessionExpired
   ]);
@@ -333,7 +310,6 @@ export default function SessionsPage() {
       setPendingInviteId(null);
       if (res?.ok) {
         setInvites((prev: Invite[]) => prev.filter((inv) => inv.id !== invite.id));
-        setNewInviteCount((c) => Math.max(0, c - 1));
         handleJoinSession(invite.id);
         openChat(invite.id, res.session || invite);
       } else {
@@ -346,7 +322,6 @@ export default function SessionsPage() {
     if (!socket || pendingInviteId === invite.id) return;
     socket.emit('declineInvite', { fromUserId: invite.from, sessionId: invite.id });
     setInvites((prev: Invite[]) => prev.filter((inv) => inv.id !== invite.id));
-    setNewInviteCount((c) => Math.max(0, c - 1));
   };
 
   useEffect(() => {
@@ -396,7 +371,7 @@ export default function SessionsPage() {
 
         {/* Sessions List */}
         <StudySessionsSection
-          newInviteCount={newInviteCount}
+          newInviteCount={invites.length}
           setCreateSessionOpen={setCreateSessionOpen}
           sessionsLoading={sessionsLoading}
           invites={invites}

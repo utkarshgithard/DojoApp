@@ -20,6 +20,11 @@
   animation: slideUp 0.3s ease-out;
 }
 
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-7px); }
+}
+
 @layer base {
   .theme { --font-heading: var(--font-sans); --font-sans: var(--font-sans);
   }

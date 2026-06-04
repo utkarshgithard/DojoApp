@@ -376,6 +376,25 @@ export default function SettingsPage() {
                       <span className="text-[13px] font-medium text-center">Dark Aesthetic</span>
                     </div>
                   </div>
+
+                  {/* Onboarding Tour Reset */}
+                  <div className="border-t border-gray-100 dark:border-gray-900 pt-6 mt-6">
+                    <h3 className="text-[14.5px] font-medium tracking-tight mb-1">Onboarding Guide</h3>
+                    <p className={`text-[12.5px] ${muted} mb-4`}>Replay the step-by-step interactive onboarding tour to learn how DojoClass functions.</p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        localStorage.setItem('dojo_onboarding_completed', 'false');
+                        toast.success('Onboarding tour reset! Redirecting to Dashboard...');
+                        setTimeout(() => {
+                          router.push('/dashboard');
+                        }, 1000);
+                      }}
+                      className={secondaryBtn}
+                    >
+                      Replay Onboarding Tour
+                    </button>
+                  </div>
                 </div>
               )}
 

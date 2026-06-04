@@ -11,7 +11,7 @@ const Ctx = createContext<AttendanceContextType | null>(null);
 export const useAttendance = () => useContext(Ctx);
 
 export const AttendanceProvider = ({ children }: { children: React.ReactNode }) => {
-  const socket = useSocket();
+  const socketContext = useSocket();
   const { isAuthenticated, loading } = useAuth();
   const [date, setDate] = useState(moment().format('YYYY-MM-DD'));
   const [unmarkedSubjects, setUnmarkedSubjects] = useState<Subject[]>([]);
@@ -217,14 +217,66 @@ export const AttendanceProvider = ({ children }: { children: React.ReactNode }) 
       fetchSummary();
       fetchSubjectStats();
       fetchCalendarData();
+      loadExistingInvites();
     }
-  }, [fetchSummary, fetchSubjectStats, fetchCalendarData, isAuthenticated, loading]);
+  }, [fetchSummary, fetchSubjectStats, fetchCalendarData, loadExistingInvites, isAuthenticated, loading]);
 
   useEffect(() => {
     if (isAuthenticated && !loading) {
       fetchFriends();
     }
   }, [fetchFriends, isAuthenticated, loading]);
+
+  // Set up real-time invite socket listeners
+  useEffect(() => {
+    const socketInstance = socketContext?.socket;
+    if (!socketInstance || !isAuthenticated || loading) return;
+
+    const onReceiveInvite = (inviteData: any) => {
+      setInvites((prev) => {
+        const exists = prev.some((i) => i.id === inviteData.id);
+        if (exists) return prev;
+
+        // Show HTML5 Notification if permitted
+        if (typeof window !== 'undefined' && Notification?.permission === 'granted') {
+          new Notification(`Study invite from ${inviteData.name}`, {
+            body: inviteData.subject || 'Join a study session',
+          });
+        }
+
+        // Display an elegant toast message
+        toast.info(`Study invite from ${inviteData.name}`, {
+          description: `Subject: ${inviteData.subject || 'No topic'}`,
+          action: {
+            label: 'View',
+            onClick: () => {
+              window.location.href = '/sessions';
+            }
+          }
+        });
+
+        return [inviteData, ...prev];
+      });
+    };
+
+    const onInviteDeclined = (data: any) => {
+      setInvites((prev) => prev.filter((inv) => inv.from !== data.by));
+    };
+
+    const onInviteExpired = (data: any) => {
+      setInvites((prev) => prev.filter((inv) => inv.id !== data.sessionId));
+    };
+
+    socketInstance.on('receiveInvite', onReceiveInvite);
+    socketInstance.on('inviteDeclined', onInviteDeclined);
+    socketInstance.on('inviteExpired', onInviteExpired);
+
+    return () => {
+      socketInstance.off('receiveInvite', onReceiveInvite);
+      socketInstance.off('inviteDeclined', onInviteDeclined);
+      socketInstance.off('inviteExpired', onInviteExpired);
+    };
+  }, [socketContext?.socket, isAuthenticated, loading]);
 
   return (
     <Ctx.Provider value={{
