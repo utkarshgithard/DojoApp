@@ -15,7 +15,6 @@ import {
   Flame, 
   AlertTriangle, 
   Check, 
-  BookOpen, 
   BarChart3, 
   UserCheck, 
   Sparkles,
@@ -313,7 +312,7 @@ export default function LandingPage() {
             </span>
           </nav>
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 md:gap-4">
             <button
               onClick={toggleDarkMode}
               aria-label={dark ? 'Switch to light mode' : 'Switch to dark mode'}
@@ -326,6 +325,19 @@ export default function LandingPage() {
               {dark ? <Sun size={17} /> : <Moon size={17} />}
             </button>
 
+            {/* Mobile-only compact auth button (sign up only) */}
+            <button 
+              onClick={() => router.push('/register')}
+              className={`md:hidden text-xs font-semibold px-3 py-1.5 rounded-full ${
+                dark 
+                  ? 'bg-zinc-100 text-zinc-950 hover:bg-white' 
+                  : 'bg-zinc-950 text-white hover:bg-zinc-800'
+              }`}
+            >
+              Sign up
+            </button>
+
+            {/* Desktop-only auth buttons */}
             <button 
               onClick={() => router.push('/login')}
               className={`hidden md:block text-sm font-medium transition-colors px-4 py-2 rounded-full border ${
@@ -352,7 +364,7 @@ export default function LandingPage() {
       </header>
 
       {/* Main Content */}
-      <main className="max-w-6xl mx-auto px-6 py-12 space-y-32">
+      <main className="max-w-6xl mx-auto px-4 sm:px-6 py-8 md:py-12 space-y-16 md:space-y-32">
         
         {/* Hero Section */}
         <section aria-label="Hero" className="pt-8 space-y-12">
@@ -747,7 +759,7 @@ export default function LandingPage() {
                     <img 
                       src="/edited-photo.png" 
                       alt="Student learning" 
-                      className="w-[200px] h-[200px] object-contain scale-[2.5] translate-y-5 select-none z-10"
+                      className="w-[200px] h-[200px] object-contain scale-[1.8] translate-y-4 select-none z-10"
                     />
                   </div>
                 </div>
@@ -832,7 +844,9 @@ export default function LandingPage() {
                         Join
                       </button>
                     </div>
-                              {/* Study Buddy Card */}
+                  </div>
+
+                  {/* Study Buddy Card */}
                   <div className={`p-4 rounded-xl border ${
                     dark ? 'bg-[#1a120b]/85 border-amber-500/30 shadow-lg shadow-amber-950/15' : 'bg-[#FFF3E0]/40 border-[#FFE0B2]/85'
                   }`}>
@@ -846,17 +860,17 @@ export default function LandingPage() {
                       </div>
                     </div>
  
-                    <div className={`mt-2.5 p-2 pb-12 rounded-xl border ${
+                    <div className={`mt-2.5 p-2 pb-6 rounded-xl border ${
                       dark ? 'bg-zinc-900/95 border-zinc-800' : 'bg-white border-[#EBEAE4]'
                     } shadow-sm`}>
                       <div className="flex items-center justify-between w-full">
                         <div className="flex flex-col items-center animate-float-you relative">
                           {chatStep % 2 === 0 && (
-                            <div className="absolute top-[34px] left-1/2 -translate-x-1/2 bg-[#ef4444] text-white text-[9.5px] font-bold px-2 py-0.75 rounded-md rounded-bl-none shadow-md shadow-rose-900/10 animate-check-pop whitespace-nowrap z-30">
+                            <div className="absolute top-[28px] left-1/2 -translate-x-1/2 bg-[#ef4444] text-white text-[8px] font-bold px-1.5 py-0.5 rounded-md rounded-bl-none shadow-md shadow-rose-900/10 animate-check-pop whitespace-nowrap z-30">
                               {chatMessages[chatStep].text}
                             </div>
                           )}
-                          <div className="w-5.5 h-5.5 rounded-full shadow-sm border border-rose-350/20 overflow-hidden">
+                          <div className="w-4 h-4 rounded-full shadow-sm border border-rose-350/20 overflow-hidden">
                             <svg className="w-full h-full" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
                               <defs>
                                 <linearGradient id="you-grad-mob" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -888,7 +902,7 @@ export default function LandingPage() {
                               {chatMessages[chatStep].text}
                             </div>
                           )}
-                          <div className="w-5.5 h-5.5 rounded-full shadow-sm border border-teal-355/20 overflow-hidden">
+                          <div className="w-4 h-4 rounded-full shadow-sm border border-teal-355/20 overflow-hidden">
                             <svg className="w-full h-full" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
                               <defs>
                                 <linearGradient id="ananya-grad-mob" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -958,14 +972,89 @@ export default function LandingPage() {
               </div>
             </div>
           </div>
-        </div>
-
-
 
         </section>
 
+        {/* ── App Summary / About Section ── */}
+        <section aria-label="About DojoClass" className="py-2">
+          <div className="text-center mb-8 space-y-2">
+            <span className={`text-xs font-bold uppercase tracking-widest ${dark ? 'text-zinc-500' : 'text-[#6A635B]'}`}>
+              WHAT IS DOJOCLASS?
+            </span>
+            <h2 className="text-2xl md:text-3xl font-bold font-serif tracking-tight">
+              Everything you need to stay on track.
+            </h2>
+            <p className={`text-sm leading-relaxed max-w-md mx-auto ${textMutedClass}`}>
+              DojoClass is a free, all-in-one academic companion built for college students — track attendance, plan your week, and study with friends.
+            </p>
+          </div>
+
+          {/* Cards with SVG curve connector */}
+          <div className="relative">
+            {/* Desktop: horizontal wavy dashed path connecting 4 cards */}
+            <svg
+              className="absolute inset-0 w-full h-full pointer-events-none z-0 hidden md:block"
+              viewBox="0 0 1000 160"
+              preserveAspectRatio="none"
+              fill="none"
+            >
+              <path
+                d="M 120 80 C 160 35, 205 125, 250 80 S 340 35, 380 80 S 470 125, 510 80 S 595 35, 630 80 S 720 125, 760 80 S 845 35, 880 80"
+                stroke={dark ? '#818cf8' : '#d1d5db'}
+                strokeWidth="1.8"
+                strokeDasharray="7 5"
+                strokeLinecap="round"
+                style={dark ? { filter: 'drop-shadow(0 0 7px rgba(129,140,248,0.85))' } : {}}
+              />
+            </svg>
+            {/* Mobile: zigzag dashed path connecting 2×2 grid */}
+            <svg
+              className="absolute inset-0 w-full h-full pointer-events-none z-0 md:hidden"
+              viewBox="0 0 200 200"
+              preserveAspectRatio="none"
+              fill="none"
+            >
+              <path
+                d="M 50 48 C 70 20, 130 20, 150 48 C 170 75, 170 90, 150 115 C 130 140, 70 140, 50 115 C 30 90, 30 140, 50 165 C 70 190, 130 190, 150 165"
+                stroke={dark ? '#818cf8' : '#d1d5db'}
+                strokeWidth="1.8"
+                strokeDasharray="6 4"
+                strokeLinecap="round"
+                style={dark ? { filter: 'drop-shadow(0 0 7px rgba(129,140,248,0.85))' } : {}}
+              />
+            </svg>
+
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 relative z-10">
+              {[
+                { icon: <UserCheck size={18} />, color: 'emerald', label: 'Attendance Tracker', desc: 'Mark & track per-subject attendance in real time. Know exactly how many classes you can skip.' },
+                { icon: <Calendar size={18} />, color: 'blue', label: 'Weekly Scheduler', desc: 'Set up your timetable once. DojoClass auto-predicts attendance for every future class.' },
+                { icon: <Users size={18} />, color: 'amber', label: 'Study Buddies', desc: 'Find accountability partners and build study streaks together with your classmates.' },
+                { icon: <Sparkles size={18} />, color: 'purple', label: 'Encrypted Rooms', desc: 'Host private, encrypted study sessions. Invite friends and study live, together.' },
+              ].map(({ icon, color, label, desc }) => (
+                <div
+                  key={label}
+                  className={`p-4 rounded-2xl border transition-all duration-300 hover:-translate-y-0.5 ${
+                    dark 
+                      ? 'bg-[#18181B] border-zinc-800 hover:shadow-[0_0_18px_rgba(129,140,248,0.15)]' 
+                      : 'bg-[#FAF9F5] border-[#EBEAE4] hover:shadow-md'
+                  }`}
+                >
+                  <div className={`w-8 h-8 rounded-xl flex items-center justify-center mb-3 ${
+                    color === 'emerald' ? 'bg-emerald-500/10 text-emerald-500' :
+                    color === 'blue'    ? 'bg-blue-500/10 text-blue-500' :
+                    color === 'amber'   ? 'bg-amber-500/10 text-amber-500' :
+                                         'bg-purple-500/10 text-purple-500'
+                  }`}>{icon}</div>
+                  <h3 className="text-[12px] md:text-[13px] font-bold leading-snug mb-1">{label}</h3>
+                  <p className={`text-[10px] md:text-[11px] leading-relaxed ${textMutedClass}`}>{desc}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
         {/* Feature Sections */}
-        <div id="features" className="space-y-36">
+        <div id="features" className="space-y-20 md:space-y-36">
 
           {/* 01 · Attendance Marking */}
           <section className="grid md:grid-cols-12 gap-8 items-center">
@@ -1491,7 +1580,7 @@ export default function LandingPage() {
       </main>
 
       {/* Footer */}
-      <footer className={`border-t mt-36 py-20 transition-all duration-500 relative overflow-hidden ${
+      <footer className={`border-t mt-16 md:mt-36 py-12 md:py-20 transition-all duration-500 relative overflow-hidden ${
         dark 
           ? 'bg-gradient-to-b from-[#09090B] to-[#030304] text-zinc-400 border-zinc-900' 
           : 'bg-gradient-to-b from-[#FAF9F5] to-[#F1EFEB] text-[#6A635B] border-[#EBEAE4]'
@@ -1524,6 +1613,8 @@ export default function LandingPage() {
                 Designed for students, by students.
               </p>
             </div>
+
+
           </div>
 
           {/* Column 2 - Core Features */}
