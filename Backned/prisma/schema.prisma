@@ -36,6 +36,7 @@ model User {
   participantIn       Participant[]
   messages            Message[]
   publicKey           UserPublicKey?
+  pushSubscriptions   PushSubscription[]
 }
 
 /// Stores the user's ECDH P-256 public key for E2EE room key distribution.
@@ -186,4 +187,17 @@ model Message {
 
   session StudySession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   user    User         @relation(fields: [userId], references: [id])
+}
+
+/// Browser Web Push subscription — one per browser/device per user.
+/// Deleted automatically when the user unsubscribes or the endpoint returns 410 Gone.
+model PushSubscription {
+  id        String   @id @default(uuid())
+  userId    String
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

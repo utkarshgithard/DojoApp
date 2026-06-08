@@ -6,8 +6,39 @@ import { Chart as ChartJS, ArcElement, Tooltip, Legend } from "chart.js";
 import { useAttendance } from "@/context/AttendanceContext";
 import { useDarkMode } from "@/context/DarkModeContext";
 import { SubjectStats as SubjectStat } from "@/lib/types";
+import { AlertTriangle, CheckCircle2, ShieldAlert, TrendingUp } from "lucide-react";
 
 ChartJS.register(ArcElement, Tooltip, Legend);
+
+/** Safe-zone threshold used across the entire feature */
+const SAFE_THRESHOLD = 0.80;
+
+/**
+ * How many more classes can a student miss before dropping below SAFE_THRESHOLD?
+ * Cancelled classes are excluded from the denominator — they are the teacher's
+ * cancellation and do not count against the student's attendance.
+ *
+ * Derivation:
+ *   attended / (countable + canMiss) >= SAFE_THRESHOLD
+ *   => canMiss = floor((attended - SAFE_THRESHOLD * countable) / SAFE_THRESHOLD)
+ *
+ * Returns a negative number when the student has already fallen below the threshold.
+ * The absolute value of a negative result = how many classes they must attend
+ * consecutively to recover above SAFE_THRESHOLD.
+ */
+function computeSafeZone(attended: number, missed: number) {
+  const countable = attended + missed; // cancelled excluded
+  if (countable === 0) return null;          // no data yet
+  if (countable <= 10) return null;          // too few classes — not meaningful yet
+  return Math.floor((attended - SAFE_THRESHOLD * countable) / SAFE_THRESHOLD);
+}
+
+/** Current attendance % excluding cancelled classes */
+function attendancePercent(attended: number, missed: number) {
+  const countable = attended + missed;
+  if (countable === 0) return null;
+  return Math.round((attended / countable) * 100);
+}
 
 const SubjectStatsChart = () => {
     const { subjectStats: stats } = useAttendance() as { subjectStats: SubjectStat[] };
@@ -66,6 +97,18 @@ const SubjectStatsChart = () => {
     const totalMissed = stats.reduce((total, s) => total + s.missed, 0);
     const totalCancelled = stats.reduce((total, s) => total + s.cancelled, 0);
 
+    // ── Safe-zone summary (most critical subject) ──────────────────────────────
+    const safeZoneData = stats.map((s) => ({
+      subject: s.subject,
+      canMiss: computeSafeZone(s.attended, s.missed),
+      pct: attendancePercent(s.attended, s.missed),
+    }));
+    // Pick the subject in the worst state (lowest canMiss)
+    const worstSubject = safeZoneData
+      .filter((s) => s.canMiss !== null)
+      .sort((a, b) => (a.canMiss as number) - (b.canMiss as number))[0] ?? null;
+    const overallSafe = worstSubject === null || (worstSubject.canMiss as number) >= 5;
+
     return (
         <div className="relative">
             <style>{`
@@ -102,6 +145,42 @@ const SubjectStatsChart = () => {
                 </button>
             </div>
 
+            {/* ── Overall Safe-Zone Alert Banner ──────────────────────────── */}
+            {worstSubject && (
+                <div className={`mb-5 flex items-start gap-3 px-4 py-3 rounded-xl border text-[12px] leading-relaxed ${
+                    (worstSubject.canMiss as number) < 0
+                        ? dark
+                            ? 'bg-red-950/20 border-red-500/30 text-red-300'
+                            : 'bg-red-50 border-red-200 text-red-700'
+                        : (worstSubject.canMiss as number) <= 2
+                        ? dark
+                            ? 'bg-amber-950/20 border-amber-500/30 text-amber-300'
+                            : 'bg-amber-50 border-amber-200 text-amber-700'
+                        : dark
+                            ? 'bg-emerald-950/20 border-emerald-500/30 text-emerald-300'
+                            : 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                }`}>
+                    <span className="mt-0.5 shrink-0">
+                        {(worstSubject.canMiss as number) < 0
+                            ? <ShieldAlert size={15} />
+                            : (worstSubject.canMiss as number) <= 2
+                            ? <AlertTriangle size={15} />
+                            : <CheckCircle2 size={15} />}
+                    </span>
+                    <span>
+                        {(worstSubject.canMiss as number) < 0 ? (
+                            <><strong>{worstSubject.subject}</strong> is below 80% — attend <strong>{Math.abs(worstSubject.canMiss as number)} more classes</strong> to recover.</>  
+                        ) : (worstSubject.canMiss as number) === 0 ? (
+                            <><strong>{worstSubject.subject}</strong> is at the limit — <strong>do not miss</strong> your next class.</>  
+                        ) : (worstSubject.canMiss as number) <= 2 ? (
+                            <><strong>{worstSubject.subject}</strong> is your tightest subject — only <strong>{worstSubject.canMiss} class{worstSubject.canMiss === 1 ? '' : 'es'} safe</strong> to miss.</>  
+                        ) : (
+                            <>You&apos;re safe! Worst subject is <strong>{worstSubject.subject}</strong> with <strong>{worstSubject.canMiss} classes</strong> left to spare.</>  
+                        )}
+                    </span>
+                </div>
+            )}
+
             {/* Total Metrics Dashboard Grid */}
             <div className={`grid grid-cols-3 border rounded-lg p-3 text-center mb-6 bg-transparent ${border}`}>
                 <div>
@@ -126,7 +205,10 @@ const SubjectStatsChart = () => {
             >
                 {stats.map((subject, idx) => {
                     const total = subject.attended + subject.missed + subject.cancelled;
-                    const attendedPercentage = total > 0 ? Math.round((subject.attended / total) * 100) : 0;
+                    // Percentage excludes cancelled (teacher's cancellation ≠ student absence)
+                    const attendedPercentage = attendancePercent(subject.attended, subject.missed) ?? 0;
+                    // Safe-zone: how many more classes can be missed before dropping below 83%
+                    const canMiss = computeSafeZone(subject.attended, subject.missed);
 
                     const data = {
                         labels: ["Attended", "Missed", "Cancelled"],
@@ -239,17 +321,51 @@ const SubjectStatsChart = () => {
                                 </div>
                             </div>
 
-                            {/* Minimal Clean Status Indicator */}
-                            <div className="mt-4 w-full">
+                            {/* ── Safe Zone Badge ──────────────────────────────────── */}
+                            <div className="mt-4 w-full space-y-2">
+                                {/* Attendance standing (uses 80% threshold) */}
                                 <div className={`text-center text-[11px] font-medium py-1 rounded border ${
                                     attendedPercentage >= 80 ? "border-green-500/20 text-green-500 bg-green-500/5" :
-                                    attendedPercentage >= 60 ? "border-amber-500/20 text-amber-500 bg-amber-500/5" :
+                                    attendedPercentage >= 65 ? "border-amber-500/20 text-amber-500 bg-amber-500/5" :
                                     "border-red-500/20 text-red-500 bg-red-500/5"
                                 }`}>
-                                    {attendedPercentage >= 80 ? "Excellent Standing" :
-                                     attendedPercentage >= 60 ? "Fair Standing" :
-                                     "Critical Warning"}
+                                    {attendedPercentage >= 80 ? "✓ Above 80% Safe Zone" :
+                                     attendedPercentage >= 65 ? "⚠ Approaching Limit" :
+                                     "✗ Below 80% Threshold"}
                                 </div>
+
+                                {/* Can-miss chip */}
+                                {canMiss !== null && (
+                                    <div className={`flex items-center justify-between px-3 py-2 rounded-lg border text-[11px] font-medium ${
+                                        canMiss < 0
+                                            ? dark
+                                                ? 'border-red-500/30 bg-red-950/20 text-red-400'
+                                                : 'border-red-200 bg-red-50 text-red-600'
+                                            : canMiss === 0
+                                            ? dark
+                                                ? 'border-orange-500/30 bg-orange-950/20 text-orange-400'
+                                                : 'border-orange-200 bg-orange-50 text-orange-600'
+                                            : canMiss <= 2
+                                            ? dark
+                                                ? 'border-amber-500/30 bg-amber-950/20 text-amber-400'
+                                                : 'border-amber-200 bg-amber-50 text-amber-600'
+                                            : dark
+                                                ? 'border-emerald-500/30 bg-emerald-950/20 text-emerald-400'
+                                                : 'border-emerald-200 bg-emerald-50 text-emerald-600'
+                                    }`}>
+                                        <span className="flex items-center gap-1.5">
+                                            <TrendingUp size={11} />
+                                            {canMiss < 0 ? 'Need to attend' : 'Safe to miss'}
+                                        </span>
+                                        <span className="font-bold font-mono text-[12px]">
+                                            {canMiss < 0
+                                                ? `${Math.abs(canMiss)} more class${Math.abs(canMiss) === 1 ? '' : 'es'}`
+                                                : canMiss === 0
+                                                ? 'None — at limit'
+                                                : `${canMiss} class${canMiss === 1 ? '' : 'es'}`}
+                                        </span>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     );

@@ -4,6 +4,7 @@ import "./globals.css";
 import ClientProviders from "@/components/ClientProviders";
 import { cn } from "@/lib/utils";
 import JsonLd from "@/components/JsonLd";
+import ServiceWorkerRegistrar from "@/components/ServiceWorkerRegistrar";
 
 const geist = Geist({ subsets: ["latin"], variable: "--font-sans" });
 const playfair = Playfair_Display({
@@ -94,6 +95,7 @@ export default function RootLayout({
         <meta name="google-site-verification" content="MH-qCpIalYR4S1flnD1CRaPx_tUMSziNE9Y6cLpgdnI" />
       </head>
       <body className={inter.className}>
+        <ServiceWorkerRegistrar />
         <JsonLd />
         <ClientProviders>
           {children}
@@ -102,4 +104,3 @@ export default function RootLayout({
     </html>
   );
 }
-

@@ -3,6 +3,8 @@ import prisma from '../lib/prisma.js';
 import { SessionStatus } from '@prisma/client';
 import { AuthenticatedRequest } from '../middleware/authmiddleware.js';
 import { Server as SocketServer } from 'socket.io';
+import { sendPushToUser } from '../utils/pushService.js';
+import { cacheGet, cacheSet, cacheDel } from '../lib/redis.js';
 
 function getIO(req: AuthenticatedRequest): SocketServer {
   return req.app.get('io') as SocketServer;
@@ -88,6 +90,13 @@ export async function createSession(req: AuthenticatedRequest, res: Response): P
       participants: doc.participants,
       status: doc.status,
     });
+
+    // 🔔 Deliver via Web Push
+    sendPushToUser(String(friendId), {
+      title: '📚 Study Invite from ' + (req.user?.name || 'A friend'),
+      body:  `${req.user?.name || 'A friend'} invited you to study: ${doc.subject}`,
+      url:   '/sessions',
+    }).catch((err) => console.error('push createSession invite error:', err));
   });
 
   // Emit to creator
@@ -96,19 +105,25 @@ export async function createSession(req: AuthenticatedRequest, res: Response): P
   res.status(201).json(doc);
 }
 
-// GET /api/study-session/mine?status=active
+// GET /api/study-session/mine
 export async function getMySessions(req: AuthenticatedRequest, res: Response): Promise<void> {
   try {
     const userId = req.userId!;
     const { status } = req.query as { status?: string };
 
-    // When status=active, only return sessions that are still relevant
+    // Default to active statuses (scheduled, pending, in_progress) unless status is explicitly 'all'
     const activeStatuses: SessionStatus[] = [
       SessionStatus.scheduled,
       SessionStatus.pending,
       SessionStatus.in_progress,
     ];
-    const statusFilter = status === 'active' ? { status: { in: activeStatuses } } : {};
+
+    let statusFilter = {};
+    if (status === 'active' || !status) {
+      statusFilter = { status: { in: activeStatuses } };
+    } else if (status !== 'all') {
+      statusFilter = { status: status as SessionStatus };
+    }
 
     const sessions = await prisma.studySession.findMany({
       where: {
@@ -235,6 +250,7 @@ export async function respondInvite(req: AuthenticatedRequest, res: Response): P
       });
     }
 
+    await cacheDel(`session:${id}`);
     io.to(userId).emit('session:updated', session);
     res.json({ ok: true, session });
   } catch (error) {
@@ -270,9 +286,58 @@ export async function cancelSession(req: AuthenticatedRequest, res: Response): P
       io.to(uid).emit('session:cancelled', { sessionId: id, sessionDetails: updated });
     });
 
+    await cacheDel(`session:${id}`);
     res.json({ ok: true, session: updated });
   } catch (error) {
     console.error('Error cancelling session:', error);
     res.status(500).json({ error: 'Failed to cancel session' });
+  }
+}
+
+// GET /api/study-session/:id
+export async function getSessionById(req: AuthenticatedRequest, res: Response): Promise<void> {
+  try {
+    const id = req.params['id'] as string;
+    const userId = req.userId!;
+    const cacheKey = `session:${id}`;
+
+    let session: any = null;
+    const cachedSession = await cacheGet(cacheKey);
+
+    if (cachedSession) {
+      session = JSON.parse(cachedSession);
+    } else {
+      session = await prisma.studySession.findUnique({
+        where: { id },
+        include: {
+          creator: { select: { id: true, name: true, email: true } },
+          participants: { include: { user: { select: { id: true, name: true, email: true, avatarUrl: true } } } },
+        },
+      });
+
+      if (session) {
+        // Cache for 24 hours
+        await cacheSet(cacheKey, JSON.stringify(session), 86400);
+      }
+    }
+
+    if (!session) {
+      res.status(404).json({ message: 'Session not found' });
+      return;
+    }
+
+    // Security check: only allow creator or participants to view the session details
+    const isCreator = session.creatorId === userId;
+    const isParticipant = session.participants.some((p: any) => (p.userId || p.user?.id) === userId);
+
+    if (!isCreator && !isParticipant) {
+      res.status(403).json({ message: 'Access denied: not a participant of this study session' });
+      return;
+    }
+
+    res.json(session);
+  } catch (error) {
+    console.error('Error fetching session by ID:', error);
+    res.status(500).json({ error: 'Failed to fetch session details' });
   }
 }

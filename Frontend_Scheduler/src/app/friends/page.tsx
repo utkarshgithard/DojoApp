@@ -92,8 +92,10 @@ export default function FriendsPage() {
     <div className={`min-h-screen transition-colors duration-300 pt-[96px] md:pt-[24px] pb-16 ${dark ? 'bg-black text-white' : 'bg-white text-gray-900'}`}>
       <div className="max-w-[750px] w-full mx-auto px-5">
         
-        {/* Page Header */}
-        <div className="mb-8 border-b pb-5 border-gray-100 dark:border-gray-900">
+        {/* Page Header — sticky */}
+        <div className={`sticky top-0 z-20 -mx-5 px-5 py-4 mb-8 backdrop-blur-md border-b ${
+          dark ? 'bg-black/80 border-gray-800/60' : 'bg-white/80 border-gray-200/60'
+        }`}>
           <p className={`text-[11px] uppercase tracking-widest ${muted} mb-1 flex items-center gap-1.5`}>
             <UserPlus size={12} />
             <span>Connections</span>

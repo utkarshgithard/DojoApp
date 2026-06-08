@@ -12,6 +12,11 @@ scheduleRouter.post('/', verifyToken, async (req: AuthenticatedRequest, res: Res
     };
     const userId = req.userId!;
 
+    if (!req.user) {
+      res.status(401).json({ message: 'User profile not found. Please sync your account.' });
+      return;
+    }
+
     if (!weeklySchedule || typeof weeklySchedule !== 'object') {
       res.status(400).json({ message: 'Invalid or missing schedule' });
       return;

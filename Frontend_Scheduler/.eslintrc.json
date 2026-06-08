@@ -2,7 +2,7 @@
   "extends": "next/core-web-vitals",
   "overrides": [
     {
-      "files": ["*.config.js", "*.config.mjs", "tailwind.config.js"],
+      "files": ["*.config.js", "*.config.mjs", "tailwind.config.js", "public/**/*.js"],
       "parser": "espree",
       "parserOptions": {
         "ecmaVersion": 2022,

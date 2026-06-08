@@ -3,6 +3,7 @@
 import React from 'react';
 import SessionStatus from '@/components/SessionStatus';
 import { DashboardInvite as Invite, StudySession as Session } from '@/lib/types';
+import { Loader2 } from 'lucide-react';
 
 interface StudySessionsSectionProps {
   newInviteCount: number;
@@ -130,14 +131,21 @@ export default function StudySessionsSection({
               <div className="flex gap-2">
                 <button
                   onClick={() => handleAcceptInvite(invite)}
-                  disabled={pendingInviteId === invite.id}
-                  className={primaryBtn}
+                  disabled={pendingInviteId !== null}
+                  className={`${primaryBtn} flex items-center justify-center gap-1.5`}
                 >
-                  {pendingInviteId === invite.id ? '...' : 'Accept'}
+                  {pendingInviteId === invite.id ? (
+                    <>
+                      <Loader2 size={13} className="animate-spin" />
+                      Accepting...
+                    </>
+                  ) : (
+                    'Accept'
+                  )}
                 </button>
                 <button
                   onClick={() => handleDeclineInvite(invite)}
-                  disabled={pendingInviteId === invite.id}
+                  disabled={pendingInviteId !== null}
                   className={secondaryBtn}
                 >
                   Decline
@@ -244,7 +252,7 @@ export default function StudySessionsSection({
                         onClick={() => handleJoinSession(sessionId)}
                         className={primaryBtn}
                       >
-                        Join Session
+                        Join Chat
                       </button>
                     )}
                     {isJoined && (
@@ -253,7 +261,7 @@ export default function StudySessionsSection({
                           onClick={() => openChat(sessionId, session)}
                           className={primaryBtn}
                         >
-                          Open Chat Room
+                          Return to Chat
                         </button>
                       </>
                     )}

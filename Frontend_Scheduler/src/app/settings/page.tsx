@@ -5,19 +5,32 @@ import { useRouter } from 'next/navigation';
 import React, { useEffect, useState, useRef } from "react";
 import API from "@/lib/axios";
 import { useDarkMode } from '@/context/DarkModeContext';
-import { User, Palette, Copy, Check, Settings, Mail, BookOpen, Camera } from 'lucide-react';
+import { User, Palette, Copy, Check, Settings, Mail, BookOpen, Camera, Bell, BellOff, BellRing } from 'lucide-react';
 import { toast } from 'sonner';
 import { auth } from '@/lib/firebase';
+import {
+  isPushSupported,
+  isPushSubscribed,
+  subscribeToPush,
+  unsubscribeFromPush,
+  getNotificationPermission,
+} from '@/lib/webPush';
 
 export default function SettingsPage() {
   const router = useRouter();
-  const { isAuthenticated, loading: authLoading, setUserName, userDetails, profileLoading, setUserDetails } = useAuth();
+  const { isAuthenticated, loading: authLoading, setUserName, userDetails, profileLoading, setUserDetails, token } = useAuth() as any;
   const [details, setDetails] = useState<any>({});
   const { darkMode, toggleDarkMode } = useDarkMode() as any;
   const [activeTab, setActiveTab] = useState('profile');
   const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // ── Notification state ───────────────────────────────────────────────────
+  const [pushSupported, setPushSupported] = useState(false);
+  const [pushSubscribed, setPushSubscribed] = useState(false);
+  const [pushPermission, setPushPermission] = useState<string>('default');
+  const [pushLoading, setPushLoading] = useState(false);
 
   const [userData, setUserData] = useState({
     name: '',
@@ -40,6 +53,14 @@ export default function SettingsPage() {
       });
     }
   }, [userDetails]);
+
+  // ── Detect push support & current subscription state ─────────────────────
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    setPushSupported(isPushSupported());
+    setPushPermission(getNotificationPermission());
+    isPushSubscribed().then(setPushSubscribed);
+  }, []);
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
@@ -125,6 +146,42 @@ export default function SettingsPage() {
       : 'border-gray-200 text-gray-700 hover:bg-gray-50 active:bg-gray-100'
     } disabled:opacity-40`;
 
+  const tabs = [
+    { id: 'profile',       label: 'Profile Settings', icon: <User size={14} /> },
+    { id: 'appearance',    label: 'Theme Styling',    icon: <Palette size={14} /> },
+    { id: 'notifications', label: 'Notifications',    icon: <Bell size={14} /> },
+  ];
+
+  const handleTogglePush = async () => {
+    if (!token) { toast.error('You must be logged in.'); return; }
+    setPushLoading(true);
+    try {
+      if (pushSubscribed) {
+        const ok = await unsubscribeFromPush(token);
+        if (ok) {
+          setPushSubscribed(false);
+          setPushPermission(getNotificationPermission());
+          toast.success('Push notifications disabled.');
+        } else {
+          toast.error('Could not disable notifications. Please try again.');
+        }
+      } else {
+        const ok = await subscribeToPush(token);
+        if (ok) {
+          setPushSubscribed(true);
+          setPushPermission(getNotificationPermission());
+          toast.success('🔔 Push notifications enabled!');
+        } else if (getNotificationPermission() === 'denied') {
+          toast.error('Permission blocked. Please allow notifications in your browser settings.');
+        } else {
+          toast.error('Could not enable notifications. Please try again.');
+        }
+      }
+    } finally {
+      setPushLoading(false);
+    }
+  };
+
   if (authLoading) {
     return (
       <div className={`min-h-screen flex justify-center items-center transition-colors duration-300 ${dark ? 'bg-black text-white' : 'bg-white text-gray-900'}`}>
@@ -151,10 +208,7 @@ export default function SettingsPage() {
           {/* Settings Sidebar */}
           <div className="w-full md:w-56 flex-shrink-0">
             <div className={`${cardClass} p-3 space-y-1`}>
-              {[
-                { id: 'profile', label: 'Profile Settings', icon: <User size={14} /> },
-                { id: 'appearance', label: 'Theme Styling', icon: <Palette size={14} /> }
-              ].map((item) => (
+              {tabs.map((item) => (
                 <button
                   key={item.id}
                   onClick={() => setActiveTab(item.id)}
@@ -395,6 +449,87 @@ export default function SettingsPage() {
                       Replay Onboarding Tour
                     </button>
                   </div>
+                </div>
+              )}
+
+              {activeTab === 'notifications' && (
+                <div className="space-y-6">
+                  <div>
+                    <h2 className="text-[15px] font-medium tracking-tight">Push Notifications</h2>
+                    <p className={`text-[12.5px] ${muted} mt-0.5`}>Get notified about study invites and live sessions even when DojoClass is closed.</p>
+                  </div>
+
+                  {!pushSupported ? (
+                    <div className={`p-4 rounded-xl border text-[13px] ${dark ? 'border-gray-800 bg-gray-950/30 text-gray-400' : 'border-gray-200 bg-gray-50 text-gray-500'}`}>
+                      Your browser does not support Web Push notifications. Try Chrome, Edge, or Firefox on desktop.
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {/* Toggle card */}
+                      <div className={`flex items-center justify-between p-4 rounded-xl border ${dark ? 'border-gray-800 bg-gray-950/20' : 'border-gray-200 bg-gray-50/50'}`}>
+                        <div className="flex items-center gap-3">
+                          <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${
+                            pushSubscribed
+                              ? dark ? 'bg-emerald-950/40 text-emerald-400' : 'bg-emerald-50 text-emerald-600'
+                              : dark ? 'bg-gray-900 text-gray-500' : 'bg-gray-100 text-gray-400'
+                          }`}>
+                            {pushSubscribed ? <BellRing size={16} /> : <BellOff size={16} />}
+                          </div>
+                          <div>
+                            <p className="text-[13px] font-medium">{pushSubscribed ? 'Notifications On' : 'Notifications Off'}</p>
+                            <p className={`text-[11px] ${muted}`}>
+                              Permission: <span className={`font-semibold ${
+                                pushPermission === 'granted' ? 'text-emerald-500'
+                                : pushPermission === 'denied' ? 'text-red-500'
+                                : dark ? 'text-gray-300' : 'text-gray-600'
+                              }`}>{pushPermission === 'granted' ? 'Granted' : pushPermission === 'denied' ? 'Blocked' : 'Not yet asked'}</span>
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Toggle switch */}
+                        <button
+                          id="push-toggle-btn"
+                          onClick={handleTogglePush}
+                          disabled={pushLoading || pushPermission === 'denied'}
+                          aria-label={pushSubscribed ? 'Disable push notifications' : 'Enable push notifications'}
+                          className={`relative w-11 h-6 rounded-full border-2 transition-all duration-300 focus:outline-none disabled:opacity-40 ${
+                            pushSubscribed
+                              ? 'bg-emerald-500 border-emerald-500'
+                              : dark ? 'bg-gray-800 border-gray-700' : 'bg-gray-200 border-gray-300'
+                          }`}
+                        >
+                          <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform duration-300 ${
+                            pushSubscribed ? 'translate-x-5' : 'translate-x-0'
+                          }`} />
+                        </button>
+                      </div>
+
+                      {/* Blocked warning */}
+                      {pushPermission === 'denied' && (
+                        <div className={`p-3.5 rounded-xl border text-[12px] leading-relaxed ${
+                          dark ? 'border-red-500/30 bg-red-950/20 text-red-300' : 'border-red-200 bg-red-50 text-red-700'
+                        }`}>
+                          <p className="font-semibold mb-0.5">Notifications are blocked in your browser.</p>
+                          <p>To re-enable: click the 🔒 icon in your browser address bar → Notifications → Allow.</p>
+                        </div>
+                      )}
+
+                      {/* What you'll receive */}
+                      <div className={`p-4 rounded-xl border space-y-2.5 ${dark ? 'border-gray-800' : 'border-gray-200'}`}>
+                        <p className={`text-[11px] uppercase tracking-wider font-semibold ${muted}`}>You will be notified when</p>
+                        {[
+                          { icon: '📩', label: 'A friend invites you to a study session' },
+                          { icon: '▶️', label: 'A study session you joined goes live' },
+                        ].map(({ icon, label }) => (
+                          <div key={label} className={`flex items-center gap-2.5 text-[12.5px] ${dark ? 'text-gray-300' : 'text-gray-600'}`}>
+                            <span>{icon}</span>
+                            <span>{label}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 

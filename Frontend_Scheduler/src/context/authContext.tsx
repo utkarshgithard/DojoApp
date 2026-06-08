@@ -22,10 +22,16 @@ const AuthProvider = (props: { children: React.ReactNode }) => {
   useEffect(() => {
     const unsubscribe = onIdTokenChanged(auth, async (user) => {
       if (user) {
-        const newToken = await user.getIdToken();
-        setToken(newToken);
-        setUserId(user.uid);
-        localStorage.setItem('token', newToken);
+        try {
+          const newToken = await user.getIdToken();
+          setToken(newToken);
+          setUserId(user.uid);
+          localStorage.setItem('token', newToken);
+        } catch (error) {
+          console.error("Firebase ID Token refresh error:", error);
+          // If network fails, don't necessarily wipe out existing token state. 
+          // They might just be offline temporarily.
+        }
       } else {
         setToken(null);
         setUserId(null);

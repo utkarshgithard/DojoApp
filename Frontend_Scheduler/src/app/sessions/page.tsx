@@ -22,7 +22,7 @@ export default function SessionsPage() {
 
   const [createSessionOpen, setCreateSessionOpen] = useState(false);
   const [pendingInviteId, setPendingInviteId] = useState<string | null>(null);
-  const [sessionsLoading, setSessionsLoading] = useState(!sessionsLoaded);
+  const sessionsLoading = !sessionsLoaded;
   const [sessionEndConfirm, setSessionEndConfirm] = useState<{ sessionId: string } | null>(null);
   
   const sessionsLoadedRef = useRef(sessionsLoaded);
@@ -43,14 +43,12 @@ export default function SessionsPage() {
   const closeCreateSession = useCallback(() => setCreateSessionOpen(false), []);
 
   const handleJoinSession = useCallback((sessionId: string) => {
-    if (!socket || !sessionId) return;
-    socket.emit('joinSession', { sessionId });
-    setJoinedSessions((prev: Set<string>) => {
-      const next = new Set([...prev, sessionId]);
-      localStorage.setItem('joinedSessions', JSON.stringify([...next]));
-      return next;
-    });
-  }, [socket, setJoinedSessions]);
+    if (!sessionId) return;
+    // Navigate directly to chat — the chat page's doJoin handles the socket join
+    // This removes the two-step "Join → Open Chat" flow
+    router.push(`/session/${sessionId}/chat`);
+  }, [router]);
+
 
   const handleLeaveSession = useCallback((sessionId: string) => {
     if (!socket || !sessionId) return;
@@ -63,25 +61,6 @@ export default function SessionsPage() {
     });
   }, [socket, setJoinedSessions]);
 
-  const loadExistingSessions = useCallback(async (signal?: AbortSignal) => {
-    if (!sessionsLoadedRef.current) {
-      setSessionsLoading(true);
-    }
-    try {
-      const response = await API.get('/study-session/mine?status=active', { signal });
-      if (!signal?.aborted) {
-        setSessions(response.data);
-        setSessionsLoaded(true);
-      }
-    } catch (error: any) {
-      if (error.name !== 'CanceledError' && error.name !== 'AbortError') {
-        console.error('Error loading existing sessions:', error);
-      }
-    } finally {
-      if (!signal?.aborted) setSessionsLoading(false);
-    }
-  }, [setSessions, setSessionsLoaded]);
-
   const activeSessions: Session[] = (sessions as Session[]).filter(
     (s) => s.status === 'scheduled' || s.status === 'in_progress'
   );
@@ -92,14 +71,9 @@ export default function SessionsPage() {
   const onConnect = useCallback(async () => {
     if (!socket) return;
     try {
-      const response = await API.get('/study-session/mine?status=active');
-      setSessions(response.data);
-
       const saved = localStorage.getItem('joinedSessions');
       if (saved) {
         const ids: string[] = JSON.parse(saved);
-        const activeIds = new Set(ids);
-        setJoinedSessions(activeIds);
         ids.forEach((sessionId) => {
           socket.emit('joinSession', { sessionId });
         });
@@ -107,110 +81,24 @@ export default function SessionsPage() {
     } catch (err) {
       console.error('Reconnect session restore failed:', err);
     }
-  }, [socket, setSessions, setJoinedSessions]);
-
-  // Removed duplicate onReceiveInvite (now handled globally in AttendanceContext.tsx)
-
-  const onSessionScheduled = useCallback((data: any) => {
-    setSessions((prev: Session[]) => {
-      const exists = prev.find((s) => s.id === data.sessionId);
-      return exists
-        ? prev.map((s) => (s.id === data.sessionId ? data.sessionDetails : s))
-        : [...prev, data.sessionDetails];
-    });
-  }, [setSessions]);
+  }, [socket]);
 
   const onSessionCreated = useCallback((data: any) => {
-    setSessions((prev: Session[]) => {
-      const exists = prev.find((s) => s.id === data.sessionId);
-      return exists ? prev : [...prev, data.sessionDetails];
-    });
     closeCreateSession();
-  }, [setSessions, closeCreateSession]);
-
-  const onSessionStarted = useCallback((data: any) => {
-    setSessions((prev: Session[]) =>
-      prev.map((s) => (s.id === data.sessionId ? { ...s, status: 'in_progress' } : s))
-    );
-  }, [setSessions]);
-
-  const onSessionJoined = useCallback((data: any) => {
-    setJoinedSessions((prev: Set<string>) => {
-      const next = new Set([...prev, data.sessionId]);
-      localStorage.setItem('joinedSessions', JSON.stringify([...next]));
-      return next;
-    });
-    setSessions((prev: Session[]) =>
-      prev.map((s) => (s.id === data.sessionId ? data.sessionDetails : s))
-    );
-  }, [setJoinedSessions, setSessions]);
-
-  const onSessionLeft = useCallback((data: any) => {
-    setJoinedSessions((prev: Set<string>) => {
-      const next = new Set(prev);
-      next.delete(data.sessionId);
-      localStorage.setItem('joinedSessions', JSON.stringify([...next]));
-      return next;
-    });
-  }, [setJoinedSessions]);
+  }, [closeCreateSession]);
 
   const onSessionEnded = useCallback((data: any) => {
-    setSessions((prev: Session[]) =>
-      prev.map((s) => (s.id === data.sessionId ? { ...s, status: 'completed' } : s))
-    );
-    setJoinedSessions((prev: Set<string>) => {
-      const next = new Set(prev);
-      next.delete(data.sessionId);
-      localStorage.setItem('joinedSessions', JSON.stringify([...next]));
-      return next;
-    });
     toast.info(data.endedBy ? `${data.endedBy} ended the session.` : 'The study session has ended.');
-  }, [setSessions, setJoinedSessions]);
-
-  const onUserJoinedSession = useCallback((data: any) => {
-    setSessions((prev: Session[]) =>
-      prev.map((session) =>
-        session.id === data.sessionId
-          ? {
-            ...session,
-            participants: session.participants?.map((p) =>
-              (p.userId || p.user?.id) === data.userId ? { ...p, status: 'joined' } : p
-            ),
-          }
-          : session
-      )
-    );
-  }, [setSessions]);
-
-  const onUserLeftSession = useCallback((data: any) => {
-    setSessions((prev: Session[]) =>
-      prev.map((session) =>
-        session.id === data.sessionId
-          ? {
-            ...session,
-            participants: session.participants?.map((p) =>
-              (p.userId || p.user?.id) === data.userId ? { ...p, status: 'accepted' } : p
-            ),
-          }
-          : session
-      )
-    );
-  }, [setSessions]);
+  }, []);
 
   const onJoinError = useCallback((data: any) => {
     toast.error(`Could not join session: ${data.message}`);
   }, []);
 
   const onInviteAccepted = useCallback((data: any) => {
-    setSessions((prev: Session[]) => {
-      const exists = prev.find((s) => s.id === data.sessionId);
-      return exists
-        ? prev.map((s) => (s.id === data.sessionId ? data.sessionDetails : s))
-        : [...prev, data.sessionDetails];
-    });
     handleJoinSession(data.sessionId);
     openChat(data.sessionId, data.sessionDetails);
-  }, [setSessions, handleJoinSession, openChat]);
+  }, [handleJoinSession, openChat]);
 
   const onInviteDeclined = useCallback((data: any) => {
     setInvites((prev: Invite[]) => prev.filter((inv) => inv.from !== data.by));
@@ -226,17 +114,10 @@ export default function SessionsPage() {
     toast.info("Friend is offline. They'll see the invite when they reconnect.");
   }, []);
 
-  const onSessionExpired = useCallback((data: any) => {
-    setSessions((prev: Session[]) =>
-      prev.map((s) => (s.id === data.sessionId ? data.sessionDetails : s))
-    );
-  }, [setSessions]);
-
   useEffect(() => {
     if (loading || !isAuthenticated) return;
     const controller = new AbortController();
     loadExistingInvites(controller.signal);
-    loadExistingSessions(controller.signal);
 
     const saved = localStorage.getItem('joinedSessions');
     if (saved) {
@@ -250,57 +131,36 @@ export default function SessionsPage() {
     return () => {
       controller.abort();
     };
-  }, [isAuthenticated, loading, loadExistingInvites, loadExistingSessions, setJoinedSessions]);
+  }, [isAuthenticated, loading, loadExistingInvites, setJoinedSessions]);
 
   useEffect(() => {
     if (loading || !isAuthenticated || !socket) return;
 
     socket.on('connect', onConnect);
-    socket.on('sessionScheduled', onSessionScheduled);
     socket.on('sessionCreated', onSessionCreated);
-    socket.on('sessionStarted', onSessionStarted);
-    socket.on('sessionJoined', onSessionJoined);
-    socket.on('sessionLeft', onSessionLeft);
     socket.on('sessionEnded', onSessionEnded);
-    socket.on('userJoinedSession', onUserJoinedSession);
-    socket.on('userLeftSession', onUserLeftSession);
     socket.on('joinError', onJoinError);
     socket.on('inviteAccepted', onInviteAccepted);
     socket.on('inviteUndelivered', onInviteUndelivered);
-    socket.on('sessionExpired', onSessionExpired);
 
     return () => {
       socket.off('connect', onConnect);
-      socket.off('sessionScheduled', onSessionScheduled);
       socket.off('sessionCreated', onSessionCreated);
-      socket.off('sessionStarted', onSessionStarted);
-      socket.off('sessionJoined', onSessionJoined);
-      socket.off('sessionLeft', onSessionLeft);
       socket.off('sessionEnded', onSessionEnded);
-      socket.off('userJoinedSession', onUserJoinedSession);
-      socket.off('userLeftSession', onUserLeftSession);
       socket.off('joinError', onJoinError);
       socket.off('inviteAccepted', onInviteAccepted);
       socket.off('inviteUndelivered', onInviteUndelivered);
-      socket.off('sessionExpired', onSessionExpired);
     };
   }, [
     socket,
     isAuthenticated,
     loading,
     onConnect,
-    onSessionScheduled,
     onSessionCreated,
-    onSessionStarted,
-    onSessionJoined,
-    onSessionLeft,
     onSessionEnded,
-    onUserJoinedSession,
-    onUserLeftSession,
     onJoinError,
     onInviteAccepted,
-    onInviteUndelivered,
-    onSessionExpired
+    onInviteUndelivered
   ]);
 
   const handleAcceptInvite = (invite: Invite) => {
@@ -359,8 +219,10 @@ export default function SessionsPage() {
     <div className={`min-h-screen transition-colors duration-300 pt-[96px] md:pt-[24px] pb-16 ${dark ? 'bg-black text-white' : 'bg-white text-gray-900'}`}>
       <div className="max-w-[750px] w-full mx-auto px-5">
         
-        {/* Page Header */}
-        <div className="mb-8 border-b pb-5 border-gray-100 dark:border-gray-900">
+        {/* Page Header — sticky */}
+        <div className={`sticky top-0 z-20 -mx-5 px-5 py-4 mb-8 backdrop-blur-md border-b ${
+          dark ? 'bg-black/80 border-gray-800/60' : 'bg-white/80 border-gray-200/60'
+        }`}>
           <p className={`text-[11px] uppercase tracking-widest ${muted} mb-1 flex items-center gap-1.5`}>
             <Users size={12} />
             <span>Study Rooms</span>

@@ -13,21 +13,19 @@ const firebaseReady: Promise<void> = new Promise((resolve) => {
   });
 });
 
-// Add token to every request — wait for Firebase to be ready first
+// Add token to every request — try cached token first to avoid blocking on Firebase
 API.interceptors.request.use(async (req) => {
   if (typeof window !== 'undefined') {
-    // Block the request until Firebase has finished initializing
-    await firebaseReady;
-
-    const currentUser = auth.currentUser;
-    if (currentUser) {
-      // Always get a fresh (non-expired) token before each request
-      const token = await currentUser.getIdToken();
-      localStorage.setItem('token', token);
-      req.headers.Authorization = token;
+    const cachedToken = localStorage.getItem('token');
+    if (cachedToken) {
+      req.headers.Authorization = cachedToken;
     } else {
-      const token = localStorage.getItem('token');
-      if (token) {
+      // No cached token, block the request until Firebase has finished initializing
+      await firebaseReady;
+      const currentUser = auth.currentUser;
+      if (currentUser) {
+        const token = await currentUser.getIdToken();
+        localStorage.setItem('token', token);
         req.headers.Authorization = token;
       }
     }
@@ -43,6 +41,8 @@ API.interceptors.response.use(
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
       try {
+        // Wait for Firebase to be ready before calling auth.currentUser
+        await firebaseReady;
         const currentUser = auth.currentUser;
         if (currentUser) {
           console.log('🔄 Axios Interceptor: Token expired (401). Refreshing ID token...');

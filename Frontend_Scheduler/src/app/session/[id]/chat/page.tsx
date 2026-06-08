@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback, useContext } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, useCallback, useContext } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useSocket } from "@/context/SocketContext";
 import { useAuth } from "@/context/authContext";
@@ -23,6 +23,7 @@ import {
   FileText,
   X,
   Image as ImageIcon,
+  StopCircle,
 } from "lucide-react";
 import { useE2EE } from "@/context/E2EEContext";
 import { auth } from "@/lib/firebase";
@@ -206,6 +207,7 @@ function CountdownWidget({
   isCreator,
   dark,
   onAddFiveMinutes,
+  extendingMins,
 }: {
   secs: number;
   isOvertime: boolean;
@@ -213,6 +215,7 @@ function CountdownWidget({
   isCreator: boolean;
   dark: boolean;
   onAddFiveMinutes: (mins: number) => void;
+  extendingMins: number | null;
 }) {
   const absSecs = Math.abs(secs);
   const h = Math.floor(absSecs / 3600);
@@ -280,21 +283,39 @@ function CountdownWidget({
           <div className="grid grid-cols-2 gap-1.5">
             <button
               onClick={() => onAddFiveMinutes(5)}
+              disabled={extendingMins !== null}
               className={`py-1.5 rounded-lg text-[11px] font-semibold border transition-all active:scale-95 flex items-center justify-center gap-1
                 ${dark 
                   ? "border-zinc-800 text-zinc-300 bg-zinc-900 hover:bg-zinc-850 hover:text-white" 
-                  : "border-gray-200 text-gray-700 bg-white hover:bg-gray-50 hover:text-black"}`}
+                  : "border-gray-200 text-gray-700 bg-white hover:bg-gray-50 hover:text-black"}
+                disabled:opacity-50 disabled:cursor-not-allowed`}
             >
-              +5 Min
+              {extendingMins === 5 ? (
+                <>
+                  <Loader2 size={11} className="animate-spin" />
+                  Adding...
+                </>
+              ) : (
+                "+5 Min"
+              )}
             </button>
             <button
               onClick={() => onAddFiveMinutes(15)}
+              disabled={extendingMins !== null}
               className={`py-1.5 rounded-lg text-[11px] font-semibold border transition-all active:scale-95 flex items-center justify-center gap-1
                 ${dark 
                   ? "border-zinc-800 text-zinc-300 bg-zinc-900 hover:bg-zinc-850 hover:text-white" 
-                  : "border-gray-200 text-gray-700 bg-white hover:bg-gray-50 hover:text-black"}`}
+                  : "border-gray-200 text-gray-700 bg-white hover:bg-gray-50 hover:text-black"}
+                disabled:opacity-50 disabled:cursor-not-allowed`}
             >
-              +15 Min
+              {extendingMins === 15 ? (
+                <>
+                  <Loader2 size={11} className="animate-spin" />
+                  Adding...
+                </>
+              ) : (
+                "+15 Min"
+              )}
             </button>
           </div>
         </div>
@@ -330,8 +351,24 @@ export default function SessionChatPage() {
   useEffect(() => { currentUserIdRef.current = currentUserId; }, [currentUserId]);
 
   // Session data
-  const [session, setSession] = useState<StudySession | null>(null);
-  const [loadingSession, setLoadingSession] = useState(true);
+  const [session, setSession] = useState<StudySession | null>(() => {
+    if (sessions && sessionId) {
+      return (sessions as StudySession[]).find((s) => s.id === sessionId) || null;
+    }
+    return null;
+  });
+  const [loadingSession, setLoadingSession] = useState(() => !session);
+
+  // Sync with global sessions list in case it changes
+  useEffect(() => {
+    if (sessions && sessionId) {
+      const found = (sessions as StudySession[]).find((s) => s.id === sessionId);
+      if (found) {
+        setSession(found);
+        setLoadingSession(false);
+      }
+    }
+  }, [sessions, sessionId]);
 
   // Chat state
   const [messages, setMessages] = useState<Message[]>([]);
@@ -355,16 +392,90 @@ export default function SessionChatPage() {
   const [focusMode, setFocusMode] = useState(false);
   const [showParticipants, setShowParticipants] = useState(false); // mobile drawer
   const [isRefreshing, setIsRefreshing] = useState(false);
+  // Initial messages load state — true until first sessionMessages event fires
+  const [loadingMessages, setLoadingMessages] = useState(true);
+  // Tracks whether the server has responded with sessionMessages at least once.
+  // Using STATE (not ref) ensures it is always batched with loadingMessages + messages
+  // in the same render cycle — prevents the "No messages yet" flash.
+  const [hasServerResponded, setHasServerResponded] = useState(false);
+
+  // Tracks if the room has ever had a message.
+  // Initialized to false, and cached in localStorage so it persists across browser refresh.
+  const [nomessageYet, setNomessageYet] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && sessionId) {
+      const stored = localStorage.getItem(`nomessageYet_${sessionId}`);
+      if (stored === "true") {
+        setNomessageYet(true);
+      }
+    }
+  }, [sessionId]);
 
   // Live session timer (seconds elapsed / seconds until start)
   const [sessionElapsed, setSessionElapsed] = useState(0);
+
+  // Time extending state
+  const [extendingMins, setExtendingMins] = useState<number | null>(null);
+  const extendingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (extendingTimeoutRef.current) {
+        clearTimeout(extendingTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Session-ended overlay
   const [sessionEndedBy, setSessionEndedBy] = useState<string | null>(null);
   const [endCountdown, setEndCountdown] = useState(5);
 
+  // End-session button animation state
+  // 'idle' → 'confirm' (armed, countdown) → 'ending' (spinner, waiting for socket)
+  const [endSessionState, setEndSessionState] = useState<'idle' | 'confirm' | 'ending'>('idle');
+  const [endConfirmCountdown, setEndConfirmCountdown] = useState(3);
+  const endConfirmTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Cleanup confirm timer on unmount
+  useEffect(() => {
+    return () => {
+      if (endConfirmTimerRef.current) clearInterval(endConfirmTimerRef.current);
+    };
+  }, []);
+
   // Presence: track which participants are in the room
   const [joinedUsers, setJoinedUsers] = useState<Set<string>>(new Set());
+  const [loadingPresence, setLoadingPresence] = useState(true);
+
+  // Safety fallback for presence loading — 2s is enough for one RTT
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setLoadingPresence(false);
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Safety fallback for message loading — 10s covers very slow connections.
+  // In practice serverReady → sessionMessages arrives in <200ms.
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setHasServerResponded(true); // treat timeout as a response — useLayoutEffect below will then clear loading states
+    }, 10000);
+    return () => clearTimeout(timer);
+  }, []);
+
+  // ── Guarantee: loading skeleton disappears ONLY after messages are in the DOM ──
+  // useLayoutEffect fires synchronously after every DOM commit, before the browser paints.
+  // By gating on hasServerResponded (set inside onHistory AFTER setMessages), we ensure
+  // the previous render already committed the messages to the DOM before we remove the
+  // skeleton — so the user never sees a blank frame between loading and messages.
+  useLayoutEffect(() => {
+    if (hasServerResponded) {
+      setLoadingMessages(false);
+      setIsRefreshing(false);
+    }
+  }, [hasServerResponded]);
 
   // Seed currentUser as joined once auth is ready (they are here = they are in the room)
   useEffect(() => {
@@ -432,15 +543,46 @@ export default function SessionChatPage() {
   };
 
   const handleEndSession = () => {
-    if (socket && sessionId) {
-      socket.emit("endSession", { sessionId });
-      // Don't navigate immediately — wait for sessionEnded event so the
-      // admin also sees the same overlay as every other participant.
+    if (endSessionState === 'idle') {
+      // First click: arm the button, start 3s confirm countdown
+      setEndSessionState('confirm');
+      setEndConfirmCountdown(3);
+      if (endConfirmTimerRef.current) clearInterval(endConfirmTimerRef.current);
+      endConfirmTimerRef.current = setInterval(() => {
+        setEndConfirmCountdown((prev) => {
+          if (prev <= 1) {
+            // Time expired — disarm
+            clearInterval(endConfirmTimerRef.current!);
+            endConfirmTimerRef.current = null;
+            setEndSessionState('idle');
+            return 3;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    } else if (endSessionState === 'confirm') {
+      // Second click: confirm — fire the event
+      if (endConfirmTimerRef.current) {
+        clearInterval(endConfirmTimerRef.current);
+        endConfirmTimerRef.current = null;
+      }
+      setEndSessionState('ending');
+      if (socket && sessionId) {
+        socket.emit("endSession", { sessionId });
+        // Don't navigate immediately — wait for sessionEnded event so the
+        // admin also sees the same overlay as every other participant.
+      }
     }
+    // 'ending' state: button is disabled, nothing to do
   };
 
   const handleExtendSession = (extraMinutes: number) => {
     if (socket && sessionId) {
+      setExtendingMins(extraMinutes);
+      if (extendingTimeoutRef.current) clearTimeout(extendingTimeoutRef.current);
+      extendingTimeoutRef.current = setTimeout(() => {
+        setExtendingMins(null);
+      }, 5000);
       socket.emit("extendSession", { sessionId, extraMinutes });
     }
   };
@@ -461,12 +603,10 @@ export default function SessionChatPage() {
 
     (async () => {
       try {
-        const res = await API.get("/study-session/mine", {
+        const res = await API.get(`/study-session/${sessionId}`, {
           signal: controller.signal,
         });
-        const all: StudySession[] = res.data;
-        const match = all.find((s) => s.id === sessionId);
-        setSession(match || null);
+        setSession(res.data || null);
       } catch (e: any) {
         if (e.name !== "CanceledError" && e.name !== "AbortError") {
           console.error("Failed to load session:", e);
@@ -539,6 +679,10 @@ export default function SessionChatPage() {
   const doJoin = useCallback(() => {
     if (!socket || !sessionId) return;
 
+    // Show skeleton immediately — hides any "No messages yet" flash while waiting
+    setLoadingMessages(true);
+    setHasServerResponded(false); // hide empty state until server confirms
+
     socket.emit("joinSession", { sessionId });
 
     // Mirror dashboard handleJoinSession — keep context + localStorage in sync
@@ -551,12 +695,6 @@ export default function SessionChatPage() {
       });
     }
 
-    // Give the server a moment to process joinSession and add us to activeSessions
-    // before we ask for the active participant list
-    setTimeout(() => {
-      socket.emit("getActiveParticipants", { sessionId });
-    }, 300);
-
     // Announce our ECDH public key to the session room so peers can send us
     // the current room key (Sender Key distribution)
     const currentE2ee = e2eeRef.current;
@@ -565,9 +703,10 @@ export default function SessionChatPage() {
     }
   }, [socket, sessionId]);
 
-  // Manual refresh handler — keeps spinner going until messages event fires
+  // Manual refresh handler — shows the overlay spinner until messages event fires
   const handleRefresh = () => {
     setIsRefreshing(true);
+    // doJoin will set loadingMessages=true (shows skeleton under the overlay)
     doJoin();
     // Safety fallback: clear after 8s in case server never responds
     setTimeout(() => setIsRefreshing(false), 8000);
@@ -582,8 +721,7 @@ export default function SessionChatPage() {
     // ── Register ALL listeners FIRST so no server response is missed ──
     const onHistory = async (data: { sessionId: string; messages: Message[] }) => {
       if (data.sessionId !== sessionId) return;
-      // Stop the refresh spinner — messages have arrived
-      setIsRefreshing(false);
+
       const decryptFn = decryptRef.current;
       const msgs = decryptFn
         ? await Promise.all(
@@ -597,7 +735,21 @@ export default function SessionChatPage() {
             }),
           )
         : (data.messages || []);
+
+      // ── Commit messages + signal server responded ──
+      // loadingMessages and isRefreshing are intentionally NOT cleared here.
+      // They are cleared by the useLayoutEffect below, which fires synchronously
+      // AFTER this render's DOM commit — guaranteeing messages are in the DOM
+      // before the skeleton disappears (no blank-frame flash).
       setMessages(msgs);
+      setHasServerResponded(true);
+
+      if (msgs.length > 0) {
+        setNomessageYet(true);
+        if (typeof window !== "undefined") {
+          localStorage.setItem(`nomessageYet_${sessionId}`, "true");
+        }
+      }
       setTimeout(() => scrollToBottom(false), 0);
     };
 
@@ -611,6 +763,10 @@ export default function SessionChatPage() {
         } catch {}
       }
       setMessages((prev) => [...prev, displayMsg]);
+      setNomessageYet(true);
+      if (typeof window !== "undefined") {
+        localStorage.setItem(`nomessageYet_${sessionId}`, "true");
+      }
       setTimeout(() => scrollToBottom(true), 0);
     };
 
@@ -635,10 +791,20 @@ export default function SessionChatPage() {
     const onError = (e: { msg?: string }) =>
       console.warn("chatError:", e?.msg);
 
+    const onSessionJoined = (data: { sessionId: string; activeUserIds?: string[] }) => {
+      if (data.sessionId !== sessionId) return;
+      const ids = data.activeUserIds || [];
+      if (ids.length > 0) {
+        setJoinedUsers((prev) => new Set([...prev, ...ids]));
+      }
+      setLoadingPresence(false);
+    };
+
     // Presence snapshot: seed joinedUsers from server's in-memory activeSessions
     const onActiveParticipants = (data: { sessionId: string; userIds: string[] }) => {
       if (data.sessionId !== sessionId) return;
       setJoinedUsers((prev) => new Set([...prev, ...data.userIds]));
+      setLoadingPresence(false);
     };
 
     // Presence: someone left the session room
@@ -701,6 +867,9 @@ export default function SessionChatPage() {
           return next;
         });
       }
+      if (typeof window !== "undefined") {
+        localStorage.removeItem(`nomessageYet_${sessionId}`);
+      }
       setSessionEndedBy(data.endedBy || "The host");
       setEndCountdown(5);
     };
@@ -714,12 +883,16 @@ export default function SessionChatPage() {
           duration: data.duration,
         };
       });
+      setExtendingMins(null);
+      if (extendingTimeoutRef.current) clearTimeout(extendingTimeoutRef.current);
       // Reset the auto-ended ref since the duration was extended
       hasAutoEndedRef.current = false;
       toast.success(`Session extended by ${data.extraMinutes} minutes by ${data.extendedBy || "the host"}!`);
     };
 
     const onSessionError = (data: { message: string }) => {
+      setExtendingMins(null);
+      if (extendingTimeoutRef.current) clearTimeout(extendingTimeoutRef.current);
       toast.error(data.message);
     };
 
@@ -728,6 +901,7 @@ export default function SessionChatPage() {
     socket.on("newChatMessage", onNew);
     socket.on("userTyping", onTyping);
     socket.on("chatError", onError);
+    socket.on("sessionJoined", onSessionJoined);
     socket.on("activeParticipants", onActiveParticipants);
     socket.on("userLeftSession", onUserLeft);
     socket.on("userJoinedSession", onUserJoined);
@@ -737,19 +911,42 @@ export default function SessionChatPage() {
     socket.on("sessionExtended", onSessionExtended);
     socket.on("sessionError", onSessionError);
 
-    // Re-join automatically on socket reconnect (network drop, backend restart)
-    socket.on("connect", doJoin);
+    // ── Join strategy: avoid the race condition ──
+    //
+    // PROBLEM: On a browser refresh, the socket reconnects and immediately calls doJoin().
+    // But the server's io.on('connection') handler is async (Firebase auth + DB lookup),
+    // so 'joinSession' arrives BEFORE registerSessionHandlers() is called — the event
+    // is silently dropped by socket.io and sessionMessages is never sent.
+    //
+    // FIX: The server emits 'serverReady' after ALL handlers are registered.
+    // We wait for that before calling doJoin().
+    //
+    // NAVIGATION case (socket already connected): serverReady already fired for this
+    // socket, so we call doJoin() immediately.
+    //
+    // REFRESH / FIRST LOAD case (socket not yet connected): doJoin() is called when
+    // 'serverReady' arrives — guaranteed to be after handlers are registered.
 
-    // ── Now it's safe to join — all listeners are ready ──
-    doJoin();
+    const onServerReady = () => {
+      doJoin();
+    };
+
+    socket.on("serverReady", onServerReady);
+
+    if ((socket as any).serverReady) {
+      // Server is already fully ready (e.g., navigated here from another page)
+      doJoin();
+    }
+    // else: doJoin() will be called by onServerReady when the server finishes async auth
 
     const timeouts = typingTimeouts.current;
     return () => {
-      socket.off("connect", doJoin);
+      socket.off("serverReady", onServerReady);
       socket.off("sessionMessages", onHistory);
       socket.off("newChatMessage", onNew);
       socket.off("userTyping", onTyping);
       socket.off("chatError", onError);
+      socket.off("sessionJoined", onSessionJoined);
       socket.off("activeParticipants", onActiveParticipants);
       socket.off("userLeftSession", onUserLeft);
       socket.off("userJoinedSession", onUserJoined);
@@ -775,6 +972,11 @@ export default function SessionChatPage() {
     setText("");
     setSelectedFile(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
+    
+    setNomessageYet(true);
+    if (typeof window !== "undefined") {
+      localStorage.setItem(`nomessageYet_${sessionId}`, "true");
+    }
     
     socket.emit("typing", { sessionId, isTyping: false });
     inputRef.current?.focus();
@@ -1074,13 +1276,13 @@ export default function SessionChatPage() {
             </h1>
 
             {isLive && (
-              <span className="shrink-0 inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full border border-green-500/30 text-green-500 bg-green-500/8">
+              <span className="hidden sm:inline-flex shrink-0 items-center gap-1 text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full border border-green-500/30 text-green-500 bg-green-500/8">
                 <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
                 Live
               </span>
             )}
             {isScheduled && (
-              <span className={`shrink-0 text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded border ${border} ${muted}`}>
+              <span className={`hidden sm:inline-flex shrink-0 text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded border ${border} ${muted}`}>
                 Scheduled
               </span>
             )}
@@ -1104,17 +1306,16 @@ export default function SessionChatPage() {
             )}
           </button>
 
-          {/* Refresh Button */}
+          {/* Refresh Button — icon-only on mobile */}
           <button
             onClick={handleRefresh}
             disabled={isRefreshing}
-            className={`flex md:hidden items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium border transition-all active:scale-95
-              ${dark ? "border-gray-800 text-gray-300 hover:bg-gray-900" : "border-gray-200 text-gray-600 hover:bg-gray-50"}
+            className={`flex md:hidden items-center justify-center p-2 rounded-lg border transition-all active:scale-95 shrink-0
+              ${dark ? "border-gray-800 text-gray-300 hover:bg-gray-900 bg-zinc-950/40" : "border-gray-200 text-gray-600 hover:bg-gray-50 bg-zinc-50/40"}
               disabled:opacity-60 disabled:cursor-not-allowed`}
             aria-label="Refresh chat connection"
           >
-            <RefreshCw size={13} className={isRefreshing ? "animate-spin" : ""} />
-            <span>Refresh</span>
+            <RefreshCw size={14} className={isRefreshing ? "animate-spin" : ""} />
           </button>
 
           {/* E2EE Lock Badge */}
@@ -1218,6 +1419,7 @@ export default function SessionChatPage() {
                 isCreator={String(session.creatorId) === String(currentUserId)}
                 dark={dark}
                 onAddFiveMinutes={handleExtendSession}
+                extendingMins={extendingMins}
               />
             )}
             {isScheduled && (
@@ -1242,18 +1444,23 @@ export default function SessionChatPage() {
               const pName = p.user?.name || (isMe ? (currentUserName || "You") : "Unknown");
               const isTypingNow = !!typingUsers[pId];
 
-              // Real-time presence overrides DB status
+               // Real-time presence overrides DB status
               const isInRoom = joinedUsers.has(pId);
+              const isChecking = loadingPresence && !isMe;
 
-              // Dot color priority: in-room → green, accepted → yellow, else gray
-              const dotColor = isInRoom
+              // Dot color priority: checking → pulsing indigo, in-room → green, accepted → yellow, else gray
+              const dotColor = isChecking
+                ? "bg-indigo-400 animate-pulse"
+                : isInRoom
                 ? "bg-green-500"
                 : p.status === "accepted" || p.status === "joined"
                 ? "bg-yellow-400"
                 : "bg-gray-400";
 
               // Status label
-              const statusLabel = isInRoom
+              const statusLabel = isChecking
+                ? "Checking..."
+                : isInRoom
                 ? "Active"
                 : p.status === "accepted" || p.status === "joined"
                 ? "Joined"
@@ -1345,10 +1552,32 @@ export default function SessionChatPage() {
             {session?.creatorId === currentUserId && (
               <button
                 onClick={handleEndSession}
-                className="w-full flex items-center justify-center gap-2 py-2 mb-2 rounded-lg text-[12.5px] font-semibold border border-red-500/40 text-red-500 bg-red-500/8 hover:bg-red-500/15 active:scale-95 transition-all"
+                disabled={endSessionState === 'ending'}
+                className={`w-full flex items-center justify-center gap-2 py-2 mb-2 rounded-lg text-[12.5px] font-semibold border transition-all active:scale-95
+                  ${
+                    endSessionState === 'ending'
+                      ? 'border-red-500/60 text-red-400 bg-red-500/15 cursor-not-allowed opacity-80'
+                      : endSessionState === 'confirm'
+                      ? 'border-red-500 text-white bg-red-500 hover:bg-red-600 animate-pulse shadow-lg shadow-red-500/30'
+                      : 'border-red-500/40 text-red-500 bg-red-500/8 hover:bg-red-500/15'
+                  }`}
               >
-                <PhoneOff size={13} />
-                End Session
+                {endSessionState === 'ending' ? (
+                  <>
+                    <Loader2 size={13} className="animate-spin" />
+                    Ending…
+                  </>
+                ) : endSessionState === 'confirm' ? (
+                  <>
+                    <StopCircle size={13} />
+                    Confirm End? ({endConfirmCountdown}s)
+                  </>
+                ) : (
+                  <>
+                    <StopCircle size={13} />
+                    End Session
+                  </>
+                )}
               </button>
             )}
             <button
@@ -1398,6 +1627,7 @@ export default function SessionChatPage() {
                     isCreator={String(session.creatorId) === String(currentUserId)}
                     dark={dark}
                     onAddFiveMinutes={handleExtendSession}
+                    extendingMins={extendingMins}
                   />
                 </div>
               )}
@@ -1408,12 +1638,19 @@ export default function SessionChatPage() {
                 const isTypingNow = !!typingUsers[pId];
 
                 const isInRoom = joinedUsers.has(pId);
-                const dotColor = isInRoom
+                const isChecking = loadingPresence && !isMe;
+
+                const dotColor = isChecking
+                  ? "bg-indigo-400 animate-pulse"
+                  : isInRoom
                   ? "bg-green-500"
                   : p.status === "accepted" || p.status === "joined"
                   ? "bg-yellow-400"
                   : "bg-gray-400";
-                const statusLabel = isInRoom
+
+                const statusLabel = isChecking
+                  ? "Checking..."
+                  : isInRoom
                   ? "Active"
                   : p.status === "accepted" || p.status === "joined"
                   ? "Joined"
@@ -1450,7 +1687,7 @@ export default function SessionChatPage() {
             ref={listRef}
             className="flex-1 overflow-y-auto px-4 py-5 space-y-4 relative"
           >
-            {/* Refresh overlay — shown while waiting for messages to load */}
+            {/* Manual refresh overlay — shown while re-fetching after user clicks refresh */}
             {isRefreshing && (
               <div className={`absolute inset-0 z-10 flex flex-col items-center justify-center gap-3
                 ${dark ? "bg-black/70" : "bg-white/80"} backdrop-blur-[2px] transition-all`}>
@@ -1459,7 +1696,37 @@ export default function SessionChatPage() {
               </div>
             )}
 
-            {messages.length === 0 && !isRefreshing ? (
+            {/* Initial join loading skeleton — shown until first sessionMessages event arrives.
+                Also shown when nomessageYet=true (localStorage confirms messages existed) but
+                messages array is still empty — keeps skeleton visible until messages arrive
+                instead of flashing a blank white screen. */}
+            {(loadingMessages || (nomessageYet && messages.length === 0)) && !isRefreshing ? (
+              <div className="flex flex-col gap-5 pt-4 animate-in fade-in duration-300">
+                {/* Skeleton message rows — alternating own/other to mimic real chat layout */}
+                {["other", "other", "own", "other", "own"].map((side, i) => (
+                  <div key={i} className={`flex gap-2.5 ${side === "own" ? "flex-row-reverse" : "flex-row"}`}>
+                    <div className={`w-7 h-7 rounded-full shrink-0 animate-pulse ${dark ? "bg-zinc-800" : "bg-gray-200"}`} />
+                    <div className={`flex flex-col gap-1.5 ${side === "own" ? "items-end" : "items-start"}`}>
+                      <div className={`h-2.5 w-16 rounded-full animate-pulse ${dark ? "bg-zinc-800" : "bg-gray-200"}`} />
+                      <div
+                        className={`h-9 rounded-2xl animate-pulse ${dark ? "bg-zinc-800/80" : "bg-gray-150"}`}
+                        style={{ width: `${120 + (i * 37) % 80}px` }}
+                      />
+                      {i % 2 === 0 && (
+                        <div
+                          className={`h-7 rounded-2xl animate-pulse ${dark ? "bg-zinc-800/60" : "bg-gray-100"}`}
+                          style={{ width: `${80 + (i * 23) % 60}px` }}
+                        />
+                      )}
+                    </div>
+                  </div>
+                ))}
+                <div className={`flex items-center justify-center gap-2 mt-4`}>
+                  <Loader2 size={13} className={`animate-spin ${muted}`} />
+                  <span className={`text-[11.5px] ${muted}`}>Loading chat history…</span>
+                </div>
+              </div>
+            ) : messages.length === 0 && !isRefreshing && hasServerResponded && !nomessageYet ? (
               <div className="flex flex-col items-center justify-center h-full gap-5 text-center py-16">
                 {/* Minimal SVG speech-bubble illustration */}
                 <div className={dark ? "text-gray-700" : "text-gray-300"}>
@@ -1619,13 +1886,22 @@ export default function SessionChatPage() {
 
           {/* Input Bar */}
           <div className={`px-4 py-3 border-t ${border} shrink-0`}>
-            {!isLive && (
+            {/* Socket reconnecting notice — shown when connection drops */}
+            {!socket?.connected && (
+              <div className={`flex items-center gap-2 mb-2 px-3 py-1.5 rounded-lg text-[11.5px] font-medium
+                ${dark ? "bg-amber-500/10 text-amber-400 border border-amber-500/20" : "bg-amber-50 text-amber-600 border border-amber-200"}`}>
+                <Loader2 size={11} className="animate-spin shrink-0" />
+                Reconnecting to session… messages will load automatically.
+              </div>
+            )}
+            {!isLive && socket?.connected && (
               <p className={`text-[11.5px] text-center ${muted} mb-2`}>
                 {isScheduled
                   ? "Chat is available once the session starts"
                   : "This session has ended"}
               </p>
             )}
+
 
             {/* Selected File Preview Card */}
             {selectedFile && (

@@ -1,6 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
 import prisma from '../lib/prisma.js';
 import admin from '../lib/firebaseAdmin.js';
+import crypto from 'crypto';
+import { cacheGet, cacheSet } from '../lib/redis.js';
 
 export interface AuthenticatedRequest extends Request {
   userId?: string;
@@ -26,10 +28,22 @@ export const verifyToken = async (
   }
 
   const token = authHeader.replace('Bearer ', '');
+  const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+  const cacheKey = `token:${tokenHash}`;
   let decodedToken;
 
   try {
-    decodedToken = await admin.auth().verifyIdToken(token);
+    const cached = await cacheGet(cacheKey);
+    if (cached) {
+      decodedToken = JSON.parse(cached);
+    } else {
+      decodedToken = await admin.auth().verifyIdToken(token);
+      const remainingTime = decodedToken.exp - Math.floor(Date.now() / 1000);
+      if (remainingTime > 0) {
+        // Cache for at most 15 minutes (900 seconds)
+        await cacheSet(cacheKey, JSON.stringify(decodedToken), Math.min(remainingTime, 900));
+      }
+    }
     req.userId = decodedToken.uid;
   } catch (err: any) {
     const isExpired = err?.code === 'auth/id-token-expired' || err?.errorInfo?.code === 'auth/id-token-expired';
@@ -68,7 +82,21 @@ export const verifyToken = async (
 export async function verifySocketTokenAsync(token: string | undefined): Promise<string | null> {
   if (!token) return null;
   try {
-    const decoded = await admin.auth().verifyIdToken(token.replace('Bearer ', ''));
+    const rawToken = token.replace('Bearer ', '');
+    const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+    const cacheKey = `token:${tokenHash}`;
+    
+    const cached = await cacheGet(cacheKey);
+    if (cached) {
+      const decoded = JSON.parse(cached);
+      return decoded.uid;
+    }
+
+    const decoded = await admin.auth().verifyIdToken(rawToken);
+    const remainingTime = decoded.exp - Math.floor(Date.now() / 1000);
+    if (remainingTime > 0) {
+      await cacheSet(cacheKey, JSON.stringify(decoded), Math.min(remainingTime, 900));
+    }
     return decoded.uid;
   } catch {
     return null;

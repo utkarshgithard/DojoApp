@@ -6,6 +6,7 @@ import {
   getMyInvites,
   respondInvite,
   cancelSession,
+  getSessionById,
 } from '../controllers/studySessionController.js';
 
 const router = Router();
@@ -13,6 +14,7 @@ const router = Router();
 router.post('/', verifyToken, createSession);
 router.get('/mine', verifyToken, getMySessions);
 router.get('/invites', verifyToken, getMyInvites);
+router.get('/:id', verifyToken, getSessionById);
 router.post('/:id/respond', verifyToken, respondInvite);
 router.post('/:id/cancel', verifyToken, cancelSession);
 

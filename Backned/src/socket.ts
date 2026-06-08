@@ -1,6 +1,8 @@
 import { Server, Socket } from 'socket.io';
 import prisma from './lib/prisma.js';
 import { verifySocketTokenAsync } from './middleware/authmiddleware.js';
+import { sendPushToUser } from './utils/pushService.js';
+import { cacheDel, chatMessagePush, chatMessageGetAll, chatMessagesDel } from './lib/redis.js';
 
 // Shared DB readiness flag — set to true by server.ts once DB is connected
 let _dbReady = false;
@@ -25,7 +27,10 @@ interface ActiveSession {
 // e.g. SADD session:{id}:members userId  |  SCARD session:{id}:members
 const activeSessions = new Map<string, ActiveSession>();
 
-// --- In-memory chat storage ---
+// --- In-memory chat storage (L1 write-through cache) ---
+// Redis is L2. In-memory gives zero-latency reads within the same server
+// process lifetime. Redis survives restarts and provides fast rehydration
+// without hitting Postgres on every browser refresh.
 // Key: sessionId, Value: array of message objects
 const sessionMessages = new Map<string, any[]>();
 
@@ -165,7 +170,11 @@ export function setupSocketHandlers(io: Server) {
       registerChatHandlers(io, socket, user);
       registerE2EEHandlers(io, socket, user);
 
-      // 4. Cleanup on disconnect
+      // 4. Signal client that all handlers are registered — client should join AFTER this
+      // This prevents the race condition where 'joinSession' arrives before handlers are set up
+      socket.emit('serverReady', { userId: user.id });
+
+      // 5. Cleanup on disconnect
       socket.on('disconnect', () => {
         chatRateLimits.delete(socket.id);
 
@@ -238,10 +247,12 @@ function registerInviteHandlers(io: Server, socket: Socket, user: UserPayload) {
         },
       });
 
+      await cacheDel(`session:${sessionId}`);
+
       // FIX: Check if invitee is online before emitting; warn creator if offline
       const targetSockets = await io.in(toUserId).fetchSockets();
       if (targetSockets.length === 0) {
-        console.log(`📭 Invite target ${toUserId} is offline`);
+              console.log(`📭 Invite target ${toUserId} is offline`);
         socket.emit('inviteUndelivered', {
           toUserId,
           sessionId,
@@ -258,6 +269,12 @@ function registerInviteHandlers(io: Server, socket: Socket, user: UserPayload) {
             invitedAt: new Date(),
           },
         });
+        // 🔔 User is offline — deliver via Web Push
+        sendPushToUser(toUserId, {
+          title: '📚 Study Invite from ' + user.name,
+          body:  `${user.name} invited you to study: ${session.subject}`,
+          url:   '/sessions',
+        }).catch((err) => console.error('push sendInvite error:', err));
         return;
       }
 
@@ -289,7 +306,10 @@ function registerInviteHandlers(io: Server, socket: Socket, user: UserPayload) {
       // to prevent double-accept race condition
       const session = await prisma.studySession.findUnique({
         where: { id: sessionId },
-        include: { participants: true, creator: true },
+        include: {
+          creator: { select: { id: true, name: true, email: true } },
+          participants: { include: { user: { select: { id: true, name: true, email: true, avatarUrl: true } } } },
+        },
       });
 
       if (!session) {
@@ -339,10 +359,15 @@ function registerInviteHandlers(io: Server, socket: Socket, user: UserPayload) {
       const updatedSession = await prisma.studySession.update({
         where: { id: sessionId },
         data: { status: 'in_progress', actualStartTime: new Date() },
-        include: { participants: true, creator: true },
+        include: {
+          creator: { select: { id: true, name: true, email: true } },
+          participants: { include: { user: { select: { id: true, name: true, email: true, avatarUrl: true } } } },
+        },
       });
 
-      // Notify ALL participants to refresh / show "Join" button
+      await cacheDel(`session:${sessionId}`);
+
+            // Notify ALL participants to refresh / show "Join" button
       updatedSession.participants.forEach((p) => {
         io.to(p.userId).emit('sessionScheduled', {
           sessionId,
@@ -350,6 +375,14 @@ function registerInviteHandlers(io: Server, socket: Socket, user: UserPayload) {
           sessionDetails: updatedSession,
           message: 'Session is live! You can join now.',
         });
+        // 🔔 Push notify each accepted participant (covers closed tabs)
+        if (p.status === 'accepted') {
+          sendPushToUser(p.userId, {
+            title: '▶️ Study Session is Live!',
+            body:  `${updatedSession.subject} just started. Tap to join!`,
+            url:   '/sessions',
+          }).catch((err) => console.error('push sessionLive error:', err));
+        }
       });
 
       // Extra event to creator: auto-join and open chat
@@ -384,7 +417,9 @@ function registerInviteHandlers(io: Server, socket: Socket, user: UserPayload) {
       // FIX: Verify the relationship is legitimate before notifying anyone
       const session = await prisma.studySession.findUnique({
         where: { id: sessionId },
-        include: { participants: true },
+        include: {
+          participants: { include: { user: { select: { id: true, name: true, email: true, avatarUrl: true } } } },
+        },
       });
 
       if (!session) return;
@@ -406,6 +441,8 @@ function registerInviteHandlers(io: Server, socket: Socket, user: UserPayload) {
         where: { sessionId, userId: user.id },
         data: { status: 'declined', respondedAt: new Date() },
       });
+
+      await cacheDel(`session:${sessionId}`);
 
       io.to(fromUserId).emit('inviteDeclined', {
         by: user.id,
@@ -457,18 +494,33 @@ function registerSessionHandlers(io: Server, socket: Socket, user: UserPayload) 
         console.log(`ℹ️ ${user.name} already in room ${sessionRoom}, re-hydrating client`);
         const sessionData = await prisma.studySession.findUnique({
           where: { id: sessionId },
-          include: { participants: true, creator: true },
+          include: {
+            creator: { select: { id: true, name: true, email: true } },
+            participants: { include: { user: { select: { id: true, name: true, email: true, avatarUrl: true } } } },
+          },
         });
         const active = activeSessions.get(sessionId);
+        const activeUserIds = active ? [...active.participants] : [user.id];
         socket.emit('sessionJoined', {
           sessionId,
           roomId: sessionRoom,
           sessionDetails: sessionData,
           participantCount: active?.participants.size ?? 1,
+          activeUserIds,
         });
-        // Load from DB if in-memory cache is empty
-        let cachedMessages = sessionMessages.get(sessionId);
-        if (!cachedMessages || cachedMessages.length === 0) {
+        // Also emit activeParticipants so the frontend resolves loadingPresence immediately
+        socket.emit('activeParticipants', { sessionId, userIds: activeUserIds });
+      // --- Send chat history (tiered: L1 in-memory → L2 Redis → DB) ---
+      let cachedMessages = sessionMessages.get(sessionId);
+      if (!cachedMessages || cachedMessages.length === 0) {
+        // L2: try Redis first (fast, survives restarts)
+        const redisMessages = await chatMessageGetAll(sessionId);
+        if (redisMessages.length > 0) {
+          cachedMessages = redisMessages;
+          sessionMessages.set(sessionId, cachedMessages); // warm L1
+          console.log(`📦 Redis: served ${redisMessages.length} messages for session ${sessionId}`);
+        } else {
+          // L3: fall back to Postgres
           const dbMessages = await prisma.message.findMany({
             where: { sessionId },
             include: { user: { select: { avatarUrl: true } } },
@@ -483,36 +535,49 @@ function registerSessionHandlers(io: Server, socket: Socket, user: UserPayload) 
             text: m.text,
             ts: m.ts.toISOString(),
             avatarUrl: m.user?.avatarUrl ?? undefined,
-            // E2EE fields
             ciphertext: m.ciphertext ?? undefined,
             iv: m.iv ?? undefined,
             encryptedKeys: m.encryptedKeys ? JSON.parse(m.encryptedKeys) : undefined,
           }));
           if (cachedMessages.length > 0) {
-            sessionMessages.set(sessionId, cachedMessages);
+            sessionMessages.set(sessionId, cachedMessages); // warm L1
+            // Populate Redis so next rehydration skips Postgres
+            for (const msg of cachedMessages) {
+              chatMessagePush(sessionId, msg);
+            }
+            console.log(`🗄️  DB: loaded ${cachedMessages.length} messages for session ${sessionId}, written to Redis`);
           }
         }
-        socket.emit('sessionMessages', {
-          sessionId,
-          messages: cachedMessages,
-        });
-        return;
+      }
+      socket.emit('sessionMessages', { sessionId, messages: cachedMessages ?? [] });
+      return;
       }
 
       socket.join(sessionRoom);
 
       let sessionData = await prisma.studySession.findUnique({
         where: { id: sessionId },
-        include: { participants: true, creator: true },
+        include: {
+          creator: { select: { id: true, name: true, email: true } },
+          participants: { include: { user: { select: { id: true, name: true, email: true, avatarUrl: true } } } },
+        },
       });
 
       if (sessionData?.status === 'scheduled') {
         sessionData = await prisma.studySession.update({
           where: { id: sessionId },
           data: { status: 'in_progress', actualStartTime: new Date() },
-          include: { participants: true, creator: true },
+          include: {
+            creator: { select: { id: true, name: true, email: true } },
+            participants: { include: { user: { select: { id: true, name: true, email: true, avatarUrl: true } } } },
+          },
         });
-        io.to(sessionRoom).emit('sessionStarted', { sessionId, sessionDetails: sessionData });
+        await cacheDel(`session:${sessionId}`);
+        // Notify all participants so their dashboards show the live banner
+        const notifyUsers = [sessionData.creatorId, ...sessionData.participants.map((p) => p.userId)];
+        notifyUsers.forEach((uid) => {
+          io.to(String(uid)).emit('sessionStarted', { sessionId, sessionDetails: sessionData });
+        });
       }
 
       // Track in-memory presence
@@ -534,38 +599,47 @@ function registerSessionHandlers(io: Server, socket: Socket, user: UserPayload) 
         roomId: sessionRoom,
         sessionDetails: sessionData,
         participantCount: active.participants.size,
+        activeUserIds: [...active.participants],
       });
 
-      // Send chat history — load from DB if in-memory cache is empty (e.g. after server restart)
+      // --- Send chat history (tiered: L1 in-memory → L2 Redis → DB) ---
       let cachedMessages = sessionMessages.get(sessionId);
       if (!cachedMessages || cachedMessages.length === 0) {
-        const dbMessages = await prisma.message.findMany({
-          where: { sessionId },
-          include: { user: { select: { avatarUrl: true } } },
-          orderBy: { ts: 'asc' },
-          take: MAX_MESSAGES_PER_SESSION,
-        });
-        cachedMessages = dbMessages.map((m) => ({
-          id: m.id,
-          sessionId: m.sessionId,
-          userId: m.userId,
-          name: m.name,
-          text: m.text,
-          ts: m.ts.toISOString(),
-          avatarUrl: m.user?.avatarUrl ?? undefined,
-          // E2EE fields
-          ciphertext: m.ciphertext ?? undefined,
-          iv: m.iv ?? undefined,
-          encryptedKeys: m.encryptedKeys ? JSON.parse(m.encryptedKeys) : undefined,
-        }));
-        if (cachedMessages.length > 0) {
-          sessionMessages.set(sessionId, cachedMessages);
+        // L2: try Redis (fast, no DB round-trip)
+        const redisMessages = await chatMessageGetAll(sessionId);
+        if (redisMessages.length > 0) {
+          cachedMessages = redisMessages;
+          sessionMessages.set(sessionId, cachedMessages); // warm L1
+          console.log(`📦 Redis: served ${redisMessages.length} messages for session ${sessionId}`);
+        } else {
+          // L3: fall back to Postgres
+          const dbMessages = await prisma.message.findMany({
+            where: { sessionId },
+            include: { user: { select: { avatarUrl: true } } },
+            orderBy: { ts: 'asc' },
+            take: MAX_MESSAGES_PER_SESSION,
+          });
+          cachedMessages = dbMessages.map((m) => ({
+            id: m.id,
+            sessionId: m.sessionId,
+            userId: m.userId,
+            name: m.name,
+            text: m.text,
+            ts: m.ts.toISOString(),
+            avatarUrl: m.user?.avatarUrl ?? undefined,
+            ciphertext: m.ciphertext ?? undefined,
+            iv: m.iv ?? undefined,
+            encryptedKeys: m.encryptedKeys ? JSON.parse(m.encryptedKeys) : undefined,
+          }));
+          if (cachedMessages.length > 0) {
+            sessionMessages.set(sessionId, cachedMessages); // warm L1
+            // Populate Redis so next refresh skips Postgres entirely
+            for (const msg of cachedMessages) chatMessagePush(sessionId, msg);
+            console.log(`🗄️  DB: loaded ${cachedMessages.length} messages, written to Redis`);
+          }
         }
       }
-      socket.emit('sessionMessages', {
-        sessionId,
-        messages: cachedMessages,
-      });
+      socket.emit('sessionMessages', { sessionId, messages: cachedMessages ?? [] });
 
       console.log(`✅ ${user.name} joined session ${sessionId} (${active.participants.size} in room)`);
     } catch (error) {
@@ -631,7 +705,12 @@ function registerSessionHandlers(io: Server, socket: Socket, user: UserPayload) 
     if (!sessionId) return;
 
     try {
-      const session = await prisma.studySession.findUnique({ where: { id: sessionId } });
+      const session = await prisma.studySession.findUnique({
+        where: { id: sessionId },
+        include: {
+          participants: { include: { user: { select: { id: true, name: true, email: true, avatarUrl: true } } } },
+        },
+      });
       if (!session) return;
 
       // Only the creator can end the session
@@ -650,17 +729,24 @@ function registerSessionHandlers(io: Server, socket: Socket, user: UserPayload) 
         }),
       ]);
 
-      // Clear in-memory caches
+      await cacheDel(`session:${sessionId}`);
+
+      // Clear ALL caches: in-memory (L1), Redis (L2), and presence state
       const active = activeSessions.get(sessionId);
       if (active) {
         active.participants.clear();
         activeSessions.delete(sessionId);
       }
-      sessionMessages.delete(sessionId);
+      sessionMessages.delete(sessionId);       // L1
+      await chatMessagesDel(sessionId);        // L2 Redis — frees space on the 30MB free tier
 
-      io.to(`session_${sessionId}`).emit('sessionEnded', {
-        sessionId,
-        endedBy: user.name,
+      // Notify all participants so their dashboards or other pages update immediately
+      const notifyUsers = [session.creatorId, ...session.participants.map((p) => p.userId)];
+      notifyUsers.forEach((uid) => {
+        io.to(String(uid)).emit('sessionEnded', {
+          sessionId,
+          endedBy: user.name,
+        });
       });
 
       console.log(`🏁 Session ${sessionId} ended by ${user.name} — ${deleted.count} message(s) permanently deleted.`);
@@ -693,8 +779,13 @@ function registerSessionHandlers(io: Server, socket: Socket, user: UserPayload) 
         data: {
           duration: session.duration + extraMinutes,
         },
-        include: { participants: true, creator: true },
+        include: {
+          creator: { select: { id: true, name: true, email: true } },
+          participants: { include: { user: { select: { id: true, name: true, email: true, avatarUrl: true } } } },
+        },
       });
+
+      await cacheDel(`session:${sessionId}`);
 
       // Broadcast the duration extension to everyone in the session
       io.to(`session_${sessionId}`).emit('sessionExtended', {
@@ -763,7 +854,7 @@ function registerChatHandlers(io: Server, socket: Socket, user: UserPayload) {
         ...(isE2EE && { ciphertext, iv, encryptedKeys }),
       };
 
-      // Add to in-memory cache immediately
+      // Add to in-memory cache immediately (L1)
       if (!sessionMessages.has(sessionId)) {
         sessionMessages.set(sessionId, []);
       }
@@ -789,7 +880,10 @@ function registerChatHandlers(io: Server, socket: Socket, user: UserPayload) {
       // ── Broadcast instantly — no waiting for DB ──
       io.to(`session_${sessionId}`).emit('newChatMessage', message);
 
-      // ── Persist to DB in the background (fire and forget) ──
+      // ── Persist to Redis (L2) and DB in the background — fire and forget ──
+      // Redis: appends to the list so future rehydrations skip Postgres
+      chatMessagePush(sessionId, message);
+
       prisma.message.create({
         data: {
           sessionId,
@@ -825,36 +919,39 @@ function registerChatHandlers(io: Server, socket: Socket, user: UserPayload) {
       const verification = await getParticipantStatus(sessionId, user.id);
       if (!verification.ok) return;
 
-      // Load from DB if in-memory cache is empty
+      // Load from cache (tiered: L1 → L2 Redis → DB)
       let chatHistory = sessionMessages.get(sessionId);
       if (!chatHistory || chatHistory.length === 0) {
-        const dbMessages = await prisma.message.findMany({
-          where: { sessionId },
-          include: { user: { select: { avatarUrl: true } } },
-          orderBy: { ts: 'asc' },
-          take: MAX_MESSAGES_PER_SESSION,
-        });
-        chatHistory = dbMessages.map((m) => ({
-          id: m.id,
-          sessionId: m.sessionId,
-          userId: m.userId,
-          name: m.name,
-          text: m.text,
-          ts: m.ts.toISOString(),
-          avatarUrl: m.user?.avatarUrl ?? undefined,
-          // E2EE fields
-          ciphertext: m.ciphertext ?? undefined,
-          iv: m.iv ?? undefined,
-          encryptedKeys: m.encryptedKeys ? JSON.parse(m.encryptedKeys) : undefined,
-        }));
-        if (chatHistory.length > 0) {
+        const redisMessages = await chatMessageGetAll(sessionId);
+        if (redisMessages.length > 0) {
+          chatHistory = redisMessages;
           sessionMessages.set(sessionId, chatHistory);
+        } else {
+          const dbMessages = await prisma.message.findMany({
+            where: { sessionId },
+            include: { user: { select: { avatarUrl: true } } },
+            orderBy: { ts: 'asc' },
+            take: MAX_MESSAGES_PER_SESSION,
+          });
+          chatHistory = dbMessages.map((m) => ({
+            id: m.id,
+            sessionId: m.sessionId,
+            userId: m.userId,
+            name: m.name,
+            text: m.text,
+            ts: m.ts.toISOString(),
+            avatarUrl: m.user?.avatarUrl ?? undefined,
+            ciphertext: m.ciphertext ?? undefined,
+            iv: m.iv ?? undefined,
+            encryptedKeys: m.encryptedKeys ? JSON.parse(m.encryptedKeys) : undefined,
+          }));
+          if (chatHistory.length > 0) {
+            sessionMessages.set(sessionId, chatHistory);
+            for (const msg of chatHistory) chatMessagePush(sessionId, msg);
+          }
         }
       }
-      socket.emit('sessionMessages', {
-        sessionId,
-        messages: chatHistory,
-      });
+      socket.emit('sessionMessages', { sessionId, messages: chatHistory ?? [] });
     } catch (error) {
       console.error('getSessionMessages error:', error);
     }

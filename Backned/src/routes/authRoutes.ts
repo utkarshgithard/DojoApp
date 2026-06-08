@@ -3,14 +3,26 @@ import prisma from '../lib/prisma.js';
 import admin from '../lib/firebaseAdmin.js';
 import { verifyToken, AuthenticatedRequest } from '../middleware/authmiddleware.js';
 import generate6CharCode from '../utils/generateCode.js';
+import { cacheGet, cacheSet, cacheDel } from '../lib/redis.js';
 
 const userRouter = express.Router();
 
 // GET /api/auth/userDetails
 userRouter.get('/userDetails', verifyToken, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
+    const userId = req.userId!;
+    const cacheKey = `profile:${userId}`;
+
+    // Try reading from cache first
+    const cachedProfile = await cacheGet(cacheKey);
+    if (cachedProfile) {
+      const user = JSON.parse(cachedProfile);
+      res.json({ user, success: true, message: 'User Found (cached)' });
+      return;
+    }
+
     const user = await prisma.user.findUnique({
-      where: { id: req.userId! },
+      where: { id: userId },
       select: {
         id: true,
         name: true,
@@ -23,6 +35,12 @@ userRouter.get('/userDetails', verifyToken, async (req: AuthenticatedRequest, re
         avatarUrl: true,
       },
     });
+
+    if (user) {
+      // Cache the profile details for 24 hours (86400 seconds)
+      await cacheSet(cacheKey, JSON.stringify(user), 86400);
+    }
+
     res.json({ user, success: true, message: 'User Found' });
   } catch (err) {
     console.error(err);
@@ -182,6 +200,9 @@ userRouter.put('/profile', verifyToken, async (req: AuthenticatedRequest, res: R
         avatarUrl: true,
       }
     });
+
+    // Invalidate profile cache
+    await cacheDel(`profile:${userId}`);
 
     res.json({ 
       success: true, 

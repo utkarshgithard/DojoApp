@@ -14,7 +14,8 @@ import { Toaster } from "@/components/ui/sonner";
 export default function ClientProviders({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const noNavbarRoutes = ['/', '/login', '/register', '/verify', '/verify-email'];
-  const showNavbar = !noNavbarRoutes.some(route => pathname === route || pathname.startsWith('/verify-email/'));
+  const showNavbar = !noNavbarRoutes.some(route => pathname === route || pathname.startsWith('/verify-email/'))
+    && !pathname.startsWith('/session/');
   
   const sidebarRoutes = ['/dashboard', '/sessions', '/friends', '/setup-schedule', '/calendar', '/settings'];
   const showSidebar = sidebarRoutes.some(route => pathname === route || pathname.startsWith(route + '/'));
