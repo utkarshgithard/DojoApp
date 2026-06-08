@@ -155,7 +155,7 @@ const Navbar = () => {
           <Link href="/dashboard" className="flex items-center gap-2" onClick={closeMenu}>
             <div className="w-6 h-6 flex items-center justify-center shrink-0">
               <img
-                src="/favicon-6-Photoroom.png"
+                src="/favicon.png"
                 alt="DojoClass Logo"
                 className="w-full h-full object-contain"
               />

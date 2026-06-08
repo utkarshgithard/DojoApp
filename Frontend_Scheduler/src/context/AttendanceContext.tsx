@@ -10,6 +10,12 @@ import { Subject, AttendanceContextType, SubjectStats } from '@/lib/types';
 const Ctx = createContext<AttendanceContextType | null>(null);
 export const useAttendance = () => useContext(Ctx);
 
+const DUMMY_CLASSES: Subject[] = [
+  { id: 'dummy-1', subject: 'CS 101: Intro to Programming (Demo)', subjectName: 'CS 101: Intro to Programming (Demo)', time: '09:00 AM', isDummy: true },
+  { id: 'dummy-2', subject: 'MATH 201: Linear Algebra (Demo)', subjectName: 'MATH 201: Linear Algebra (Demo)', time: '11:30 AM', isDummy: true },
+  { id: 'dummy-3', subject: 'PHY 102: Physics Lab (Demo)', subjectName: 'PHY 102: Physics Lab (Demo)', time: '02:00 PM', isDummy: true },
+];
+
 export const AttendanceProvider = ({ children }: { children: React.ReactNode }) => {
   const socketContext = useSocket();
   const { isAuthenticated, loading } = useAuth();
@@ -128,6 +134,13 @@ export const AttendanceProvider = ({ children }: { children: React.ReactNode }) 
   }, [setInvites]);
 
   const handleAttendance = useCallback(async (subject: Subject, status: string) => {
+    if (subject.isDummy) {
+      setUnmarkedSubjects(prev => prev.filter(s => s.id !== subject.id));
+      setMarkedSubjects(prev => [...prev, { ...subject, status }]);
+      toast.success(`Demo: Marked "${subject.subjectName || subject.subject}" as ${status}. Configure your actual schedule in Setup Schedule!`);
+      return;
+    }
+
     // Optimistically update the UI instantly
     setUnmarkedSubjects(prev => prev.filter(s => s.id !== subject.id));
     setMarkedSubjects(prev => [...prev, { ...subject, status }]);
@@ -152,6 +165,15 @@ export const AttendanceProvider = ({ children }: { children: React.ReactNode }) 
   }, [date, fetchSubjectStats]);
 
   const markHoliday = useCallback(async () => {
+    const hasDummy = unmarkedSubjects.some(s => s.isDummy);
+    if (hasDummy) {
+      const cancelledSubjects = unmarkedSubjects.map(s => ({ ...s, status: 'cancelled' }));
+      setMarkedSubjects(prev => [...prev, ...cancelledSubjects]);
+      setUnmarkedSubjects([]);
+      toast.success('Demo: All classes marked as Holiday/Cancelled!');
+      return;
+    }
+
     // Save state for potential rollback
     const prevUnmarked = [...unmarkedSubjects];
     const prevMarked = [...markedSubjects];
@@ -180,6 +202,20 @@ export const AttendanceProvider = ({ children }: { children: React.ReactNode }) 
   }, [date, fetchSummary, fetchSubjectStats, unmarkedSubjects, markedSubjects]);
 
   const undoHoliday = useCallback(async () => {
+    const hasDummy = markedSubjects.some(s => s.isDummy && s.status === 'cancelled');
+    if (hasDummy) {
+      const cancelledSubjects = markedSubjects.filter((s: any) => s.isDummy && s.status === 'cancelled');
+      const otherMarked = markedSubjects.filter((s: any) => !s.isDummy || s.status !== 'cancelled');
+      
+      setMarkedSubjects(otherMarked);
+      setUnmarkedSubjects(prev => [...prev, ...cancelledSubjects.map((s: any) => { 
+        const { status, ...rest } = s; 
+        return rest as Subject; 
+      })]);
+      toast.success('Demo: Holiday undone successfully.');
+      return;
+    }
+
     // Save state for potential rollback
     const prevUnmarked = [...unmarkedSubjects];
     const prevMarked = [...markedSubjects];
@@ -226,6 +262,15 @@ export const AttendanceProvider = ({ children }: { children: React.ReactNode }) 
       fetchFriends();
     }
   }, [fetchFriends, isAuthenticated, loading]);
+
+  useEffect(() => {
+    if (!attendanceLoading && calendarData) {
+      const isScheduleEmpty = Object.values(calendarData).every((dayArr: any) => !dayArr || dayArr.length === 0);
+      if (isScheduleEmpty && unmarkedSubjects.length === 0 && markedSubjects.length === 0) {
+        setUnmarkedSubjects(DUMMY_CLASSES);
+      }
+    }
+  }, [calendarData, attendanceLoading, unmarkedSubjects.length, markedSubjects.length]);
 
   // Set up real-time invite socket listeners
   useEffect(() => {

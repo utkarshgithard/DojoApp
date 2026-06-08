@@ -67,27 +67,30 @@ export default function OnboardingTour() {
   const [coords, setCoords] = useState<{ top: number; left: number; width: number; height: number } | null>(null);
   const [isMobile, setIsMobile] = useState(false);
 
-  useEffect(() => {
-    // Check if user has already completed onboarding
-    const completed = localStorage.getItem('dojo_onboarding_completed');
-    if (completed === 'true') {
-      setStepIndex(-2); // -2 means fully completed, don't show
-    } else {
-      setStepIndex(0); // Start the tour
-    }
-  }, []);
-
   // Handle window resizing and mobile layout detection
   useEffect(() => {
-    if (stepIndex < 0) return;
-
-    const checkLayout = () => {
-      setIsMobile(window.innerWidth < 768);
+    const checkMobileAndTour = () => {
+      const isMobileView = window.innerWidth < 768;
+      setIsMobile(isMobileView);
+      
+      if (isMobileView) {
+        setStepIndex(-2); // Disable/hide tour completely on mobile view
+        return;
+      }
+      
+      if (stepIndex === -1) {
+        const completed = localStorage.getItem('dojo_onboarding_completed');
+        if (completed === 'true') {
+          setStepIndex(-2); // -2 means fully completed, don't show
+        } else {
+          setStepIndex(0); // Start the tour
+        }
+      }
     };
 
-    checkLayout();
-    window.addEventListener('resize', checkLayout);
-    return () => window.removeEventListener('resize', checkLayout);
+    checkMobileAndTour();
+    window.addEventListener('resize', checkMobileAndTour);
+    return () => window.removeEventListener('resize', checkMobileAndTour);
   }, [stepIndex]);
 
   // Track position of the highlighted sidebar link
@@ -108,8 +111,8 @@ export default function OnboardingTour() {
       if (el) {
         const rect = el.getBoundingClientRect();
         setCoords({
-          top: rect.top + window.scrollY,
-          left: rect.left + window.scrollX,
+          top: rect.top,
+          left: rect.left,
           width: rect.width,
           height: rect.height
         });
@@ -163,7 +166,7 @@ export default function OnboardingTour() {
   // Floating styling for the card next to sidebar
   const cardStyle: React.CSSProperties = hasTarget && !isMobile
     ? {
-        position: 'absolute',
+        position: 'fixed',
         top: `${coords.top + coords.height / 2}px`,
         left: `${coords.left + coords.width + 16}px`,
         transform: 'translateY(-50%)',
@@ -181,16 +184,25 @@ export default function OnboardingTour() {
     <AnimatePresence>
       <div className="fixed inset-0 z-[9999] pointer-events-none">
         
-        {/* Full-screen darkening mask overlay (except if target element exists and we spotlight it) */}
-        <div 
-          className={`fixed inset-0 transition-opacity duration-300 pointer-events-auto bg-black/25`}
-          onClick={completeTour} // Clicking outside ends the tour
-        />
+        {/* Darkening mask overlays */}
+        {hasTarget && !isMobile ? (
+          /* Invisible overlay that handles clicking outside to exit the tour */
+          <div 
+            className="fixed inset-0 pointer-events-auto bg-transparent"
+            onClick={completeTour}
+          />
+        ) : (
+          /* Full-screen darken overlay for welcome / finish steps */
+          <div 
+            className="fixed inset-0 pointer-events-auto bg-black/50 backdrop-blur-[1px]"
+            onClick={completeTour}
+          />
+        )}
 
         {/* Dynamic target highlight container (spotlight overlay on link) */}
         {hasTarget && !isMobile && (
           <div 
-            className="absolute z-[100] border-2 border-white dark:border-zinc-300 rounded-xl shadow-[0_0_20px_rgba(255,255,255,0.4)] pointer-events-auto animate-pulse-slow"
+            className="fixed z-[100] border-2 border-indigo-500 dark:border-indigo-400 rounded-xl shadow-[0_0_0_9999px_rgba(0,0,0,0.5),0_0_20px_rgba(99,102,241,0.3)] pointer-events-none animate-pulse-slow"
             style={{
               top: `${coords.top - 4}px`,
               left: `${coords.left - 4}px`,
@@ -201,105 +213,106 @@ export default function OnboardingTour() {
           />
         )}
 
-        {/* Guided Tooltip Card */}
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          exit={{ opacity: 0, scale: 0.95 }}
-          transition={{ duration: 0.25, ease: 'easeOut' }}
-          style={cardStyle}
-          className={`pointer-events-auto w-[320px] sm:w-[350px] p-5 rounded-2xl border shadow-2xl backdrop-blur-lg ${
-            dark 
-              ? 'bg-zinc-950/95 border-zinc-800 text-white' 
-              : 'bg-white/95 border-zinc-200 text-zinc-900'
-          }`}
-        >
-          {/* Arrow pointing to the target link on desktop */}
-          {hasTarget && !isMobile && (
-            <div className="absolute right-full top-1/2 -translate-y-1/2 w-0 h-0 border-t-[8px] border-t-transparent border-b-[8px] border-b-transparent border-r-[10px] border-r-white dark:border-r-zinc-950 filter drop-shadow-[-1px_0_1px_rgba(0,0,0,0.1)]"></div>
-          )}
-
-          {/* Close button */}
-          <button
-            onClick={completeTour}
-            className={`absolute top-3.5 right-3.5 p-1 rounded-lg transition-colors ${
-              dark ? 'hover:bg-zinc-900 text-zinc-400' : 'hover:bg-zinc-100 text-zinc-500'
+        {/* Guided Tooltip Card Wrapper */}
+        <div style={cardStyle}>
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            transition={{ duration: 0.25, ease: 'easeOut' }}
+            className={`pointer-events-auto w-[320px] sm:w-[350px] p-5 rounded-2xl border shadow-2xl backdrop-blur-lg ${
+              dark 
+                ? 'bg-zinc-950/95 border-zinc-800 text-white' 
+                : 'bg-white/95 border-zinc-200 text-zinc-900'
             }`}
-            title="Skip Tour"
           >
-            <X size={15} />
-          </button>
-
-          {/* Icon indicator header */}
-          <div className="flex items-center gap-2 mb-3.5">
-            {isLast ? (
-              <CheckCircle className="size-5 text-green-500" />
-            ) : (
-              <HelpCircle className="size-5 text-indigo-500 animate-pulse" />
+            {/* Arrow pointing to the target link on desktop */}
+            {hasTarget && !isMobile && (
+              <div className="absolute right-full top-1/2 -translate-y-1/2 w-0 h-0 border-t-[8px] border-t-transparent border-b-[8px] border-b-transparent border-r-[10px] border-r-white dark:border-r-zinc-950 filter drop-shadow-[-1px_0_1px_rgba(0,0,0,0.1)]"></div>
             )}
-            <span className={`text-[10px] font-bold uppercase tracking-widest ${dark ? 'text-zinc-500' : 'text-zinc-400'}`}>
-              Dojo Walkthrough &bull; Step {stepIndex + 1} of {STEPS.length}
-            </span>
-          </div>
 
-          {/* Title & Body Description */}
-          <h3 className="text-[17px] font-semibold tracking-tight mb-2 pr-5">
-            {currentStep.title}
-          </h3>
-          <p className={`text-[13px] leading-relaxed mb-4 ${dark ? 'text-zinc-400' : 'text-zinc-650'}`}>
-            {currentStep.description}
-          </p>
-
-          {/* Helper hint */}
-          {currentStep.actionHint && (
-            <p className={`text-[10.5px] italic mb-5 ${dark ? 'text-zinc-600' : 'text-zinc-450'}`}>
-              Tip: {currentStep.actionHint}
-            </p>
-          )}
-
-          {/* Footer Navigation Buttons */}
-          <div className="flex items-center justify-between pt-3 border-t border-zinc-100 dark:border-zinc-900">
-            {/* Skip Tour Button */}
+            {/* Close button */}
             <button
               onClick={completeTour}
-              className={`text-[12px] font-medium transition-colors ${
-                dark ? 'text-zinc-500 hover:text-zinc-300' : 'text-zinc-400 hover:text-zinc-600'
+              className={`absolute top-3.5 right-3.5 p-1 rounded-lg transition-colors ${
+                dark ? 'hover:bg-zinc-900 text-zinc-400' : 'hover:bg-zinc-100 text-zinc-500'
               }`}
+              title="Skip Tour"
             >
-              Skip
+              <X size={15} />
             </button>
 
-            <div className="flex gap-2">
-              {/* Back Button */}
-              {!isFirst && (
-                <button
-                  onClick={handleBack}
-                  className={`flex items-center gap-1.5 px-4 py-2 rounded-lg border text-[13px] font-medium transition-all hover:opacity-85 active:scale-95 ${
-                    dark 
-                      ? 'border-zinc-800 bg-zinc-900 text-zinc-200 hover:bg-zinc-850' 
-                      : 'border-zinc-200 bg-zinc-50 text-zinc-700 hover:bg-zinc-100'
-                  }`}
-                >
-                  <ArrowLeft size={14} />
-                  <span>Back</span>
-                </button>
+            {/* Icon indicator header */}
+            <div className="flex items-center gap-2 mb-3.5">
+              {isLast ? (
+                <CheckCircle className="size-5 text-green-500" />
+              ) : (
+                <HelpCircle className="size-5 text-indigo-500 animate-pulse" />
               )}
+              <span className={`text-[10px] font-bold uppercase tracking-widest ${dark ? 'text-zinc-500' : 'text-zinc-400'}`}>
+                Dojo Walkthrough &bull; Step {stepIndex + 1} of {STEPS.length}
+              </span>
+            </div>
 
-              {/* Next / Finish Button */}
+            {/* Title & Body Description */}
+            <h3 className="text-[17px] font-semibold tracking-tight mb-2 pr-5">
+              {currentStep.title}
+            </h3>
+            <p className={`text-[13px] leading-relaxed mb-4 ${dark ? 'text-zinc-400' : 'text-zinc-650'}`}>
+              {currentStep.description}
+            </p>
+
+            {/* Helper hint */}
+            {currentStep.actionHint && (
+              <p className={`text-[10.5px] italic mb-5 ${dark ? 'text-zinc-600' : 'text-zinc-450'}`}>
+                Tip: {currentStep.actionHint}
+              </p>
+            )}
+
+            {/* Footer Navigation Buttons */}
+            <div className="flex items-center justify-between pt-3 border-t border-zinc-100 dark:border-zinc-900">
+              {/* Skip Tour Button */}
               <button
-                onClick={handleNext}
-                className={`flex items-center gap-1.5 px-5 py-2 rounded-lg text-[13px] font-semibold tracking-wide transition-all hover:opacity-90 active:scale-95 ${
-                  dark 
-                    ? 'bg-white text-black hover:bg-zinc-100' 
-                    : 'bg-black text-white hover:bg-zinc-900'
+                onClick={completeTour}
+                className={`text-[12px] font-medium transition-colors ${
+                  dark ? 'text-zinc-500 hover:text-zinc-300' : 'text-zinc-400 hover:text-zinc-600'
                 }`}
               >
-                <span>{isLast ? 'Finish' : 'Next'}</span>
-                {!isLast && <ArrowRight size={14} />}
+                Skip
               </button>
+
+              <div className="flex gap-2">
+                {/* Back Button */}
+                {!isFirst && (
+                  <button
+                    onClick={handleBack}
+                    className={`flex items-center gap-1.5 px-4 py-2 rounded-lg border text-[13px] font-medium transition-all hover:opacity-85 active:scale-95 ${
+                      dark 
+                        ? 'border-zinc-800 bg-zinc-900 text-zinc-200 hover:bg-zinc-850' 
+                        : 'border-zinc-200 bg-zinc-50 text-zinc-700 hover:bg-zinc-100'
+                    }`}
+                  >
+                    <ArrowLeft size={14} />
+                    <span>Back</span>
+                  </button>
+                )}
+
+                {/* Next / Finish Button */}
+                <button
+                  onClick={handleNext}
+                  className={`flex items-center gap-1.5 px-5 py-2 rounded-lg text-[13px] font-semibold tracking-wide transition-all hover:opacity-90 active:scale-95 ${
+                    dark 
+                      ? 'bg-white text-black hover:bg-zinc-100' 
+                      : 'bg-black text-white hover:bg-zinc-900'
+                  }`}
+                >
+                  <span>{isLast ? 'Finish' : 'Next'}</span>
+                  {!isLast && <ArrowRight size={14} />}
+                </button>
+              </div>
             </div>
-          </div>
-        </motion.div>
+          </motion.div>
+        </div>
 
         {/* Injected custom micro-animations style */}
         <style dangerouslySetInnerHTML={{__html: `

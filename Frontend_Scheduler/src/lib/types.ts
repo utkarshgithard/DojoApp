@@ -31,6 +31,7 @@ export interface Subject {
   days?: string[];
   userId?: string;
   status?: string;
+  isDummy?: boolean;
 }
 
 export interface AttendanceEntry {

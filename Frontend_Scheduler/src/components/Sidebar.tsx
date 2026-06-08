@@ -107,7 +107,7 @@ const Sidebar = () => {
         <Link href="/dashboard" className="flex items-center gap-2.5">
           <div className="w-8 h-8 flex items-center justify-center shrink-0">
             <img
-              src="/favicon-6-Photoroom.png"
+              src="/favicon.png"
               alt="DojoClass Logo"
               className="w-full h-full object-contain"
             />

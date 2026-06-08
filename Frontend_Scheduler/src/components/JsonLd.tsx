@@ -29,7 +29,7 @@ export default function JsonLd() {
     "@type": "Organization",
     name: "DojoClass",
     url: "https://dojoclass.space",
-    logo: "https://dojoclass.space/favicon-6-Photoroom.png",
+    logo: "https://dojoclass.space/favicon.png",
     contactPoint: {
       "@type": "ContactPoint",
       email: "bceutkarsh@gmail.com",

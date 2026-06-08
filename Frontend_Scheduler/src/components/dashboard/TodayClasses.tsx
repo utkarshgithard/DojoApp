@@ -49,6 +49,8 @@ export default function TodayClasses({
   const isToday = date === getLocalDateString(new Date());
   const formattedDate = date ? format(new Date(date + 'T00:00:00'), 'PPP') : '';
 
+  const hasDummy = unmarkedSubjects.some((s: any) => s.isDummy);
+
   return (
     <section className={cardClass}>
       <p className={`text-[11px] uppercase tracking-widest ${muted} mb-2`}>Schedule</p>
@@ -116,6 +118,22 @@ export default function TodayClasses({
         </div>
       ) : (
         <div className="space-y-3">
+          {hasDummy && (
+            <div className={`p-4 rounded-xl border border-dashed flex flex-col gap-2 ${
+              dark 
+                ? 'border-indigo-500/30 bg-indigo-500/5 text-indigo-300' 
+                : 'border-indigo-200 bg-indigo-50 text-indigo-800'
+            }`}>
+              <div className="flex items-center gap-2 font-medium text-[13px]">
+                <span className="text-[15px]">💡</span>
+                <span>New to Dojo? Try Marking Attendance!</span>
+              </div>
+              <p className={`text-[12px] leading-relaxed ${dark ? 'text-zinc-400' : 'text-zinc-600'}`}>
+                We&apos;ve loaded some <strong>demo classes</strong> for you below. Tap <strong>Attended</strong>, <strong>Missed</strong>, or <strong>Cancelled</strong> to see how attendance logging works. 
+                Once you&apos;re ready, set up your real timetable under <strong>Add Classes</strong> in the sidebar.
+              </p>
+            </div>
+          )}
           {unmarkedSubjects.map((subject: any) => (
             <div
               key={subject._id || subject.id}
