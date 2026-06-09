@@ -169,12 +169,21 @@ export function setupSocketHandlers(io: Server) {
       registerSessionHandlers(io, socket, user);
       registerChatHandlers(io, socket, user);
       registerE2EEHandlers(io, socket, user);
+      registerCallHandlers(io, socket, user);
 
       // 4. Signal client that all handlers are registered — client should join AFTER this
       // This prevents the race condition where 'joinSession' arrives before handlers are set up
       socket.emit('serverReady', { userId: user.id });
 
       // 5. Cleanup on disconnect
+      socket.on('disconnecting', () => {
+        for (const room of socket.rooms) {
+          if (room.startsWith('call_room_')) {
+            socket.to(room).emit('room:peer-left', { userId: user.id });
+          }
+        }
+      });
+
       socket.on('disconnect', () => {
         chatRateLimits.delete(socket.id);
 
@@ -1002,6 +1011,174 @@ function registerE2EEHandlers(io: Server, socket: Socket, user: UserPayload) {
       fromUserId: user.id,
       encryptedRoomKey,
     });
+  });
+}
+
+// =============================================================================
+// VIDEO CALL HANDLERS
+// =============================================================================
+function registerCallHandlers(io: Server, socket: Socket, user: UserPayload) {
+  /**
+   * Initiate a 1:1 call to another user
+   * JSDoc: We do NOT encrypt WebRTC signaling (offer/answer/ICE).
+   * These contain no sensitive content and the media stream is already
+   * protected by WebRTC's built-in DTLS-SRTP encryption.
+   */
+  socket.on('call:initiate', ({ to, offer }: { to: string; offer: any }) => {
+    if (!to || !offer) return;
+    io.to(to).emit('call:incoming', {
+      from: user.id,
+      callerName: user.name,
+      offer
+    });
+  });
+
+  /**
+   * Answer a 1:1 call
+   * JSDoc: Signaling is not encrypted since WebRTC uses DTLS-SRTP for media protection.
+   */
+  socket.on('call:answer', ({ to, answer }: { to: string; answer: any }) => {
+    if (!to || !answer) return;
+    io.to(to).emit('call:answered', { answer });
+  });
+
+  /**
+   * Reject a 1:1 call
+   */
+  socket.on('call:reject', ({ to }: { to: string }) => {
+    if (!to) return;
+    io.to(to).emit('call:rejected');
+  });
+
+  /**
+   * End a 1:1 call
+   */
+  socket.on('call:end', ({ to }: { to: string }) => {
+    if (!to) return;
+    io.to(to).emit('call:ended');
+  });
+
+  /**
+   * Notify caller that the user is busy
+   */
+  socket.on('call:busy', ({ to }: { to: string }) => {
+    if (!to) return;
+    io.to(to).emit('call:busy');
+  });
+
+  /**
+   * Relay ICE candidates between 1:1 call peers
+   */
+  socket.on('ice:candidate', ({ to, candidate }: { to: string; candidate: any }) => {
+    if (!to || !candidate) return;
+    io.to(to).emit('ice:candidate', {
+      from: user.id,
+      candidate
+    });
+  });
+
+  /**
+   * Join a room-based mesh group call
+   */
+  socket.on('room:join-call', async ({ roomId, sessionId }: { roomId: string; sessionId?: string }) => {
+    if (!roomId) return;
+    const callRoomName = `call_room_${roomId}`;
+
+    console.log(`📞 [room:join-call] user=${user.name} (${user.id}) roomId=${roomId} sessionId=${sessionId}`);
+
+    // Fetch all current sockets in that room
+    const sockets = await io.in(callRoomName).fetchSockets();
+    const otherPeerIds = sockets
+      .map((s: any) => s.user?.id)
+      .filter((id: string) => id && id !== user.id);
+
+    console.log(`📞 [room:join-call] existing peers in call room: [${otherPeerIds.join(', ')}]`);
+
+    const isFirstToJoin = otherPeerIds.length === 0;
+
+    // Send the list of existing peers in the call to the new participant
+    socket.emit('room:existing-peers', { peers: otherPeerIds });
+
+    // Join the call room
+    socket.join(callRoomName);
+
+    // Announce to existing peers in the room that this user joined
+    socket.to(callRoomName).emit('room:peer-joined', { userId: user.id });
+
+    // If this is the first person to start the call, notify ALL session participants
+    // so they get an invitation to join the group video call
+    if (isFirstToJoin && sessionId) {
+      try {
+        const session = await prisma.studySession.findUnique({
+          where: { id: sessionId },
+          include: { participants: true },
+        });
+
+        if (session) {
+          const targetUserIds = new Set<string>();
+          if (session.creatorId && session.creatorId !== user.id) {
+            targetUserIds.add(session.creatorId);
+          }
+          for (const p of session.participants) {
+            const pStatus = p.status as string;
+            if (p.userId !== user.id && (pStatus === 'accepted' || pStatus === 'joined')) {
+              targetUserIds.add(p.userId);
+            }
+          }
+
+          console.log(`📢 [room:call-started] broadcasting to target users: [${Array.from(targetUserIds).join(', ')}]`);
+
+          for (const targetId of targetUserIds) {
+            io.to(targetId).emit('room:call-started', {
+              startedBy: user.id,
+              starterName: user.name,
+              roomId,
+              sessionId,
+            });
+          }
+        } else {
+          console.warn(`⚠️ [room:join-call] session ${sessionId} not found in database`);
+        }
+      } catch (err) {
+        console.error(`❌ [room:join-call] error fetching session/participants:`, err);
+      }
+    } else if (!sessionId) {
+      console.warn(`⚠️ [room:join-call] sessionId missing — cannot broadcast call invite`);
+    } else {
+      console.log(`ℹ️ [room:join-call] not first to join — skipping broadcast`);
+    }
+  });
+
+  /**
+   * Relay mesh SDP offer from one peer to another
+   */
+  socket.on('room:relay-offer', ({ to, offer }: { to: string; offer: any }) => {
+    if (!to || !offer) return;
+    io.to(to).emit('room:offer', {
+      from: user.id,
+      offer
+    });
+  });
+
+  /**
+   * Relay mesh SDP answer from one peer to another
+   */
+  socket.on('room:relay-answer', ({ to, answer }: { to: string; answer: any }) => {
+    if (!to || !answer) return;
+    io.to(to).emit('room:answer', {
+      from: user.id,
+      answer
+    });
+  });
+
+  /**
+   * User leaves the group call
+   */
+  socket.on('room:peer-left', ({ roomId }: { roomId: string }) => {
+    if (!roomId) return;
+    const callRoomName = `call_room_${roomId}`;
+    socket.leave(callRoomName);
+    socket.to(callRoomName).emit('room:peer-left', { userId: user.id });
   });
 }
 
