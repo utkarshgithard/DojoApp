@@ -7,6 +7,13 @@ import { useAuth } from "@/context/authContext";
 import { useDarkMode } from "@/context/DarkModeContext";
 import { Message, StudySession, Participant, TypingUsers } from "@/lib/types";
 import API from "@/lib/axios";
+import { useVideoCall } from "@/hooks/useVideoCall";
+import { useGroupCall } from "@/hooks/useGroupCall";
+import { CallButton } from "@/components/call/CallButton";
+import { IncomingCallToast } from "@/components/call/IncomingCallToast";
+import { CallOverlay } from "@/components/call/CallOverlay";
+import { getCallDurationString } from "@/components/call/CallDurationTimer";
+import { CallStatus } from "@/types/call";
 import {
   ArrowLeft,
   Send,
@@ -337,6 +344,8 @@ export default function SessionChatPage() {
   const { darkMode } = useDarkMode() as any;
   const e2ee = useE2EE();
 
+
+
   // Stable refs to E2EE functions and context handlers — prevents stale closures and infinite render loops
   const decryptRef = useRef(e2ee?.decrypt);
   const encryptRef = useRef(e2ee?.encrypt);
@@ -483,6 +492,196 @@ export default function SessionChatPage() {
       setJoinedUsers((prev) => new Set([...prev, String(currentUserId)]));
     }
   }, [currentUserId]);
+
+  // WebRTC Video Call state & refs
+  const localVideoRef = useRef<HTMLVideoElement>(null);
+  const remoteVideoRef = useRef<HTMLVideoElement>(null);
+  const wasCallerRef = useRef(false);
+  const startedAtRef = useRef<Date | null>(null);
+
+  const {
+    callState: vCallState,
+    incomingCall,
+    localStream: vLocalStream,
+    remoteStream: vRemoteStream,
+    call: initiate1to1Call,
+    answer: answer1to1Call,
+    reject: reject1to1Call,
+    endCall: end1to1Call,
+    toggleMic: toggleMic1to1,
+    toggleCamera: toggleCam1to1,
+    shareScreen: shareScreen1to1,
+  } = useVideoCall({
+    socket,
+    localVideoRef,
+    remoteVideoRef,
+    userId: currentUserId || "",
+  });
+
+  const {
+    callState: gCallState,
+    peers,
+    localStream: gLocalStream,
+    joinGroupCall,
+    leaveGroupCall,
+    toggleMic: toggleMicGroup,
+    toggleCamera: toggleCamGroup,
+    shareScreen: shareScreenGroup,
+  } = useGroupCall({
+    socket,
+    userId: currentUserId || "",
+  });
+
+  // State for incoming group call invites (when another participant starts a call)
+  const [incomingGroupInvite, setIncomingGroupInvite] = useState<{
+    starterName: string;
+    roomId: string;
+    sessionId: string;
+  } | null>(null);
+
+  const participants: Participant[] = session?.participants || [];
+  const isGroupCall = participants.length > 2;
+
+  const callState = isGroupCall ? gCallState : vCallState;
+  const localStream = isGroupCall ? gLocalStream : vLocalStream;
+  const remoteStream = isGroupCall ? null : vRemoteStream;
+  const status = callState.status;
+  const startedAt = callState.startedAt;
+  const isMicOn = callState.isMicOn;
+  const isCamOn = callState.isCamOn;
+  const isScreenSharing = callState.isScreenSharing;
+
+  const sendSystemMessage = useCallback(async (messageText: string) => {
+    if (!socket || !sessionId) return;
+    
+    if (encryptRef.current && e2eeRef.current?.isReady) {
+      const memberIds = (session?.participants || [])
+        .map((p) => String(p.userId || p.user?.id || ""))
+        .filter(Boolean);
+      try {
+        const payload = await encryptRef.current(messageText, memberIds);
+        if (payload) {
+          socket.emit("sendChatMessage", { sessionId, ...payload, text: "" });
+          return;
+        }
+      } catch (err) {
+        console.warn("[E2EE] Encrypt failed on system message, falling back to plaintext:", err);
+      }
+    }
+    socket.emit("sendChatMessage", { sessionId, text: messageText });
+  }, [socket, sessionId, session?.participants]);
+
+  const handleToggleMic = () => {
+    if (isGroupCall) {
+      toggleMicGroup();
+    } else {
+      toggleMic1to1();
+    }
+  };
+
+  const handleToggleCam = () => {
+    if (isGroupCall) {
+      toggleCamGroup();
+    } else {
+      toggleCam1to1();
+    }
+  };
+
+  const handleToggleScreen = () => {
+    if (isGroupCall) {
+      shareScreenGroup();
+    } else {
+      shareScreen1to1();
+    }
+  };
+
+  const handleEndCall = useCallback(() => {
+    if (isGroupCall) {
+      leaveGroupCall();
+    } else {
+      end1to1Call();
+    }
+  }, [isGroupCall, leaveGroupCall, end1to1Call]);
+
+  const handleCallButtonClick = () => {
+    if (isGroupCall) {
+      wasCallerRef.current = true;
+      // Dismiss any pending group invite (they started it)
+      setIncomingGroupInvite(null);
+      joinGroupCall(sessionId, sessionId);
+    } else {
+      const otherPart = participants.find(
+        (p) => String(p.userId || p.user?.id || "") !== String(currentUserId)
+      );
+      const targetId = otherPart?.userId || otherPart?.user?.id;
+      if (targetId) {
+        wasCallerRef.current = true;
+        initiate1to1Call(targetId);
+      } else {
+        toast.error("No other participants to call.");
+      }
+    }
+  };
+
+  // Monitor call status changes for system message logging
+  useEffect(() => {
+    if (status === "connected") {
+      if (!startedAtRef.current) {
+        startedAtRef.current = startedAt || new Date();
+        if (wasCallerRef.current) {
+          sendSystemMessage(`[SYSTEM]:📹 Video call started by ${currentUserName}`);
+        }
+      }
+    } else if (status === "ended") {
+      if (startedAtRef.current) {
+        const durationStr = getCallDurationString(startedAtRef.current);
+        startedAtRef.current = null;
+        if (wasCallerRef.current) {
+          sendSystemMessage(`[SYSTEM]:📹 Call ended · ${durationStr}`);
+          wasCallerRef.current = false;
+        }
+      }
+    }
+  }, [status, currentUserName, sendSystemMessage, startedAt]);
+
+  // ---------------------------------------------------------------------------
+  // Listen for group call invites from other participants
+  // ---------------------------------------------------------------------------
+  // Use a ref to avoid stale closure — the listener is registered once and always
+  // reads the latest gCallState without needing to re-bind on every status change.
+  const gCallStatusRef = useRef(gCallState.status);
+  useEffect(() => {
+    gCallStatusRef.current = gCallState.status;
+  }, [gCallState.status]);
+
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleGroupCallStarted = ({
+      starterName,
+      roomId,
+      sessionId: inviteSessionId,
+    }: {
+      startedBy: string;
+      starterName: string;
+      roomId: string;
+      sessionId: string;
+    }) => {
+      console.log("[room:call-started] received", { starterName, roomId, inviteSessionId, currentStatus: gCallStatusRef.current });
+      // Only show invite if this user isn't already in the call
+      if (gCallStatusRef.current !== "idle" && gCallStatusRef.current !== "ended") {
+        console.log("[room:call-started] ignored — already in call, status:", gCallStatusRef.current);
+        return;
+      }
+      setIncomingGroupInvite({ starterName, roomId, sessionId: inviteSessionId });
+    };
+
+    socket.on("room:call-started", handleGroupCallStarted);
+    return () => {
+      socket.off("room:call-started", handleGroupCallStarted);
+    };
+  // Only re-bind when the socket instance changes — not on every status change
+  }, [socket]);
 
   // ---------------------------------------------------------------------------
   // File upload handlers
@@ -1024,7 +1223,7 @@ export default function SessionChatPage() {
   // ---------------------------------------------------------------------------
   const typingNames = Object.values(typingUsers).filter(Boolean) as string[];
 
-  const participants: Participant[] = session?.participants || [];
+
 
   // Sort: current user first, then joined/accepted, then others
   const sortedParticipants = [...participants].sort((a, b) => {
@@ -1330,6 +1529,16 @@ export default function SessionChatPage() {
               <Lock size={9} />
               E2EE
             </span>
+          )}
+
+          {/* Call Button */}
+          {isLive && (
+            <CallButton
+              onClick={handleCallButtonClick}
+              disabled={callState.status !== 'idle' && callState.status !== 'ended'}
+              tooltipText={(callState.status !== 'idle' && callState.status !== 'ended') ? 'Call in progress' : undefined}
+              dark={dark}
+            />
           )}
 
           {/* Focus mode toggle */}
@@ -1768,6 +1977,25 @@ export default function SessionChatPage() {
               </div>
             ) : (
               messages.map((m, index) => {
+                if (m.text?.startsWith("[SYSTEM]:")) {
+                  const systemText = m.text.substring(9);
+                  return (
+                    <div
+                      key={m.id || m._id || index}
+                      className="flex justify-center w-full my-2 animate-in fade-in duration-300"
+                    >
+                      <div className={`px-4 py-1.5 rounded-full text-[11px] font-semibold border select-none
+                        ${dark 
+                          ? "bg-zinc-900/50 border-zinc-800 text-zinc-400 shadow-sm" 
+                          : "bg-zinc-50 border-zinc-200 text-zinc-500 shadow-sm"
+                        }`}
+                      >
+                        {systemText}
+                      </div>
+                    </div>
+                  );
+                }
+
                 const isOwn = String(m.userId) === String(currentUserId);
                 const prevMsg = index > 0 ? messages[index - 1] : null;
                 const showSender = !prevMsg || prevMsg.userId !== m.userId;
@@ -1999,6 +2227,64 @@ export default function SessionChatPage() {
           </div>
         </div>
       </div>
+
+      {/* WebRTC Video Call Overlay & Toast components */}
+      {incomingCall && (
+        <IncomingCallToast
+          callerName={incomingCall.callerName}
+          onAccept={() => {
+            wasCallerRef.current = false;
+            answer1to1Call(incomingCall.callerId, incomingCall.offer);
+          }}
+          onReject={() => {
+            reject1to1Call(incomingCall.callerId);
+          }}
+          dark={dark}
+        />
+      )}
+
+      {/* Group call invite — shown when another participant starts a group call */}
+      {incomingGroupInvite && (gCallState.status === "idle" || gCallState.status === "ended") && (
+        <IncomingCallToast
+          callerName={incomingGroupInvite.starterName}
+          subtitle="Group video call · tap to join"
+          onAccept={() => {
+            wasCallerRef.current = false;
+            setIncomingGroupInvite(null);
+            joinGroupCall(incomingGroupInvite.roomId, incomingGroupInvite.sessionId);
+          }}
+          onReject={() => {
+            setIncomingGroupInvite(null);
+          }}
+          dark={dark}
+        />
+      )}
+
+      <CallOverlay
+        isOpen={callState.status === "calling" || callState.status === "connected"}
+        isGroup={isGroupCall}
+        status={callState.status}
+        startedAt={callState.startedAt}
+        localStream={localStream}
+        remoteStream={remoteStream}
+        peers={peers}
+        participants={participants}
+        currentUserId={currentUserId || ""}
+        isMicOn={isMicOn}
+        isCamOn={isCamOn}
+        isScreenSharing={isScreenSharing}
+        onToggleMic={handleToggleMic}
+        onToggleCam={handleToggleCam}
+        onToggleScreen={handleToggleScreen}
+        onEndCall={handleEndCall}
+        peerName={
+          isGroupCall
+            ? undefined
+            : participants.find(
+                (p) => String(p.userId || p.user?.id || "") !== String(currentUserId)
+              )?.user?.name || "User"
+        }
+      />
     </div>
   );
 }
