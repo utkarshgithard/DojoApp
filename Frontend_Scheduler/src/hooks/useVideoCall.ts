@@ -3,6 +3,7 @@ import { Socket } from 'socket.io-client';
 import { useCallState } from './useCallState';
 import { CallState } from '@/types/call';
 import { toast } from 'sonner';
+import { fetchIceServers } from '@/lib/iceServers';
 
 interface UseVideoCallProps {
   socket: Socket | null;
@@ -33,32 +34,6 @@ export function useVideoCall({
   const originalVideoTrackRef = useRef<MediaStreamTrack | null>(null);
   // Keep a stable ref to the current peer ID so endCall can notify them even in stale closures
   const peerIdRef = useRef<string | null>(null);
-
-  // Leave TODO comment for TURN credentials via env vars:
-  // TODO: Configure TURN credentials in production via:
-  // process.env.NEXT_PUBLIC_TURN_URL
-  // process.env.NEXT_PUBLIC_TURN_USER
-  // process.env.NEXT_PUBLIC_TURN_PASS
-  const getIceServers = (): RTCConfiguration => {
-    const iceServers: RTCIceServer[] = [
-      { urls: 'stun:stun.l.google.com:19302' },
-      { urls: 'stun:stun1.l.google.com:19302' },
-    ];
-
-    const turnUrl = process.env.NEXT_PUBLIC_TURN_URL;
-    const turnUser = process.env.NEXT_PUBLIC_TURN_USER;
-    const turnPass = process.env.NEXT_PUBLIC_TURN_PASS;
-
-    if (turnUrl && turnUser && turnPass) {
-      iceServers.push({
-        urls: turnUrl,
-        username: turnUser,
-        credential: turnPass,
-      });
-    }
-
-    return { iceServers };
-  };
 
   const endCall = useCallback((notifyPeer = true) => {
     // BUG FIX: Notify the remote peer so their call also terminates automatically
@@ -96,11 +71,12 @@ export function useVideoCall({
     dispatch({ type: 'CALL_END' });
   }, [socket, dispatch, localVideoRef, remoteVideoRef]);
 
-  const initiatePeerConnection = useCallback((peerId: string) => {
+  const initiatePeerConnection = useCallback(async (peerId: string) => {
     if (!socket) return null;
 
-    const configuration = getIceServers();
-    const pc = new RTCPeerConnection(configuration);
+    // Fetch fresh TURN+STUN credentials from the server (Metered.ca)
+    const iceServers = await fetchIceServers();
+    const pc = new RTCPeerConnection({ iceServers });
 
     pc.onicecandidate = (event) => {
       if (event.candidate) {
@@ -147,7 +123,7 @@ export function useVideoCall({
         localVideoRef.current.srcObject = stream;
       }
 
-      const pc = initiatePeerConnection(targetUserId);
+      const pc = await initiatePeerConnection(targetUserId);
       if (!pc) return;
 
       stream.getTracks().forEach((track) => {
@@ -187,7 +163,7 @@ export function useVideoCall({
         localVideoRef.current.srcObject = stream;
       }
 
-      const pc = initiatePeerConnection(callerId);
+      const pc = await initiatePeerConnection(callerId);
       if (!pc) return;
 
       stream.getTracks().forEach((track) => {
