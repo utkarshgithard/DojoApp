@@ -7,6 +7,8 @@ import { toast } from 'sonner';
 interface UseGroupCallProps {
   socket: Socket | null;
   userId: string;
+  /** Called when a remote peer leaves the call. Provides the peerId so the UI can show a notification. */
+  onPeerLeft?: (peerId: string) => void;
 }
 
 export interface PeerStream {
@@ -20,7 +22,7 @@ export interface PeerStream {
  * JSDoc: WebRTC signaling (offers, answers, ICE candidates) is NOT encrypted.
  * Media streams are secured natively by WebRTC DTLS-SRTP, and signaling data contains no PII.
  */
-export function useGroupCall({ socket, userId }: UseGroupCallProps) {
+export function useGroupCall({ socket, userId, onPeerLeft }: UseGroupCallProps) {
   const { callState, dispatch } = useCallState();
   const [peers, setPeers] = useState<PeerStream[]>([]);
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
@@ -329,6 +331,8 @@ export function useGroupCall({ socket, userId }: UseGroupCallProps) {
         pcsRef.current.delete(peerId);
       }
       setPeers((prev) => prev.filter((p) => p.peerId !== peerId));
+      // BUG FIX: Notify the UI so it can show a toast/notification
+      onPeerLeft?.(peerId);
     };
 
     socket.on('room:existing-peers', handleExistingPeers);

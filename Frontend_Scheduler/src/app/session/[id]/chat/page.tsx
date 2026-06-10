@@ -530,6 +530,14 @@ export default function SessionChatPage() {
   } = useGroupCall({
     socket,
     userId: currentUserId || "",
+    // BUG FIX: Show a toast when a peer leaves and their video tile is removed
+    onPeerLeft: (peerId) => {
+      const participant = (session?.participants || []).find(
+        (p) => String(p.userId || p.user?.id || "") === String(peerId)
+      );
+      const name = participant?.user?.name || "A participant";
+      toast.info(`${name} left the call.`);
+    },
   });
 
   // State for incoming group call invites (when another participant starts a call)
@@ -870,6 +878,27 @@ export default function SessionChatPage() {
       clearTimeout(t2);
     };
   }, [messages, loadingSession, scrollToBottom]);
+
+  // ---------------------------------------------------------------------------
+  // Mobile keyboard: re-scroll to bottom when the visual viewport shrinks
+  // (i.e. when the on-screen keyboard pops up or dismisses on a phone).
+  // `visualViewport` is the correct API — `window.resize` does NOT fire on
+  // keyboard open in most mobile browsers.
+  // ---------------------------------------------------------------------------
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.visualViewport) return;
+
+    const handleViewportResize = () => {
+      // Small timeout gives the browser a frame to repaint the shrunken layout
+      // before we scroll, so we land exactly at the last message.
+      setTimeout(() => scrollToBottom(false), 50);
+    };
+
+    window.visualViewport.addEventListener('resize', handleViewportResize);
+    return () => {
+      window.visualViewport!.removeEventListener('resize', handleViewportResize);
+    };
+  }, [scrollToBottom]);
 
 
   // ---------------------------------------------------------------------------
@@ -1446,7 +1475,7 @@ export default function SessionChatPage() {
   // ---------------------------------------------------------------------------
   return (
     <div
-      className={`h-screen flex flex-col overflow-hidden transition-colors duration-300 ${bg} ${dark ? "text-white" : "text-gray-900"}`}
+      className={`h-[100dvh] flex flex-col overflow-hidden transition-colors duration-300 ${bg} ${dark ? "text-white" : "text-gray-900"}`}
     >
       {/* ------------------------------------------------------------------ */}
       {/* TOP BAR                                                             */}
@@ -2197,6 +2226,12 @@ export default function SessionChatPage() {
                     e.preventDefault();
                     send();
                   }
+                }}
+                onFocus={() => {
+                  // When the user taps the input on mobile, the keyboard is about to
+                  // open. Scroll to the very bottom so the most recent messages are
+                  // visible right above the keyboard instead of being hidden behind it.
+                  setTimeout(() => scrollToBottom(false), 100);
                 }}
                 placeholder={
                   disabled

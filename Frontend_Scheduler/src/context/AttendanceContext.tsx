@@ -27,6 +27,7 @@ export const AttendanceProvider = ({ children }: { children: React.ReactNode }) 
   const [friends, setFriends] = useState<any[]>([]);
   const [subjectStats, setSubjectStats] = useState<SubjectStats[]>([]);
   const [calendarData, setCalendarData] = useState<any>(null);
+  const [hasSavedSchedule, setHasSavedSchedule] = useState(false);
   const [attendanceLoading, setAttendanceLoading] = useState(true);
   const [holidayLoading, setHolidayLoading] = useState(false);
   const [friendsLoading, setFriendsLoading] = useState(true);
@@ -35,6 +36,7 @@ export const AttendanceProvider = ({ children }: { children: React.ReactNode }) 
     try {
       const res = await API.get("/schedule/calender");
       setCalendarData(res.data.schedule);
+      setHasSavedSchedule(!!res.data.id);
     } catch (err: any) {
       if ((err?.response?.status === 503 || err?.response?.status === 500) && retryCount < 3) {
         console.warn(`⏳ Server or database not ready, retrying fetchCalendarData in 3s (attempt ${retryCount + 1}/3)...`);
@@ -266,11 +268,11 @@ export const AttendanceProvider = ({ children }: { children: React.ReactNode }) 
   useEffect(() => {
     if (!attendanceLoading && calendarData) {
       const isScheduleEmpty = Object.values(calendarData).every((dayArr: any) => !dayArr || dayArr.length === 0);
-      if (isScheduleEmpty && unmarkedSubjects.length === 0 && markedSubjects.length === 0) {
+      if (isScheduleEmpty && !hasSavedSchedule && unmarkedSubjects.length === 0 && markedSubjects.length === 0) {
         setUnmarkedSubjects(DUMMY_CLASSES);
       }
     }
-  }, [calendarData, attendanceLoading, unmarkedSubjects.length, markedSubjects.length]);
+  }, [calendarData, attendanceLoading, unmarkedSubjects.length, markedSubjects.length, hasSavedSchedule]);
 
   // Set up real-time invite socket listeners
   useEffect(() => {

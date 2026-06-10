@@ -58,9 +58,14 @@ export function CallOverlay({
 
   useEffect(() => {
     if (localVideoRef.current && localStream) {
+      // BUG FIX: Always re-assign srcObject here.
+      // For the caller, the overlay renders in 'calling' state but the local <video> element
+      // isn't rendered until status==='connected'. Re-running this effect when `status` changes
+      // ensures the srcObject is applied after the element mounts.
       localVideoRef.current.srcObject = localStream;
+      localVideoRef.current.play().catch(() => {});
     }
-  }, [localStream, isOpen, isCamOn]);
+  }, [localStream, isOpen, isCamOn, status]);
 
   if (!isOpen) return null;
 
@@ -179,6 +184,7 @@ export function CallOverlay({
                 autoPlay
                 playsInline
                 muted
+                style={{ transform: 'scaleX(-1)' }}
                 className={`w-full h-full object-cover transition-opacity duration-300 ${
                   isCamOn ? 'opacity-100' : 'opacity-0 pointer-events-none'
                 }`}

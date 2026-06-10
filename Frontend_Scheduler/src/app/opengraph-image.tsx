@@ -1,6 +1,7 @@
 import { ImageResponse } from "next/og";
 
-export const runtime = "edge";
+// Let Next.js statically generate this image at build time by using the default runtime
+export const runtime = "nodejs";
 
 export const alt = "DojoClass — Smart Attendance Tracker for College Students";
 export const size = { width: 1200, height: 630 };

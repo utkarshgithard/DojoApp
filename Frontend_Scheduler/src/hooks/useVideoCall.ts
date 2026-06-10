@@ -31,6 +31,8 @@ export function useVideoCall({
   const localStreamRef = useRef<MediaStream | null>(null);
   const screenTrackRef = useRef<MediaStreamTrack | null>(null);
   const originalVideoTrackRef = useRef<MediaStreamTrack | null>(null);
+  // Keep a stable ref to the current peer ID so endCall can notify them even in stale closures
+  const peerIdRef = useRef<string | null>(null);
 
   // Leave TODO comment for TURN credentials via env vars:
   // TODO: Configure TURN credentials in production via:
@@ -58,7 +60,13 @@ export function useVideoCall({
     return { iceServers };
   };
 
-  const endCall = useCallback(() => {
+  const endCall = useCallback((notifyPeer = true) => {
+    // BUG FIX: Notify the remote peer so their call also terminates automatically
+    if (notifyPeer && socket && peerIdRef.current) {
+      socket.emit('call:end', { to: peerIdRef.current });
+    }
+    peerIdRef.current = null;
+
     // Stop screen share if active
     if (screenTrackRef.current) {
       screenTrackRef.current.stop();
@@ -86,7 +94,7 @@ export function useVideoCall({
     setLocalStream(null);
     setRemoteStream(null);
     dispatch({ type: 'CALL_END' });
-  }, [dispatch, localVideoRef, remoteVideoRef]);
+  }, [socket, dispatch, localVideoRef, remoteVideoRef]);
 
   const initiatePeerConnection = useCallback((peerId: string) => {
     if (!socket) return null;
@@ -133,6 +141,7 @@ export function useVideoCall({
       });
 
       localStreamRef.current = stream;
+      peerIdRef.current = targetUserId;
       setLocalStream(stream);
       if (localVideoRef.current) {
         localVideoRef.current.srcObject = stream;
@@ -172,6 +181,7 @@ export function useVideoCall({
       });
 
       localStreamRef.current = stream;
+      peerIdRef.current = callerId;
       setLocalStream(stream);
       if (localVideoRef.current) {
         localVideoRef.current.srcObject = stream;
@@ -295,6 +305,16 @@ export function useVideoCall({
     }
   }, [callState.isScreenSharing, dispatch]);
 
+  // BUG FIX: Sync remoteStream state → video element imperatively.
+  // pc.ontrack fires before the <video> is in the DOM (call is still in 'calling' state),
+  // so srcObject assignment inside ontrack is lost. This effect re-applies it once visible.
+  useEffect(() => {
+    if (remoteStream && remoteVideoRef.current) {
+      remoteVideoRef.current.srcObject = remoteStream;
+      remoteVideoRef.current.play().catch(() => {});
+    }
+  }, [remoteStream, remoteVideoRef]);
+
   useEffect(() => {
     if (!socket) return;
 
@@ -307,6 +327,7 @@ export function useVideoCall({
         socket.emit('call:busy', { to: from });
         return;
       }
+      peerIdRef.current = from;
       setIncomingCall({ callerId: from, callerName, offer });
       dispatch({
         type: 'CALL_START',
@@ -333,17 +354,17 @@ export function useVideoCall({
 
     const handleRejected = () => {
       toast.error('Call rejected.');
-      endCall();
+      endCall(false); // Don't notify peer — they already rejected
     };
 
     const handleEnded = () => {
-      toast.info('Call ended.');
-      endCall();
+      toast.info('Call ended by the other person.');
+      endCall(false); // Don't notify peer — they already ended
     };
 
     const handleBusy = () => {
-      toast.error('User is busy.');
-      endCall();
+      toast.error('User is currently busy.');
+      endCall(false);
     };
 
     socket.on('call:incoming', handleIncoming);

@@ -7,7 +7,6 @@ import { Calendar } from '@/components/ui/calendar';
 import { format } from 'date-fns';
 import { CalendarIcon, ChevronDown, X, Search, UserPlus } from 'lucide-react';
 import { useDarkMode } from '@/context/DarkModeContext';
-import { TimePicker } from '@/components/ui/time-picker';
 
 interface Friend {
   id: string;
@@ -193,8 +192,13 @@ function FriendMultiSelect({
 const CreateStudySession = ({ socket, onClose }: { socket: any; onClose: () => void }) => {
   const { darkMode } = useDarkMode() as any;
   const [subject, setSubject] = useState('');
-  const [date, setDate] = useState('');
-  const [time, setTime] = useState('09:00');
+  const [date, setDate] = useState(() => {
+    const now = new Date();
+    const yyyy = now.getFullYear();
+    const mm = String(now.getMonth() + 1).padStart(2, '0');
+    const dd = String(now.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  });
   const [duration, setDuration] = useState(30);
   const [selectedFriends, setSelectedFriends] = useState<Friend[]>([]);
   const [friends, setFriends] = useState<Friend[]>([]);
@@ -229,23 +233,27 @@ const CreateStudySession = ({ socket, onClose }: { socket: any; onClose: () => v
   };
 
   const handleCreateSession = async () => {
-    if (!subject || !date || !time) {
+    if (!subject || !date) {
       return toast.error('Please fill in all required fields');
     }
     setLoading(true);
+
+    const now = new Date();
+    const currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+
     try {
       await API.post('/study-session', {
         subject,
         date,
-        time,
+        time: currentTime,
         duration,
         // Map selected friends → their friend codes for the existing API contract
         invitedFriends: selectedFriends.map((f) => f.friendCode),
       });
 
       setSubject('');
-      setDate('');
-      setTime('09:00');
+      const today = new Date();
+      setDate(`${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`);
       setDuration(30);
       setSelectedFriends([]);
 
@@ -339,22 +347,16 @@ const CreateStudySession = ({ socket, onClose }: { socket: any; onClose: () => v
         </div>
       </div>
 
-      {/* Grid for Time & Duration */}
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label className={labelClass}>Start Time</label>
-          <TimePicker value={time} onChange={setTime} />
-        </div>
-        <div>
-          <label className={labelClass}>Duration (mins)</label>
-          <input
-            type="number"
-            placeholder="Minutes"
-            value={duration}
-            onChange={(e) => setDuration(Number(e.target.value))}
-            className={inputClass}
-          />
-        </div>
+      {/* Duration field */}
+      <div>
+        <label className={labelClass}>Duration (mins)</label>
+        <input
+          type="number"
+          placeholder="Minutes"
+          value={duration}
+          onChange={(e) => setDuration(Number(e.target.value))}
+          className={inputClass}
+        />
       </div>
 
       {/* Actions */}
