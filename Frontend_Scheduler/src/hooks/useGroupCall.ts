@@ -3,7 +3,6 @@ import { Socket } from 'socket.io-client';
 import { useCallState } from './useCallState';
 import { CallState } from '@/types/call';
 import { toast } from 'sonner';
-import { fetchIceServers } from '@/lib/iceServers';
 
 interface UseGroupCallProps {
   socket: Socket | null;
@@ -33,6 +32,31 @@ export function useGroupCall({ socket, userId, onPeerLeft }: UseGroupCallProps) 
   const screenTrackRef = useRef<MediaStreamTrack | null>(null);
   const originalVideoTrackRef = useRef<MediaStreamTrack | null>(null);
   const currentRoomIdRef = useRef<string | null>(null);
+
+  // TODO: Configure TURN credentials in production via env vars:
+  // process.env.NEXT_PUBLIC_TURN_URL
+  // process.env.NEXT_PUBLIC_TURN_USER
+  // process.env.NEXT_PUBLIC_TURN_PASS
+  const getIceServers = (): RTCConfiguration => {
+    const iceServers: RTCIceServer[] = [
+      { urls: 'stun:stun.l.google.com:19302' },
+      { urls: 'stun:stun1.l.google.com:19302' },
+    ];
+
+    const turnUrl = process.env.NEXT_PUBLIC_TURN_URL;
+    const turnUser = process.env.NEXT_PUBLIC_TURN_USER;
+    const turnPass = process.env.NEXT_PUBLIC_TURN_PASS;
+
+    if (turnUrl && turnUser && turnPass) {
+      iceServers.push({
+        urls: turnUrl,
+        username: turnUser,
+        credential: turnPass,
+      });
+    }
+
+    return { iceServers };
+  };
 
   const leaveGroupCall = useCallback(() => {
     const roomId = currentRoomIdRef.current;
@@ -65,12 +89,11 @@ export function useGroupCall({ socket, userId, onPeerLeft }: UseGroupCallProps) 
     dispatch({ type: 'CALL_END' });
   }, [socket, dispatch]);
 
-  const createPeerConnection = useCallback(async (peerId: string) => {
+  const createPeerConnection = useCallback((peerId: string) => {
     if (!socket) return null;
 
-    // Fetch fresh TURN+STUN credentials (Metered.ca via secure server API route)
-    const iceServers = await fetchIceServers();
-    const pc = new RTCPeerConnection({ iceServers });
+    const configuration = getIceServers();
+    const pc = new RTCPeerConnection(configuration);
 
     pc.onicecandidate = (event) => {
       if (event.candidate) {
@@ -234,7 +257,7 @@ export function useGroupCall({ socket, userId, onPeerLeft }: UseGroupCallProps) 
       // Mesh limit: max 6 peers total (including self)
       const allowedPeers = peers.slice(0, 5); 
       for (const peerId of allowedPeers) {
-        const pc = await createPeerConnection(peerId);
+        const pc = createPeerConnection(peerId);
         if (pc) {
           try {
             const offer = await pc.createOffer();
@@ -255,14 +278,14 @@ export function useGroupCall({ socket, userId, onPeerLeft }: UseGroupCallProps) 
         return;
       }
       // Note: We wait for the joiner to send us an offer
-      createPeerConnection(peerId); // fire-and-forget; offer will arrive via handleOffer
+      createPeerConnection(peerId);
     };
 
     // We received an offer from a peer
     const handleOffer = async ({ from, offer }: { from: string; offer: RTCSessionDescriptionInit }) => {
       let pc = pcsRef.current.get(from);
       if (!pc) {
-        pc = (await createPeerConnection(from)) || undefined;
+        pc = createPeerConnection(from) || undefined;
       }
       if (pc) {
         try {
