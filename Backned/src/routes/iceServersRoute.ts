@@ -1,5 +1,12 @@
 import { Router, Request, Response } from 'express';
 
+// RTCIceServer is a browser-only WebRTC type — define an equivalent here for Node.js
+interface IceServer {
+  urls: string | string[];
+  username?: string;
+  credential?: string;
+}
+
 const router = Router();
 
 /**
@@ -42,7 +49,7 @@ router.get('/', async (_req: Request, res: Response) => {
       throw new Error(`Metered API error: ${response.status} ${response.statusText}`);
     }
 
-    const meteredServers = await response.json() as RTCIceServer[];
+    const meteredServers = await response.json() as IceServer[];
 
     // Merge: Metered's fresh credentials + Google STUN baseline
     const iceServers = [
