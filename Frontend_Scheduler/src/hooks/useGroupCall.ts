@@ -116,13 +116,24 @@ export function useGroupCall({ socket, userId, onPeerLeft }: UseGroupCallProps) 
       }
     };
 
+    let iceRestartAttempts = 0;
+
     pc.onconnectionstatechange = () => {
-      if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
-        // Attempt to clean up that specific peer
-        pc.close();
-        pcsRef.current.delete(peerId);
-        setPeers((prev) => prev.filter((p) => p.peerId !== peerId));
+      if (pc.connectionState === 'failed') {
+        if (iceRestartAttempts < 1) {
+          // Try ICE restart before removing peer tile
+          iceRestartAttempts++;
+          pc.restartIce();
+          console.warn(`[WebRTC] Peer ${peerId} failed — attempting ICE restart...`);
+        } else {
+          // Restart also failed — clean up this peer
+          pc.close();
+          pcsRef.current.delete(peerId);
+          setPeers((prev) => prev.filter((p) => p.peerId !== peerId));
+          console.warn(`[WebRTC] Peer ${peerId} permanently disconnected.`);
+        }
       }
+      // 'disconnected' is transient — browser may auto-recover, don't remove yet
     };
 
     // Add local tracks to this new peer connection

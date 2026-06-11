@@ -129,10 +129,28 @@ export function useVideoCall({
       }
     };
 
+    // Track restart attempts to avoid infinite loops
+    let iceRestartAttempts = 0;
+
     pc.onconnectionstatechange = () => {
       if (pc.connectionState === 'failed') {
-        toast.error('Call failed. Try again.');
-        endCall();
+        if (iceRestartAttempts < 1 && pcRef.current === pc) {
+          // Attempt an ICE restart before giving up — this re-gathers candidates
+          // and can recover when the initial STUN path fails but TURN succeeds.
+          iceRestartAttempts++;
+          pc.restartIce();
+          console.warn('[WebRTC] Connection failed — attempting ICE restart...');
+        } else {
+          toast.error('Call failed. Please check your connection and try again.');
+          endCall(false);
+        }
+      }
+    };
+
+    pc.oniceconnectionstatechange = () => {
+      if (pc.iceConnectionState === 'disconnected') {
+        // Transient disconnection — try to recover silently
+        console.warn('[WebRTC] ICE disconnected — may auto-recover...');
       }
     };
 
