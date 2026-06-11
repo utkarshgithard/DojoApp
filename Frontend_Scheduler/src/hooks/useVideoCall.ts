@@ -34,27 +34,35 @@ export function useVideoCall({
   // Keep a stable ref to the current peer ID so endCall can notify them even in stale closures
   const peerIdRef = useRef<string | null>(null);
 
-  // Leave TODO comment for TURN credentials via env vars:
-  // TODO: Configure TURN credentials in production via:
-  // process.env.NEXT_PUBLIC_TURN_URL
-  // process.env.NEXT_PUBLIC_TURN_USER
-  // process.env.NEXT_PUBLIC_TURN_PASS
+  // Configure ICE servers — STUN for simple NAT, TURN for strict NAT / CGNAT / mobile carriers.
+  // When Metered env vars are set we inject the FULL recommended ICE array:
+  //   - Metered STUN
+  //   - TURN over UDP  port 80  (fastest)
+  //   - TURN over UDP  port 443 (ISP fallback)
+  //   - TURN over TLS  port 443 (most firewall-proof)
+  //   - TURN over TCP  port 80  (bypasses UDP-blocking networks)
   const getIceServers = (): RTCConfiguration => {
+    const turnUser = process.env.NEXT_PUBLIC_TURN_USER;
+    const turnPass = process.env.NEXT_PUBLIC_TURN_PASS;
+
+    // Always include Google STUN as baseline
     const iceServers: RTCIceServer[] = [
       { urls: 'stun:stun.l.google.com:19302' },
       { urls: 'stun:stun1.l.google.com:19302' },
     ];
 
-    const turnUrl = process.env.NEXT_PUBLIC_TURN_URL;
-    const turnUser = process.env.NEXT_PUBLIC_TURN_USER;
-    const turnPass = process.env.NEXT_PUBLIC_TURN_PASS;
+    if (turnUser && turnPass) {
+      // Add Metered STUN
+      iceServers.push({ urls: 'stun:stun.relay.metered.ca:80' });
 
-    if (turnUrl && turnUser && turnPass) {
-      iceServers.push({
-        urls: turnUrl,
-        username: turnUser,
-        credential: turnPass,
-      });
+      // Add all 4 TURN endpoints (mirrors what metered.ca dashboard generates)
+      const turnBase = 'global.relay.metered.ca';
+      iceServers.push(
+        { urls: `turn:${turnBase}:80`,                       username: turnUser, credential: turnPass },
+        { urls: `turn:${turnBase}:80?transport=tcp`,         username: turnUser, credential: turnPass },
+        { urls: `turn:${turnBase}:443`,                      username: turnUser, credential: turnPass },
+        { urls: `turns:${turnBase}:443?transport=tcp`,       username: turnUser, credential: turnPass },
+      );
     }
 
     return { iceServers };

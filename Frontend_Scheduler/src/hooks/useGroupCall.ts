@@ -33,26 +33,27 @@ export function useGroupCall({ socket, userId, onPeerLeft }: UseGroupCallProps) 
   const originalVideoTrackRef = useRef<MediaStreamTrack | null>(null);
   const currentRoomIdRef = useRef<string | null>(null);
 
-  // TODO: Configure TURN credentials in production via env vars:
-  // process.env.NEXT_PUBLIC_TURN_URL
-  // process.env.NEXT_PUBLIC_TURN_USER
-  // process.env.NEXT_PUBLIC_TURN_PASS
+  // Configure ICE servers — STUN for simple NAT, TURN for strict NAT / CGNAT / mobile carriers.
+  // Full Metered ICE array: STUN + 4 TURN endpoints (UDP/TCP/TLS) for maximum connectivity.
   const getIceServers = (): RTCConfiguration => {
+    const turnUser = process.env.NEXT_PUBLIC_TURN_USER;
+    const turnPass = process.env.NEXT_PUBLIC_TURN_PASS;
+
     const iceServers: RTCIceServer[] = [
       { urls: 'stun:stun.l.google.com:19302' },
       { urls: 'stun:stun1.l.google.com:19302' },
     ];
 
-    const turnUrl = process.env.NEXT_PUBLIC_TURN_URL;
-    const turnUser = process.env.NEXT_PUBLIC_TURN_USER;
-    const turnPass = process.env.NEXT_PUBLIC_TURN_PASS;
+    if (turnUser && turnPass) {
+      iceServers.push({ urls: 'stun:stun.relay.metered.ca:80' });
 
-    if (turnUrl && turnUser && turnPass) {
-      iceServers.push({
-        urls: turnUrl,
-        username: turnUser,
-        credential: turnPass,
-      });
+      const turnBase = 'global.relay.metered.ca';
+      iceServers.push(
+        { urls: `turn:${turnBase}:80`,                       username: turnUser, credential: turnPass },
+        { urls: `turn:${turnBase}:80?transport=tcp`,         username: turnUser, credential: turnPass },
+        { urls: `turn:${turnBase}:443`,                      username: turnUser, credential: turnPass },
+        { urls: `turns:${turnBase}:443?transport=tcp`,       username: turnUser, credential: turnPass },
+      );
     }
 
     return { iceServers };
