@@ -25,8 +25,8 @@ router.get('/', async (_req: Request, res: Response) => {
 
   // Always return Google STUN as a baseline fallback
   const fallbackServers = [
-    { urls: 'stun:stun.l.google.com:19302' },
-    { urls: 'stun:stun1.l.google.com:19302' },
+    { urls: 'stun:stun.relay.metered.ca:80' },
+
   ];
 
   if (!apiKey || apiKey === 'your_metered_api_key_here') {
