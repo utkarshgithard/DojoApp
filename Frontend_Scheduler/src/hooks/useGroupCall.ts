@@ -33,30 +33,23 @@ export function useGroupCall({ socket, userId, onPeerLeft }: UseGroupCallProps) 
   const originalVideoTrackRef = useRef<MediaStreamTrack | null>(null);
   const currentRoomIdRef = useRef<string | null>(null);
 
-  // Configure ICE servers — STUN for simple NAT, TURN for strict NAT / CGNAT / mobile carriers.
-  // Full Metered ICE array: STUN + 4 TURN endpoints (UDP/TCP/TLS) for maximum connectivity.
-  const getIceServers = (): RTCConfiguration => {
-    const turnUser = process.env.NEXT_PUBLIC_TURN_USER;
-    const turnPass = process.env.NEXT_PUBLIC_TURN_PASS;
-
-    const iceServers: RTCIceServer[] = [
-      { urls: 'stun:stun.l.google.com:19302' },
-      { urls: 'stun:stun1.l.google.com:19302' },
-    ];
-
-    if (turnUser && turnPass) {
-      iceServers.push({ urls: 'stun:stun.relay.metered.ca:80' });
-
-      const turnBase = 'global.relay.metered.ca';
-      iceServers.push(
-        { urls: `turn:${turnBase}:80`,                       username: turnUser, credential: turnPass },
-        { urls: `turn:${turnBase}:80?transport=tcp`,         username: turnUser, credential: turnPass },
-        { urls: `turn:${turnBase}:443`,                      username: turnUser, credential: turnPass },
-        { urls: `turns:${turnBase}:443?transport=tcp`,       username: turnUser, credential: turnPass },
-      );
+  // Fetch fresh ICE server credentials from the backend before each peer connection.
+  const getIceServersAsync = async (): Promise<RTCConfiguration> => {
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+    try {
+      const res = await fetch(`${apiUrl}/api/ice-servers`, { cache: 'no-store' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json() as { iceServers: RTCIceServer[] };
+      return { iceServers: data.iceServers };
+    } catch (err) {
+      console.warn('[ICE] Backend unavailable, using Google STUN fallback:', err);
+      return {
+        iceServers: [
+          { urls: 'stun:stun.l.google.com:19302' },
+          { urls: 'stun:stun1.l.google.com:19302' },
+        ],
+      };
     }
-
-    return { iceServers };
   };
 
   const leaveGroupCall = useCallback(() => {
@@ -90,10 +83,10 @@ export function useGroupCall({ socket, userId, onPeerLeft }: UseGroupCallProps) 
     dispatch({ type: 'CALL_END' });
   }, [socket, dispatch]);
 
-  const createPeerConnection = useCallback((peerId: string) => {
+  const createPeerConnection = useCallback(async (peerId: string) => {
     if (!socket) return null;
 
-    const configuration = getIceServers();
+    const configuration = await getIceServersAsync();
     const pc = new RTCPeerConnection(configuration);
 
     pc.onicecandidate = (event) => {
@@ -266,10 +259,9 @@ export function useGroupCall({ socket, userId, onPeerLeft }: UseGroupCallProps) 
 
     // We receive the list of all peers currently in the room
     const handleExistingPeers = async ({ peers }: { peers: string[] }) => {
-      // Mesh limit: max 6 peers total (including self)
-      const allowedPeers = peers.slice(0, 5); 
+      const allowedPeers = peers.slice(0, 5);
       for (const peerId of allowedPeers) {
-        const pc = createPeerConnection(peerId);
+        const pc = await createPeerConnection(peerId);
         if (pc) {
           try {
             const offer = await pc.createOffer();
@@ -283,21 +275,20 @@ export function useGroupCall({ socket, userId, onPeerLeft }: UseGroupCallProps) 
     };
 
     // A new peer joined the room
-    const handlePeerJoined = ({ userId: peerId }: { userId: string }) => {
-      // Mesh limit: max 6 peers total (including self)
+    const handlePeerJoined = async ({ userId: peerId }: { userId: string }) => {
       if (pcsRef.current.size >= 5) {
         toast.warning('Room has reached the maximum of 6 participants.');
         return;
       }
       // Note: We wait for the joiner to send us an offer
-      createPeerConnection(peerId);
+      await createPeerConnection(peerId);
     };
 
     // We received an offer from a peer
     const handleOffer = async ({ from, offer }: { from: string; offer: RTCSessionDescriptionInit }) => {
       let pc = pcsRef.current.get(from);
       if (!pc) {
-        pc = createPeerConnection(from) || undefined;
+        pc = await createPeerConnection(from) || undefined;
       }
       if (pc) {
         try {

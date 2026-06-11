@@ -13,6 +13,7 @@ import scheduleRouter from './routes/scheduleRoutes.js';
 import attendanceRouter from './routes/attendanceRoutes.js';
 import studySessionRouter from './routes/studySessionRoutes.js';
 import pushRouter from './routes/pushRoutes.js';
+import iceServersRouter from './routes/iceServersRoute.js';
 import prisma from './lib/prisma.js';
 import { setupSocketHandlers, setDbReady } from './socket.js';
 
@@ -37,6 +38,9 @@ app.use('/api', (_req, res, next) => {
 });
 
 // API routes
+// ICE servers route is DB-independent — must be registered BEFORE the dbReady guard
+app.use('/api/ice-servers', iceServersRouter);
+
 app.use('/api/auth', userRouter);
 app.use('/api/subject', subjectRouter);
 app.use('/api/schedule', scheduleRouter);

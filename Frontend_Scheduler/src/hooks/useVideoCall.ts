@@ -34,38 +34,26 @@ export function useVideoCall({
   // Keep a stable ref to the current peer ID so endCall can notify them even in stale closures
   const peerIdRef = useRef<string | null>(null);
 
-  // Configure ICE servers — STUN for simple NAT, TURN for strict NAT / CGNAT / mobile carriers.
-  // When Metered env vars are set we inject the FULL recommended ICE array:
-  //   - Metered STUN
-  //   - TURN over UDP  port 80  (fastest)
-  //   - TURN over UDP  port 443 (ISP fallback)
-  //   - TURN over TLS  port 443 (most firewall-proof)
-  //   - TURN over TCP  port 80  (bypasses UDP-blocking networks)
-  const getIceServers = (): RTCConfiguration => {
-    const turnUser = process.env.NEXT_PUBLIC_TURN_USER;
-    const turnPass = process.env.NEXT_PUBLIC_TURN_PASS;
-
-    // Always include Google STUN as baseline
-    const iceServers: RTCIceServer[] = [
-      { urls: 'stun:stun.l.google.com:19302' },
-      { urls: 'stun:stun1.l.google.com:19302' },
-    ];
-
-    if (turnUser && turnPass) {
-      // Add Metered STUN
-      iceServers.push({ urls: 'stun:stun.relay.metered.ca:80' });
-
-      // Add all 4 TURN endpoints (mirrors what metered.ca dashboard generates)
-      const turnBase = 'global.relay.metered.ca';
-      iceServers.push(
-        { urls: `turn:${turnBase}:80`,                       username: turnUser, credential: turnPass },
-        { urls: `turn:${turnBase}:80?transport=tcp`,         username: turnUser, credential: turnPass },
-        { urls: `turn:${turnBase}:443`,                      username: turnUser, credential: turnPass },
-        { urls: `turns:${turnBase}:443?transport=tcp`,       username: turnUser, credential: turnPass },
-      );
+  // Fetch fresh ICE server credentials from the backend before each call.
+  // Credentials are fetched server-side from Metered's API so they are always
+  // fresh and the API key is never exposed to the client.
+  const getIceServersAsync = async (): Promise<RTCConfiguration> => {
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+    try {
+      const res = await fetch(`${apiUrl}/api/ice-servers`, { cache: 'no-store' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json() as { iceServers: RTCIceServer[] };
+      console.log('[ICE] Fetched fresh servers:', data.iceServers.length, 'entries');
+      return { iceServers: data.iceServers };
+    } catch (err) {
+      console.warn('[ICE] Could not fetch from backend, using Google STUN fallback:', err);
+      return {
+        iceServers: [
+          { urls: 'stun:stun.l.google.com:19302' },
+          { urls: 'stun:stun1.l.google.com:19302' },
+        ],
+      };
     }
-
-    return { iceServers };
   };
 
   const endCall = useCallback((notifyPeer = true) => {
@@ -104,10 +92,10 @@ export function useVideoCall({
     dispatch({ type: 'CALL_END' });
   }, [socket, dispatch, localVideoRef, remoteVideoRef]);
 
-  const initiatePeerConnection = useCallback((peerId: string) => {
+  const initiatePeerConnection = useCallback(async (peerId: string) => {
     if (!socket) return null;
 
-    const configuration = getIceServers();
+    const configuration = await getIceServersAsync();
     const pc = new RTCPeerConnection(configuration);
 
     pc.onicecandidate = (event) => {
@@ -173,7 +161,7 @@ export function useVideoCall({
         localVideoRef.current.srcObject = stream;
       }
 
-      const pc = initiatePeerConnection(targetUserId);
+      const pc = await initiatePeerConnection(targetUserId);
       if (!pc) return;
 
       stream.getTracks().forEach((track) => {
@@ -213,7 +201,7 @@ export function useVideoCall({
         localVideoRef.current.srcObject = stream;
       }
 
-      const pc = initiatePeerConnection(callerId);
+      const pc = await initiatePeerConnection(callerId);
       if (!pc) return;
 
       stream.getTracks().forEach((track) => {
