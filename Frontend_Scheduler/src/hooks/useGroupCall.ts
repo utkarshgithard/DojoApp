@@ -35,9 +35,8 @@ export function useGroupCall({ socket, userId, onPeerLeft }: UseGroupCallProps) 
 
   // Fetch fresh ICE server credentials from the backend before each peer connection.
   const getIceServersAsync = async (): Promise<RTCConfiguration> => {
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
     try {
-      const res = await fetch(`${apiUrl}/api/ice-servers`, { cache: 'no-store' });
+      const res = await fetch('/api/ice-servers', { cache: 'no-store' });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json() as { iceServers: RTCIceServer[] };
       return { iceServers: data.iceServers };

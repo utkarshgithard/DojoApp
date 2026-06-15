@@ -38,15 +38,16 @@ export function useVideoCall({
   // Credentials are fetched server-side from Metered's API so they are always
   // fresh and the API key is never exposed to the client.
   const getIceServersAsync = async (): Promise<RTCConfiguration> => {
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
     try {
-      const res = await fetch(`${apiUrl}/api/ice-servers`, { cache: 'no-store' });
+      // Calls the Next.js Route Handler at /api/ice-servers — runs server-side,
+      // keeps METERED_API_KEY secret, always returns fresh non-expired credentials.
+      const res = await fetch('/api/ice-servers', { cache: 'no-store' });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json() as { iceServers: RTCIceServer[] };
       console.log('[ICE] Fetched fresh servers:', data.iceServers.length, 'entries');
       return { iceServers: data.iceServers };
     } catch (err) {
-      console.warn('[ICE] Could not fetch from backend, using Google STUN fallback:', err);
+      console.warn('[ICE] Could not fetch ICE servers, using Google STUN fallback:', err);
       return {
         iceServers: [
           { urls: 'stun:stun.l.google.com:19302' },
