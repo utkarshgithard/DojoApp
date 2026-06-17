@@ -13,7 +13,7 @@ export const useAttendance = () => useContext(Ctx);
 const DUMMY_CLASSES: Subject[] = [
   { id: 'dummy-1', subject: 'CS 101: Intro to Programming (Demo)', subjectName: 'CS 101: Intro to Programming (Demo)', time: '09:00 AM', isDummy: true },
   { id: 'dummy-2', subject: 'MATH 201: Linear Algebra (Demo)', subjectName: 'MATH 201: Linear Algebra (Demo)', time: '11:30 AM', isDummy: true },
-  { id: 'dummy-3', subject: 'PHY 102: Physics Lab (Demo)', subjectName: 'PHY 102: Physics Lab (Demo)', time: '02:00 PM', isDummy: true },
+
 ];
 
 export const AttendanceProvider = ({ children }: { children: React.ReactNode }) => {
@@ -136,16 +136,34 @@ export const AttendanceProvider = ({ children }: { children: React.ReactNode }) 
   }, [setInvites]);
 
   const handleAttendance = useCallback(async (subject: Subject, status: string) => {
+    // Check if it was already marked to know how to rollback on failure
+    const previousMarkedEntry = markedSubjects.find(s =>
+      s.id === subject.id ||
+      (s.subjectName || s.subject || '').toLowerCase() === (subject.subjectName || subject.subject || '').toLowerCase()
+    );
+
     if (subject.isDummy) {
       setUnmarkedSubjects(prev => prev.filter(s => s.id !== subject.id));
-      setMarkedSubjects(prev => [...prev, { ...subject, status }]);
+      setMarkedSubjects(prev => {
+        const filtered = prev.filter(s =>
+          s.id !== subject.id &&
+          (s.subjectName || s.subject || '').toLowerCase() !== (subject.subjectName || subject.subject || '').toLowerCase()
+        );
+        return [...filtered, { ...subject, status }];
+      });
       toast.success(`Demo: Marked "${subject.subjectName || subject.subject}" as ${status}. Configure your actual schedule in Setup Schedule!`);
       return;
     }
 
     // Optimistically update the UI instantly
     setUnmarkedSubjects(prev => prev.filter(s => s.id !== subject.id));
-    setMarkedSubjects(prev => [...prev, { ...subject, status }]);
+    setMarkedSubjects(prev => {
+      const filtered = prev.filter(s =>
+        s.id !== subject.id &&
+        (s.subjectName || s.subject || '').toLowerCase() !== (subject.subjectName || subject.subject || '').toLowerCase()
+      );
+      return [...filtered, { ...subject, status }];
+    });
 
     try {
       await API.post('/attendance/mark', {
@@ -160,11 +178,25 @@ export const AttendanceProvider = ({ children }: { children: React.ReactNode }) 
     } catch (error) {
       console.error('Error marking attendance:', error);
       toast.error(`Failed to mark attendance as ${status}.`);
+
       // Revert optimistic update on failure
-      setMarkedSubjects(prev => prev.filter(s => s.id !== subject.id));
-      setUnmarkedSubjects(prev => [...prev, subject]);
+      if (previousMarkedEntry) {
+        setMarkedSubjects(prev => {
+          const filtered = prev.filter(s =>
+            s.id !== subject.id &&
+            (s.subjectName || s.subject || '').toLowerCase() !== (subject.subjectName || subject.subject || '').toLowerCase()
+          );
+          return [...filtered, previousMarkedEntry];
+        });
+      } else {
+        setMarkedSubjects(prev => prev.filter(s =>
+          s.id !== subject.id &&
+          (s.subjectName || s.subject || '').toLowerCase() !== (subject.subjectName || subject.subject || '').toLowerCase()
+        ));
+        setUnmarkedSubjects(prev => [...prev, subject]);
+      }
     }
-  }, [date, fetchSubjectStats]);
+  }, [date, fetchSubjectStats, markedSubjects]);
 
   const markHoliday = useCallback(async () => {
     const hasDummy = unmarkedSubjects.some(s => s.isDummy);
@@ -184,10 +216,10 @@ export const AttendanceProvider = ({ children }: { children: React.ReactNode }) 
     const cancelledSubjects = unmarkedSubjects.map(s => ({ ...s, status: 'cancelled' }));
     setMarkedSubjects(prev => [...prev, ...cancelledSubjects]);
     setUnmarkedSubjects([]);
-    
+
     // Don't set holidayLoading to true, keep it fast UX
     // setHolidayLoading(true); 
-    
+
     try {
       const res = await API.post('/attendance/holiday', { date });
       // Sync with server in background
@@ -208,11 +240,11 @@ export const AttendanceProvider = ({ children }: { children: React.ReactNode }) 
     if (hasDummy) {
       const cancelledSubjects = markedSubjects.filter((s: any) => s.isDummy && s.status === 'cancelled');
       const otherMarked = markedSubjects.filter((s: any) => !s.isDummy || s.status !== 'cancelled');
-      
+
       setMarkedSubjects(otherMarked);
-      setUnmarkedSubjects(prev => [...prev, ...cancelledSubjects.map((s: any) => { 
-        const { status, ...rest } = s; 
-        return rest as Subject; 
+      setUnmarkedSubjects(prev => [...prev, ...cancelledSubjects.map((s: any) => {
+        const { status, ...rest } = s;
+        return rest as Subject;
       })]);
       toast.success('Demo: Holiday undone successfully.');
       return;
@@ -225,11 +257,11 @@ export const AttendanceProvider = ({ children }: { children: React.ReactNode }) 
     // Optimistically move all 'cancelled' subjects back to unmarked
     const cancelledSubjects = markedSubjects.filter((s: any) => s.status === 'cancelled');
     const otherMarked = markedSubjects.filter((s: any) => s.status !== 'cancelled');
-    
+
     setMarkedSubjects(otherMarked);
-    setUnmarkedSubjects(prev => [...prev, ...cancelledSubjects.map((s: any) => { 
-      const { status, ...rest } = s; 
-      return rest as Subject; 
+    setUnmarkedSubjects(prev => [...prev, ...cancelledSubjects.map((s: any) => {
+      const { status, ...rest } = s;
+      return rest as Subject;
     })]);
 
     // Don't set holidayLoading to true, keep it fast UX
@@ -249,6 +281,29 @@ export const AttendanceProvider = ({ children }: { children: React.ReactNode }) 
       setMarkedSubjects(prevMarked);
     }
   }, [date, fetchSummary, fetchSubjectStats, unmarkedSubjects, markedSubjects]);
+
+  const deleteSubjectStats = useCallback(async (subjectName: string) => {
+    // 1. Save current state for potential rollback
+    const previousStats = [...subjectStats];
+
+    // 2. Optimistically remove the subject from the UI immediately
+    setSubjectStats(prev => prev.filter(s => 
+      s.subject.toLowerCase() !== subjectName.toLowerCase()
+    ));
+
+    try {
+      const res = await API.delete(`/subject/stats/${encodeURIComponent(subjectName)}`);
+      toast.success(res.data.message || `Statistics for ${subjectName} deleted successfully.`);
+      // 3. Sync with server silently in background
+      fetchSubjectStats();
+      fetchSummary();
+    } catch (error) {
+      console.error('Error deleting subject stats:', error);
+      toast.error(`Failed to delete statistics for ${subjectName}.`);
+      // 4. Revert optimistic update on failure
+      setSubjectStats(previousStats);
+    }
+  }, [fetchSubjectStats, fetchSummary, subjectStats]);
 
   useEffect(() => {
     if (isAuthenticated && !loading) {
@@ -334,7 +389,7 @@ export const AttendanceProvider = ({ children }: { children: React.ReactNode }) 
       fetchSummary, attendanceLoading, holidayLoading,
       handleAttendance, markHoliday, undoHoliday, sessions, setSessions, invites,
       loadExistingInvites, setInvites,
-      subjectStats, setSubjectStats, fetchSubjectStats,
+      subjectStats, setSubjectStats, fetchSubjectStats, deleteSubjectStats,
       calendarData, setCalendarData, fetchCalendarData
     }}>
       {children}

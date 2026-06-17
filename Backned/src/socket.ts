@@ -27,6 +27,9 @@ interface ActiveSession {
 // e.g. SADD session:{id}:members userId  |  SCARD session:{id}:members
 const activeSessions = new Map<string, ActiveSession>();
 
+// --- Auto-end empty sessions timeout ---
+const sessionCleanupTimers = new Map<string, NodeJS.Timeout>();
+
 // --- In-memory chat storage (L1 write-through cache) ---
 // Redis is L2. In-memory gives zero-latency reads within the same server
 // process lifetime. Redis survives restarts and provides fast rehydration
@@ -86,6 +89,67 @@ function clearTyping(io: Server, userId: string, userName: string, sessionId: st
   if (existing) clearTimeout(existing);
   typingTimers.delete(key);
   io.to(`session_${sessionId}`).emit('userTyping', { userId, name: userName, isTyping: false });
+}
+
+// --- Helper: Schedule auto-end for empty sessions ---
+function scheduleSessionCleanup(io: Server, sessionId: string) {
+  if (sessionCleanupTimers.has(sessionId)) return;
+
+  const timer = setTimeout(async () => {
+    try {
+      const active = activeSessions.get(sessionId);
+      if (!active || active.participants.size === 0) {
+        console.log(`🧹 Auto-ending empty session ${sessionId} after 2 minutes of inactivity.`);
+
+        const [, deleted] = await Promise.all([
+          prisma.studySession.updateMany({
+            where: { id: sessionId, status: 'in_progress' },
+            data: { status: 'completed' },
+          }),
+          prisma.message.deleteMany({
+            where: { sessionId },
+          }),
+        ]);
+
+        await cacheDel(`session:${sessionId}`);
+
+        if (active) activeSessions.delete(sessionId);
+        sessionMessages.delete(sessionId);
+        await chatMessagesDel(sessionId);
+
+        const session = await prisma.studySession.findUnique({
+          where: { id: sessionId },
+          include: { participants: true },
+        });
+
+        if (session) {
+          const notifyUsers = [session.creatorId, ...session.participants.map((p) => p.userId)];
+          notifyUsers.forEach((uid) => {
+            io.to(String(uid)).emit('sessionEnded', {
+              sessionId,
+              endedBy: 'System (Auto-cleanup)',
+            });
+          });
+        }
+      }
+    } catch (err) {
+      console.error('Error during auto-cleanup of session:', err);
+    } finally {
+      sessionCleanupTimers.delete(sessionId);
+    }
+  }, 120_000); // 2 minutes
+
+  sessionCleanupTimers.set(sessionId, timer);
+}
+
+// --- Helper: Cancel auto-end ---
+function cancelSessionCleanup(sessionId: string) {
+  const timer = sessionCleanupTimers.get(sessionId);
+  if (timer) {
+    clearTimeout(timer);
+    sessionCleanupTimers.delete(sessionId);
+    console.log(`🛑 Cancelled auto-cleanup for session ${sessionId} (participant rejoined)`);
+  }
 }
 
 // --- Helper: Check & enforce chat rate limit ---
@@ -203,7 +267,7 @@ export function setupSocketHandlers(io: Server) {
             // DO NOT complete session on disconnect — a page refresh is also a disconnect.
             // Leave DB status as-is so users can rejoin.
             if (active.participants.size === 0) {
-              activeSessions.delete(sessionId);
+              scheduleSessionCleanup(io, sessionId);
             }
           }
         }
@@ -595,6 +659,7 @@ function registerSessionHandlers(io: Server, socket: Socket, user: UserPayload) 
       }
       const active = activeSessions.get(sessionId)!;
       active.participants.add(user.id);
+      cancelSessionCleanup(sessionId);
 
       socket.to(sessionRoom).emit('userJoinedSession', {
         sessionId,
@@ -676,6 +741,10 @@ function registerSessionHandlers(io: Server, socket: Socket, user: UserPayload) 
         name: user.name,
         participantCount: active.participants.size,
       });
+
+      if (active.participants.size === 0) {
+        scheduleSessionCleanup(io, sessionId);
+      }
     }
 
     socket.emit('sessionLeft', { sessionId });

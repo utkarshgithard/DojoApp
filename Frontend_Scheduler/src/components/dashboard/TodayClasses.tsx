@@ -1,14 +1,15 @@
 "use client";
  
-import React from 'react';
+import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Sun, Undo2 } from 'lucide-react';
+import { Sun, Undo2, Pencil, X } from 'lucide-react';
 import { format } from 'date-fns';
 import { useDarkMode } from '@/context/DarkModeContext';
 
 interface TodayClassesProps {
   date: string;
   unmarkedSubjects: any[];
+  markedSubjects: any[];
   attendanceLoading: boolean;
   holidayLoading: boolean;
   hasClasses: boolean;
@@ -32,6 +33,7 @@ const getLocalDateString = (d: Date) => {
 export default function TodayClasses({
   date,
   unmarkedSubjects,
+  markedSubjects,
   attendanceLoading,
   holidayLoading,
   hasClasses,
@@ -49,13 +51,40 @@ export default function TodayClasses({
   const isToday = date === getLocalDateString(new Date());
   const formattedDate = date ? format(new Date(date + 'T00:00:00'), 'PPP') : '';
 
+  const [editingId, setEditingId] = useState<string | null>(null);
+
+  // Combine unmarked and marked subjects chronologically
+  const allDaySubjects = React.useMemo(() => {
+    const unmarked = unmarkedSubjects.map(s => ({ ...s, isMarked: false }));
+    const marked = markedSubjects.map(s => ({ ...s, isMarked: true }));
+    const combined = [...unmarked, ...marked];
+
+    // Helper to sort classes by time (e.g. "09:00 AM", "02:30 PM")
+    const parseTimeToMinutes = (tStr: string) => {
+      if (!tStr) return 9999;
+      const match = tStr.match(/(\d+):(\d+)\s*(AM|PM)/i);
+      if (!match) return 9999;
+      let hours = parseInt(match[1]);
+      const minutes = parseInt(match[2]);
+      const ampm = match[3].toUpperCase();
+      if (ampm === 'PM' && hours < 12) hours += 12;
+      if (ampm === 'AM' && hours === 12) hours = 0;
+      return hours * 60 + minutes;
+    };
+
+    return combined.sort((a, b) => parseTimeToMinutes(a.time) - parseTimeToMinutes(b.time));
+  }, [unmarkedSubjects, markedSubjects]);
+
   const hasDummy = unmarkedSubjects.some((s: any) => s.isDummy);
+  const totalClassesCount = allDaySubjects.length;
 
   return (
     <section className={cardClass}>
-      <p className={`text-[11px] uppercase tracking-widest ${muted} mb-2`}>Schedule</p>
+      <p className={`text-[11px] uppercase tracking-widest ${muted} mb-2`}>Schedule & Attendance</p>
+      
       <h2 className="text-[16px] font-medium tracking-tight mb-4 flex justify-between items-center">
         <span>{isToday ? "Today's Classes" : `Classes on ${formattedDate}`}</span>
+        
         <div className="flex items-center gap-2">
           {hasClasses && (
             isAlreadyHoliday ? (
@@ -80,13 +109,14 @@ export default function TodayClasses({
               </Button>
             )
           )}
+          
           <span className={`text-[11px] px-2 py-0.5 rounded border ${border} ${muted}`}>
-            {unmarkedSubjects.length} classes
+            {totalClassesCount} classes
           </span>
         </div>
       </h2>
       
-      {/* Today's Classes content with skeleton */}
+      {/* Classes content */}
       {(attendanceLoading || holidayLoading) ? (
         <div className="space-y-3 animate-pulse">
           {[1, 2, 3].map((i) => (
@@ -103,7 +133,7 @@ export default function TodayClasses({
             </div>
           ))}
         </div>
-      ) : unmarkedSubjects.length === 0 ? (
+      ) : allDaySubjects.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-8 px-4 text-center border border-dashed rounded-xl border-zinc-200 dark:border-zinc-800 bg-zinc-50/10 dark:bg-zinc-950/10">
           <div className={`p-2.5 rounded-full mb-2.5 ${dark ? 'bg-zinc-950 text-zinc-500 border border-zinc-800' : 'bg-zinc-50 text-zinc-400 border border-zinc-100'}`}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -134,28 +164,81 @@ export default function TodayClasses({
               </p>
             </div>
           )}
-          {unmarkedSubjects.map((subject: any) => (
-            <div
-              key={subject._id || subject.id}
-              className={`border rounded-lg p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 ${border}`}
-            >
-              <div>
-                <p className="font-medium text-[15px]">{subject.subjectName || subject.subject}</p>
-                <p className={`text-[12px] mt-0.5 ${muted}`}>{subject.time}</p>
+
+          {allDaySubjects.map((subject: any) => {
+            const isEditing = editingId === (subject._id || subject.id);
+            const showActions = !subject.isMarked || isEditing;
+
+            return (
+              <div
+                key={subject._id || subject.id}
+                className={`border rounded-lg p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 transition-colors ${border} ${
+                  subject.isMarked && !isEditing
+                    ? dark ? 'bg-zinc-950/20' : 'bg-gray-50/40'
+                    : ''
+                }`}
+              >
+                <div>
+                  <p className="font-medium text-[15px]">{subject.subjectName || subject.subject}</p>
+                  <p className={`text-[12px] mt-0.5 ${muted}`}>{subject.time}</p>
+                </div>
+
+                <div className="flex items-center gap-2 mt-2 sm:mt-0 w-full sm:w-auto justify-end">
+                  {showActions ? (
+                    <div className="flex gap-2 flex-wrap items-center">
+                      {['attended', 'missed', 'cancelled'].map((status) => (
+                        <button
+                          key={status}
+                          onClick={() => {
+                            setAttendanceConfirm({ subject, status });
+                            setEditingId(null); // Reset edit view
+                          }}
+                          className={secondaryBtn}
+                        >
+                          {status.charAt(0).toUpperCase() + status.slice(1)}
+                        </button>
+                      ))}
+
+                      {/* Cancel edit button */}
+                      {isEditing && (
+                        <button
+                          onClick={() => setEditingId(null)}
+                          className={`p-1.5 rounded-lg border hover:bg-red-500/10 hover:text-red-500 transition-colors ${border}`}
+                          title="Cancel editing"
+                        >
+                          <X size={14} />
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-3">
+                      {/* Marked status badge */}
+                      <span
+                        className={`px-3 py-1 rounded-full border text-[10px] uppercase font-medium tracking-wider ${
+                          subject.status === 'attended'
+                            ? 'border-green-500/30 text-green-500 bg-green-500/5 dark:bg-green-500/10'
+                            : subject.status === 'missed'
+                              ? 'border-red-500/30 text-red-500 bg-red-500/5 dark:bg-red-500/10'
+                              : 'border-zinc-500/30 text-zinc-550 bg-zinc-500/5 dark:bg-zinc-550/10'
+                        }`}
+                      >
+                        {subject.status}
+                      </span>
+
+                      {/* Change/Edit button */}
+                      <button
+                        onClick={() => setEditingId(subject._id || subject.id)}
+                        className={`p-1.5 rounded-lg border hover:bg-zinc-100 dark:hover:bg-zinc-900 transition-colors ${border} ${muted}`}
+                        title="Change attendance"
+                      >
+                        <Pencil size={12} />
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
-              <div className="flex gap-2 flex-wrap mt-2 sm:mt-0">
-                {['attended', 'missed', 'cancelled'].map((status) => (
-                  <button
-                    key={status}
-                    onClick={() => setAttendanceConfirm({ subject, status })}
-                    className={secondaryBtn}
-                  >
-                    {status.charAt(0).toUpperCase() + status.slice(1)}
-                  </button>
-                ))}
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </section>

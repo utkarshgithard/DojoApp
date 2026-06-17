@@ -229,6 +229,7 @@ export interface AttendanceContextType {
   calendarData: any;
   setCalendarData: React.Dispatch<React.SetStateAction<any>>;
   fetchCalendarData: () => Promise<void>;
+  deleteSubjectStats: (subjectName: string) => Promise<void>;
 }
 
 // --- Component Props & Local Types ---

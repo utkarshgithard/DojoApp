@@ -399,6 +399,37 @@ export default function SessionChatPage() {
 
   // UI state
   const [focusMode, setFocusMode] = useState(false);
+
+  // Strict Focus Detection
+  useEffect(() => {
+    if (!focusMode) return;
+
+    const handleFocusLost = async () => {
+      toast.error("🚨 You broke your focus! Focus Mode disabled.", {
+        duration: 5000,
+        style: { border: '1px solid #ef4444' }, // highlight the error visually
+      });
+      setFocusMode(false);
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        handleFocusLost();
+      }
+    };
+
+    const handleWindowBlur = () => {
+      handleFocusLost();
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("blur", handleWindowBlur);
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("blur", handleWindowBlur);
+    };
+  }, [focusMode]);
   const [showParticipants, setShowParticipants] = useState(false); // mobile drawer
   const [isRefreshing, setIsRefreshing] = useState(false);
   // Initial messages load state — true until first sessionMessages event fires

@@ -96,5 +96,69 @@ subjectRouter.get('/stats', verifyToken, async (req: AuthenticatedRequest, res: 
     res.status(500).json({ error: 'Server error' });
   }
 });
+// DELETE /api/subject/stats/:subjectName
+subjectRouter.delete('/stats/:subjectName', verifyToken, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const userId = req.userId!;
+    const { subjectName } = req.params;
+
+    if (!subjectName) {
+      res.status(400).json({ error: 'Subject name is required' });
+      return;
+    }
+
+    // Find all attendance records for this user
+    const records = await prisma.attendanceRecord.findMany({
+      where: { userId },
+      select: { id: true }
+    });
+
+    if (records.length === 0) {
+      res.json({ success: true, message: 'No records found to delete' });
+      return;
+    }
+
+    const recordIds = records.map(r => r.id);
+
+    const subjectNameStr = subjectName as string;
+
+    const entriesToDelete = await prisma.attendanceEntry.findMany({
+      where: {
+        attendanceRecordId: { in: recordIds },
+        subject: { equals: subjectNameStr, mode: 'insensitive' }
+      },
+      select: { id: true }
+    });
+
+    const entryIds = entriesToDelete.map(e => e.id);
+
+    const deletedEntries = await prisma.attendanceEntry.deleteMany({
+      where: {
+        id: { in: entryIds }
+      }
+    });
+
+    // Cleanup: find any AttendanceRecords that now have 0 entries and delete them
+    // This is optional but keeps the database clean.
+    const emptyRecords = await prisma.attendanceRecord.findMany({
+      where: {
+        id: { in: recordIds },
+        entries: { none: {} }
+      },
+      select: { id: true }
+    });
+
+    if (emptyRecords.length > 0) {
+      await prisma.attendanceRecord.deleteMany({
+        where: { id: { in: emptyRecords.map(r => r.id) } }
+      });
+    }
+
+    res.json({ success: true, message: 'Statistics deleted successfully', deletedCount: deletedEntries.count });
+  } catch (err) {
+    console.error('Error deleting subject stats:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
 
 export default subjectRouter;

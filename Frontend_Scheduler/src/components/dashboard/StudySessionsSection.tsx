@@ -84,7 +84,7 @@ export default function StudySessionsSection({
         <p className={`text-[12px] font-medium mb-3 ${muted}`}>Pending Invites</p>
         {sessionsLoading ? (
           <div className="space-y-3 animate-pulse">
-            {[1, 2].map((i) => (
+            {[1].map((i) => (
               <div key={i} className={`border rounded-lg p-4 flex justify-between items-center mb-3 ${border}`}>
                 <div className="space-y-2">
                   <div className={`h-3.5 rounded w-28 ${dark ? 'bg-gray-800' : 'bg-gray-200'}`}></div>
@@ -161,7 +161,7 @@ export default function StudySessionsSection({
         <p className={`text-[12px] font-medium mb-3 ${muted}`}>Active Sessions</p>
         {sessionsLoading ? (
           <div className="space-y-3 animate-pulse">
-            {[1, 2].map((i) => (
+            {[1].map((i) => (
               <div key={i} className={`border rounded-lg p-4 mb-3 ${border}`}>
                 <div className="flex justify-between items-start mb-3">
                   <div className="space-y-2">

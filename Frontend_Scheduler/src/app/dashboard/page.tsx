@@ -6,7 +6,7 @@ import { useAttendance } from '@/context/AttendanceContext';
 import SubjectStatsChart from '@/components/SubjectStatsChart';
 import { useAuth } from '@/context/authContext';
 import TodayClasses from '@/components/dashboard/TodayClasses';
-import MarkedAttendance from '@/components/dashboard/MarkedAttendance';
+import NotesSection from '@/components/dashboard/NotesSection';
 import DashboardConfirmationModals from '@/components/dashboard/DashboardConfirmationModals';
 import { useRouter } from 'next/navigation';
 import { Calendar } from '@/components/ui/calendar';
@@ -174,46 +174,36 @@ const Dashboard = () => {
           </div>
         )}
 
-        {/* Two column grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* ---- LEFT COLUMN ---- */}
-          <div className="space-y-8">
-            <TodayClasses
-              date={date}
-              unmarkedSubjects={unmarkedSubjects}
-              attendanceLoading={attendanceLoading}
-              holidayLoading={holidayLoading}
-              hasClasses={hasClasses}
-              isAlreadyHoliday={isAlreadyHoliday}
-              setUndoHolidayConfirm={setUndoHolidayConfirm}
-              setHolidayConfirm={setHolidayConfirm}
-              setAttendanceConfirm={setAttendanceConfirm}
-              cardClass={cardClass}
-              border={border}
-              muted={muted}
-              secondaryBtn={secondaryBtn}
-            />
+        {/* Two column layout for Classes & Checklist */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-stretch mb-8">
+          <TodayClasses
+            date={date}
+            unmarkedSubjects={unmarkedSubjects}
+            markedSubjects={markedSubjects}
+            attendanceLoading={attendanceLoading}
+            holidayLoading={holidayLoading}
+            hasClasses={hasClasses}
+            isAlreadyHoliday={isAlreadyHoliday}
+            setUndoHolidayConfirm={setUndoHolidayConfirm}
+            setHolidayConfirm={setHolidayConfirm}
+            setAttendanceConfirm={setAttendanceConfirm}
+            cardClass={`${cardClass} h-full`}
+            border={border}
+            muted={muted}
+            secondaryBtn={secondaryBtn}
+          />
 
-            <MarkedAttendance
-              date={date}
-              markedSubjects={markedSubjects}
-              attendanceLoading={attendanceLoading}
-              holidayLoading={holidayLoading}
-              cardClass={cardClass}
-              border={border}
-              muted={muted}
-            />
-          </div>
+          {/* Daily Notes (Checklist) */}
+          <NotesSection date={date} cardClass={`${cardClass} h-full`} muted={muted} />
+        </div>
 
-          {/* ---- RIGHT COLUMN ---- */}
-          <div className="space-y-8">
-            {/* Stats */}
-            <section className={cardClass}>
-              <p className={`text-[11px] uppercase tracking-widest ${muted} mb-2`}>Visual Insights</p>
-              <h2 className="text-[16px] font-medium tracking-tight mb-4">Attendance Statistics</h2>
-              <SubjectStatsChart />
-            </section>
-          </div>
+        {/* Full-width Stats Section below */}
+        <div className="mb-8">
+          <section className={cardClass}>
+            <p className={`text-[11px] uppercase tracking-widest ${muted} mb-2`}>Visual Insights</p>
+            <h2 className="text-[16px] font-medium tracking-tight mb-4">Attendance Statistics</h2>
+            <SubjectStatsChart />
+          </section>
         </div>
       </div>
 

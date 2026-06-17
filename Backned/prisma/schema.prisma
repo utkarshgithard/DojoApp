@@ -37,6 +37,7 @@ model User {
   messages            Message[]
   publicKey           UserPublicKey?
   pushSubscriptions   PushSubscription[]
+  notes               Note[]
 }
 
 /// Stores the user's ECDH P-256 public key for E2EE room key distribution.
@@ -200,4 +201,18 @@ model PushSubscription {
   createdAt DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+/// Daily notes — one per user per date, used on the dashboard.
+model Note {
+  id        String   @id @default(uuid())
+  userId    String
+  date      String   // "YYYY-MM-DD" — one note per day per user
+  content   String   @default("")
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date])
 }

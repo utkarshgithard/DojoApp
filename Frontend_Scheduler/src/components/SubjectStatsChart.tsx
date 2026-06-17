@@ -6,7 +6,7 @@ import { Chart as ChartJS, ArcElement, Tooltip, Legend } from "chart.js";
 import { useAttendance } from "@/context/AttendanceContext";
 import { useDarkMode } from "@/context/DarkModeContext";
 import { SubjectStats as SubjectStat } from "@/lib/types";
-import { AlertTriangle, CheckCircle2, ShieldAlert, TrendingUp } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ShieldAlert, TrendingUp, Trash2 } from "lucide-react";
 
 ChartJS.register(ArcElement, Tooltip, Legend);
 
@@ -41,11 +41,12 @@ function attendancePercent(attended: number, missed: number) {
 }
 
 const SubjectStatsChart = () => {
-    const { subjectStats: stats } = useAttendance() as { subjectStats: SubjectStat[] };
+    const { subjectStats: stats, deleteSubjectStats } = useAttendance() as { subjectStats: SubjectStat[], deleteSubjectStats: (subjectName: string) => Promise<void> };
     const { darkMode } = useDarkMode() as any;
     const [activeIndex, setActiveIndex] = useState<number | null>(null);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
     const [loading, setLoading] = useState(true);
+    const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
     useEffect(() => {
         const timer = setTimeout(() => setLoading(false), 200);
@@ -239,9 +240,21 @@ const SubjectStatsChart = () => {
                             onMouseEnter={() => setActiveIndex(idx)}
                             onMouseLeave={() => setActiveIndex(null)}
                         >
-                            <h3 className="text-[14px] font-medium tracking-tight mb-4 truncate w-full text-center">
-                                {subject.subject}
-                            </h3>
+                            <div className="w-full flex justify-between items-start mb-4 gap-2">
+                                <h3 className="text-[14px] font-medium tracking-tight truncate pl-1 pt-1">
+                                    {subject.subject}
+                                </h3>
+                                <button
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        setDeleteConfirm(subject.subject);
+                                    }}
+                                    className={`p-1.5 rounded-md transition-colors hover:bg-red-500/10 text-gray-400 hover:text-red-500 shrink-0`}
+                                    aria-label="Delete Statistics"
+                                >
+                                    <Trash2 size={14} />
+                                </button>
+                            </div>
 
                             {/* Ultra-sleek Thin Doughnut Ring */}
                             <div className="relative w-28 h-28 flex items-center justify-center mb-4">
@@ -398,6 +411,48 @@ const SubjectStatsChart = () => {
                     />
                 ))}
             </div>
+
+            {/* Custom Confirmation Dialog for Deleting Stats */}
+            {deleteConfirm && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm transition-all duration-300">
+                    <div className={`rounded-xl border p-6 max-w-sm w-full mx-4 shadow-2xl animate-in fade-in zoom-in-95 duration-200 ${
+                        dark ? 'bg-black border-gray-800 text-white' : 'bg-white border-gray-200 text-gray-900'
+                    }`}>
+                        <div className="mb-4">
+                            <h3 className="text-[16px] font-medium tracking-tight text-red-500 flex items-center gap-2">
+                                <AlertTriangle className="size-5" />
+                                Delete Statistics?
+                            </h3>
+                            <p className={`mt-2 text-[13.5px] leading-relaxed ${muted}`}>
+                                Are you sure you want to delete all statistics for <strong>{deleteConfirm}</strong>? This action cannot be undone.
+                            </p>
+                        </div>
+                        <div className="flex justify-end gap-2.5 mt-6 pt-3 border-t border-gray-100 dark:border-gray-900">
+                            <button
+                                type="button"
+                                onClick={() => setDeleteConfirm(null)}
+                                className={`px-3.5 py-1.5 rounded-lg text-[13px] font-medium border transition-colors
+                                    ${dark
+                                      ? 'border-gray-800 text-gray-200 hover:bg-gray-900'
+                                      : 'border-gray-200 text-gray-700 hover:bg-gray-50'
+                                    }`}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    deleteSubjectStats(deleteConfirm);
+                                    setDeleteConfirm(null);
+                                }}
+                                className="px-3.5 py-1.5 rounded-lg text-[13px] font-medium border border-red-500/50 text-red-500 hover:bg-red-500/10 transition-colors"
+                            >
+                                Delete
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
