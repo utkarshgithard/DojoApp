@@ -14,6 +14,7 @@ import { format } from 'date-fns';
 import { CalendarIcon, Users } from 'lucide-react';
 import API from '@/lib/axios';
 import { useSocket } from '@/context/SocketContext';
+import PerformanceIndexChart from '@/components/dashboard/PerformanceIndexChart';
 
 const Dashboard = () => {
   const router = useRouter();
@@ -195,6 +196,11 @@ const Dashboard = () => {
 
           {/* Daily Notes (Checklist) */}
           <NotesSection date={date} cardClass={`${cardClass} h-full`} muted={muted} />
+        </div>
+
+        {/* Full-width Performance Tracker Section */}
+        <div className="mb-8">
+          <PerformanceIndexChart />
         </div>
 
         {/* Full-width Stats Section below */}
