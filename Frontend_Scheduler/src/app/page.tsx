@@ -19,7 +19,8 @@ import {
   UserCheck, 
   Sparkles,
   Calendar,
-  Clock
+  Clock,
+  ChevronDown
 } from 'lucide-react';
 import { useDarkMode } from '@/context/DarkModeContext';
 import { useAuth } from '@/context/authContext';
@@ -37,6 +38,7 @@ export default function LandingPage() {
   const [chatStep, setChatStep] = useState(0);
   const [sessionChatStep, setSessionChatStep] = useState(0);
   const [headlineStep, setHeadlineStep] = useState(0);
+  const [activeFaq, setActiveFaq] = useState<number | null>(null);
 
   const headlinePhrases = [
     "Stay above 75%.",
@@ -57,6 +59,25 @@ export default function LandingPage() {
     { sender: 'Ananya M.', text: "Yes! Just divide by gravity. 🚀", avatar: 'AM' },
     { sender: 'Siddharth V.', text: "Joining in 2 minutes guys! 🎯", avatar: 'SV' },
     { sender: 'Riya M.', text: "Let's review the motion graphs next. 📈", avatar: 'Riya' }
+  ];
+
+  const faqs = [
+    {
+      question: "How do I track my college attendance by subject on DojoClass?",
+      answer: "DojoClass provides an intuitive, one-tap dashboard to mark present, absent, or cancelled classes for each of your subjects. It automatically recalculates your attendance percentage in real-time, helping you visualize your progress and stay on track with your academic criteria."
+    },
+    {
+      question: "What is a study buddy streak and how does it keep me motivated?",
+      answer: "A study buddy streak is a built-in motivation system where you pair up with a classmate. You can check each other's attendance statistics, monitor streaks, and keep each other accountable through friendly competition so that neither of you falls below 75%."
+    },
+    {
+      question: "Are the study rooms and group video calls secure?",
+      answer: "Absolutely. DojoClass study sessions, chat messages, and group video/audio calls are fully secured. Study rooms feature private, host-controlled access to guarantee a focused and distraction-free collaboration space."
+    },
+    {
+      question: "How does the weekly class scheduler predict my future attendance?",
+      answer: "By entering your weekly class schedule once, DojoClass maps out your repeating timetable. It automatically forecasts your future attendance percentages and alerts you if upcoming absences might push your criteria below safe limits."
+    }
   ];
 
   useEffect(() => {
@@ -1063,7 +1084,7 @@ export default function LandingPage() {
                 01 · ATTENDANCE MARKING
               </span>
               <h2 className="text-3xl md:text-4xl font-bold font-serif tracking-tight">
-                One tap per class.
+                Subject-Wise Attendance Tracking: One tap per class.
               </h2>
               <p className={`text-sm md:text-base leading-relaxed ${textMutedClass}`}>
                 Mark present, absent, or cancelled instantly. DojoClass recalculates your standing in real-time — subject by subject.
@@ -1156,7 +1177,7 @@ export default function LandingPage() {
                 02 · WEEKLY SCHEDULER
               </span>
               <h2 className="text-3xl md:text-4xl font-bold font-serif tracking-tight">
-                Your timetable, always with you.
+                Weekly Timetable & Schedule Planner: Your timetable, always with you.
               </h2>
               <p className={`text-sm md:text-base leading-relaxed ${textMutedClass}`}>
                 Set up recurring classes for each day. DojoClass uses your schedule to auto-suggest what to work and predict future attendance.
@@ -1241,7 +1262,7 @@ export default function LandingPage() {
                 03 · STUDY SESSIONS
               </span>
               <h2 className="text-3xl md:text-4xl font-bold font-serif tracking-tight">
-                Study together, privately.
+                Encrypted Study Rooms & Video Calling: Study together, privately.
               </h2>
               <p className={`text-sm md:text-base leading-relaxed ${textMutedClass}`}>
                 Host encrypted study rooms for your friend group. Every message is end-to-end encrypted — only people in the session can read it.
@@ -1356,7 +1377,7 @@ export default function LandingPage() {
                 04 · STUDY BUDDY
               </span>
               <h2 className="text-3xl md:text-4xl font-bold font-serif tracking-tight">
-                Keep each other accountable.
+                Accountability Partner & Study Buddy: Keep each other on track.
               </h2>
               <p className={`text-sm md:text-base leading-relaxed ${textMutedClass}`}>
                 Link with a friend as study buddies. See each other's attendance percentage and streak — healthy competition keeps you both on track.
@@ -1577,6 +1598,62 @@ export default function LandingPage() {
           </section>
 
         </div>
+
+        {/* FAQ Section */}
+        <section aria-label="Frequently Asked Questions" className="space-y-12 pt-8 border-t border-inherit">
+          <div className="text-center max-w-xl mx-auto space-y-4">
+            <span className={`text-xs font-bold uppercase tracking-widest ${dark ? 'text-zinc-500' : 'text-[#6A635B]'}`}>
+              QUESTIONS & ANSWERS · FAQ
+            </span>
+            <h2 className="text-4xl font-bold font-serif tracking-tight">
+              Frequently Asked Questions
+            </h2>
+            <p className={`text-sm md:text-base leading-relaxed ${textMutedClass}`}>
+              Have questions about DojoClass? We've got you covered with everything you need to know to get started.
+            </p>
+          </div>
+
+          <div className="max-w-3xl mx-auto space-y-4">
+            {faqs.map((faq, idx) => {
+              const isOpen = activeFaq === idx;
+              return (
+                <div
+                  key={idx}
+                  className={`rounded-2xl border transition-all duration-300 ${
+                    dark 
+                      ? 'bg-[#18181B] border-zinc-800 hover:border-zinc-700' 
+                      : 'bg-[#FAF9F5] border-[#EBEAE4] hover:border-zinc-350'
+                  } overflow-hidden`}
+                >
+                  <button
+                    onClick={() => setActiveFaq(isOpen ? null : idx)}
+                    className="w-full px-6 py-5 text-left flex justify-between items-center gap-4 transition-colors"
+                    aria-expanded={isOpen}
+                  >
+                    <span className="text-sm md:text-base font-bold text-zinc-900 dark:text-white">
+                      {faq.question}
+                    </span>
+                    <span className={`text-zinc-400 transition-transform duration-300 shrink-0 ${
+                      isOpen ? 'rotate-180 text-blue-500' : ''
+                    }`}>
+                      <ChevronDown size={18} />
+                    </span>
+                  </button>
+                  
+                  <div
+                    className={`transition-all duration-300 ease-in-out overflow-hidden ${
+                      isOpen ? 'max-h-[200px] border-t border-inherit opacity-100' : 'max-h-0 opacity-0'
+                    }`}
+                  >
+                    <p className={`p-6 text-xs md:text-sm leading-relaxed ${textMutedClass}`}>
+                      {faq.answer}
+                    </p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
       </main>
 
       {/* Footer */}
@@ -1719,8 +1796,8 @@ export default function LandingPage() {
           </div>
 
           <div className="flex gap-6 font-medium text-zinc-500">
-            <a href="#" className={`transition-colors ${dark ? 'hover:text-white' : 'hover:text-[#1C1917]'}`}>Privacy Policy</a>
-            <a href="#" className={`transition-colors ${dark ? 'hover:text-white' : 'hover:text-[#1C1917]'}`}>Terms of Service</a>
+            <a href="/privacy" className={`transition-colors ${dark ? 'hover:text-white' : 'hover:text-[#1C1917]'}`}>Privacy Policy</a>
+            <a href="/terms" className={`transition-colors ${dark ? 'hover:text-white' : 'hover:text-[#1C1917]'}`}>Terms of Service</a>
           </div>
         </div>
       </footer>

@@ -18,7 +18,7 @@ const inter = Inter({ subsets: ["latin"] });
 export const metadata: Metadata = {
   metadataBase: new URL("https://dojoclass.space"),
   title: {
-    default: "DojoClass — Smart Attendance Tracker for College Students",
+    default: "DojoClass — All Student Needs in One Tool | Online Study Rooms, Attendance & Daily Track",
     template: "%s | DojoClass",
   },
   description:
@@ -43,7 +43,7 @@ export const metadata: Metadata = {
     locale: "en_IN",
     url: "https://dojoclass.space",
     siteName: "DojoClass",
-    title: "DojoClass — Smart Attendance Tracker for College Students",
+    title: "DojoClass — All Student Needs in One Tool | Online Study Rooms, Attendance & Daily Track",
     description:
       "Track your college attendance by subject, plan weekly schedules, and never fall below 75%. Free for all students.",
     images: [
@@ -51,13 +51,13 @@ export const metadata: Metadata = {
         url: "/opengraph-image",
         width: 1200,
         height: 630,
-        alt: "DojoClass — Smart Attendance Tracker for College Students",
+        alt: "DojoClass — All Student Needs in One Tool | Online Study Rooms, Attendance & Daily Track",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "DojoClass — Smart Attendance Tracker for College Students",
+    title: "DojoClass — All Student Needs in One Tool | Online Study Rooms, Attendance & Daily Track",
     description:
       "Track your college attendance by subject, plan weekly schedules, and never fall below 75%.",
     images: ["/opengraph-image"],

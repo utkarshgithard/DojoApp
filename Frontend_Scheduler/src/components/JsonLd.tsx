@@ -37,6 +37,45 @@ export default function JsonLd() {
     },
   };
 
+  const faqSchema = {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "How do I track my college attendance by subject on DojoClass?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "DojoClass provides an intuitive, one-tap dashboard to mark present, absent, or cancelled classes for each of your subjects. It automatically recalculates your attendance percentage in real-time, helping you visualize your progress and stay on track with your academic criteria."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "What is a study buddy streak and how does it keep me motivated?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "A study buddy streak is a built-in motivation system where you pair up with a classmate. You can check each other's attendance statistics, monitor streaks, and keep each other accountable through friendly competition so that neither of you falls below 75%."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Are the study rooms and group video calls secure?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Absolutely. DojoClass study sessions, chat messages, and group video/audio calls are fully secured. Study rooms feature private, host-controlled access to guarantee a focused and distraction-free collaboration space."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How does the weekly class scheduler predict my future attendance?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "By entering your weekly class schedule once, DojoClass maps out your repeating timetable. It automatically forecasts your future attendance percentages and alerts you if upcoming absences might push your criteria below safe limits."
+        }
+      }
+    ]
+  };
+
   return (
     <>
       <script
@@ -49,6 +88,12 @@ export default function JsonLd() {
         type="application/ld+json"
         dangerouslySetInnerHTML={{
           __html: JSON.stringify(organizationSchema),
+        }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(faqSchema),
         }}
       />
     </>

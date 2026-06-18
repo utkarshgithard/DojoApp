@@ -2,7 +2,7 @@ import { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "DojoClass — Smart Attendance Tracker",
+    name: "DojoClass — All Student Needs in One Tool",
     short_name: "DojoClass",
     description:
       "Track your college attendance by subject, plan weekly schedules, and never fall below 75%. Free for all students.",
