@@ -36,7 +36,6 @@ export default function SettingsPage() {
     name: '',
     email: '',
     bio: '',
-    department: '',
     avatarUrl: '',
   });
 
@@ -48,8 +47,7 @@ export default function SettingsPage() {
         name: userDetails.name || '',
         email: userDetails.email || '',
         bio: userDetails.bio || '',
-        department: userDetails.department || '',
-        avatarUrl: userDetails.avatarUrl || '',
+        avatarUrl: userDetails.avatarUrl || auth.currentUser?.photoURL || '',
       });
     }
   }, [userDetails]);
@@ -97,7 +95,6 @@ export default function SettingsPage() {
       const res = await API.put('/auth/profile', {
         name: userData.name,
         bio: userData.bio,
-        department: userData.department,
         avatarUrl: userData.avatarUrl,
       });
       setDetails(res.data.user);
@@ -352,18 +349,6 @@ export default function SettingsPage() {
                         </div>
                       </div>
 
-                      {/* Department */}
-                      <div>
-                        <label className={labelClass}>Department / Major</label>
-                        <input
-                          type="text"
-                          name="department"
-                          value={userData.department}
-                          onChange={handleInputChange}
-                          placeholder="e.g. Computer Science"
-                          className={inputClass}
-                        />
-                      </div>
 
                       {/* Bio */}
                       <div>

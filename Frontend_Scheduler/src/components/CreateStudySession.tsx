@@ -7,6 +7,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { format } from 'date-fns';
 import { CalendarIcon, ChevronDown, X, Search, UserPlus } from 'lucide-react';
 import { useDarkMode } from '@/context/DarkModeContext';
+import { useNetwork } from '@/context/NetworkContext';
 
 interface Friend {
   id: string;
@@ -201,28 +202,18 @@ const CreateStudySession = ({ socket, onClose }: { socket: any; onClose: () => v
   });
   const [duration, setDuration] = useState(30);
   const [selectedFriends, setSelectedFriends] = useState<Friend[]>([]);
-  const [friends, setFriends] = useState<Friend[]>([]);
-  const [friendsLoading, setFriendsLoading] = useState(true);
+  const { network, fetchNetwork, hasData, loading: networkLoading } = useNetwork();
+  const friends = (network.friends as any[]) || [];
+  const friendsLoading = networkLoading && !hasData;
+
   const [loading, setLoading] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
 
-  // Fetch user's friends on mount
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await API.get('auth/friends-List');
-        if (!cancelled) {
-          setFriends(res.data.friends || []);
-        }
-      } catch {
-        // silently fail — dropdown will show "No friends added yet"
-      } finally {
-        if (!cancelled) setFriendsLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, []);
+    if (!hasData) {
+      fetchNetwork();
+    }
+  }, [hasData, fetchNetwork]);
 
   const toggleFriend = (friend: Friend) => {
     setSelectedFriends((prev) =>

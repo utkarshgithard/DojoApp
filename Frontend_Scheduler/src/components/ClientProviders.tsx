@@ -4,6 +4,8 @@ import { AttendanceProvider } from "@/context/AttendanceContext";
 import { SocketProvider } from "@/context/SocketContext";
 import { DarkModeProvider } from "@/context/DarkModeContext";
 import AuthProvider from "@/context/authContext";
+import { CommunityProvider } from "@/context/CommunityContext";
+import { NetworkProvider } from "@/context/NetworkContext";
 import { usePathname } from "next/navigation";
 import Sidebar from "./Sidebar";
 import Navbar from "./Navbar";
@@ -24,25 +26,28 @@ export default function ClientProviders({ children }: { children: React.ReactNod
     <AuthProvider>
       <SocketProvider>
         <AttendanceProvider>
-          <DarkModeProvider>
-            <InternetStatus />
-            {showNavbar && <Navbar />}
-            {showSidebar ? (
-              <div className="min-h-screen w-full flex">
-                <Sidebar />
-                <div className="flex-1 md:pl-64 w-full min-w-0">
-                  {children}
+          <CommunityProvider>
+            <NetworkProvider>
+              <DarkModeProvider>
+              <InternetStatus />
+              {showNavbar && <Navbar />}
+              {showSidebar ? (
+                <div className="min-h-screen w-full flex">
+                  <Sidebar />
+                  <div className="flex-1 md:pl-64 w-full min-w-0">
+                    {children}
+                  </div>
+                  <OnboardingTour />
                 </div>
-                <OnboardingTour />
-              </div>
-            ) : (
-              children
-            )}
-            <Toaster />
-          </DarkModeProvider>
+              ) : (
+                children
+              )}
+              <Toaster />
+              </DarkModeProvider>
+            </NetworkProvider>
+          </CommunityProvider>
         </AttendanceProvider>
       </SocketProvider>
     </AuthProvider>
   );
 }
-

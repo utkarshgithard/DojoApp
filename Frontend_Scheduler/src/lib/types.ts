@@ -10,7 +10,6 @@ export interface User {
   friendCode: string;
   createdAt: string;
   bio?: string;
-  department?: string;
   avatarUrl?: string;
 }
 

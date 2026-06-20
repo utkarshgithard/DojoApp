@@ -3,7 +3,7 @@
 import React, { useState, useContext, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
-import { Moon, Sun, Menu, X, LogOut, LayoutDashboard, Calendar, Clock, Settings, User, Users, UserPlus, Bell, Coffee } from 'lucide-react';
+import { Moon, Sun, Menu, X, LogOut, LayoutDashboard, Calendar, Clock, Settings, User, Users, UserPlus, Bell, Coffee, Hash } from 'lucide-react';
 import { useDarkMode } from '@/context/DarkModeContext';
 import { AuthContext } from '@/context/authContext';
 import { useAttendance } from '@/context/AttendanceContext';
@@ -11,7 +11,7 @@ import { auth } from '@/lib/firebase';
 
 const Navbar = () => {
   const { darkMode, toggleDarkMode } = useDarkMode() as any;
-  const { logout, isAuthenticated, loading, userName, profileLoading, setUserName } = useContext(AuthContext) as any;
+  const { logout, isAuthenticated, loading, userName, profileLoading, setUserName, userDetails } = useContext(AuthContext) as any;
   const router = useRouter();
   const pathname = usePathname();
 
@@ -53,16 +53,16 @@ const Navbar = () => {
     setIsMounted(true);
   }, []);
 
-  // Sync photo from Firebase Auth
+  // Sync photo from Database or Firebase Auth fallback
   useEffect(() => {
     if (loading) return;
+    if (profileLoading) return; // Wait for database profile to load
     if (isAuthenticated) {
-      const currentUser = auth.currentUser;
-      setUserPhoto(currentUser?.photoURL || null);
+      setUserPhoto(userDetails?.avatarUrl || auth.currentUser?.photoURL || null);
     } else {
       setUserPhoto(null);
     }
-  }, [isAuthenticated, loading, pathname]);
+  }, [isAuthenticated, loading, profileLoading, pathname, userDetails]);
 
   const toggleMenu = () => setIsOpen(!isOpen);
   const closeMenu = () => setIsOpen(false);
@@ -189,6 +189,14 @@ const Navbar = () => {
             }`}
           >
             Friends
+          </Link>
+          <Link
+            href="/community"
+            className={`text-[13px] font-medium transition-colors ${
+              pathname === '/community' ? textActive : textMuted
+            }`}
+          >
+            Community
           </Link>
           <Link
             href="/setup-schedule"
@@ -431,6 +439,16 @@ const Navbar = () => {
           >
             <UserPlus size={15} />
             <span>Friends</span>
+          </Link>
+          <Link
+            href="/community"
+            onClick={closeMenu}
+            className={`flex items-center gap-2.5 text-[14px] font-medium py-1 ${
+              pathname === '/community' ? textActive : textMuted
+            }`}
+          >
+            <Hash size={15} />
+            <span>Community</span>
           </Link>
           <Link
             href="/setup-schedule"

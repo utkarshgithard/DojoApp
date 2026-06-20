@@ -20,8 +20,8 @@ model User {
   friendCode        String    @unique
   verificationToken String?
   bio               String?
-  department        String?
   avatarUrl         String?
+  role              UserRole  @default(student)
   createdAt         DateTime  @default(now())
 
   // Self-referential friends relationship
@@ -38,7 +38,21 @@ model User {
   publicKey           UserPublicKey?
   pushSubscriptions   PushSubscription[]
   notes               Note[]
+
+  // Community
+  posts               Post[]
+  postLikes           PostLike[]
+  postComments        PostComment[]
+
+  // Follow
+  following           UserFollow[] @relation("Followers")   // people this user follows
+  followers           UserFollow[] @relation("Following")   // people who follow this user
+
+  // Shares
+  sharesSent          PostShare[]  @relation("SharesSent")
+  sharesReceived      PostShare[]  @relation("SharesReceived")
 }
+
 
 /// Stores the user's ECDH P-256 public key for E2EE room key distribution.
 /// Updated each time the user opens the chat (ephemeral keys per session).
@@ -215,4 +229,98 @@ model Note {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, date])
+}
+
+// ── Community Feed ────────────────────────────────────────────────────────────
+
+model Post {
+  id        String   @id @default(uuid())
+  userId    String
+  content   String   @db.VarChar(500)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  author   User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  media    PostMedia[]
+  likes    PostLike[]
+  comments PostComment[]
+  shares   PostShare[]
+}
+
+model PostMedia {
+  id           String    @id @default(uuid())
+  postId       String
+  url          String    // Supabase public URL
+  type         MediaType
+  thumbnailUrl String?   // for video preview
+  order        Int       @default(0)
+
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+}
+
+enum MediaType {
+  image
+  video
+}
+
+model PostLike {
+  postId    String
+  userId    String
+  createdAt DateTime @default(now())
+
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([postId, userId])
+}
+
+model PostComment {
+  id        String   @id @default(uuid())
+  postId    String
+  userId    String
+  content   String   @db.VarChar(300)
+  createdAt DateTime @default(now())
+
+  parentId  String?
+  parent    PostComment?  @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies   PostComment[] @relation("CommentReplies")
+
+  post   Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  author User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+enum UserRole {
+  student
+  instructor
+  admin
+}
+
+// ── Follow System ─────────────────────────────────────────────────────────────
+
+model UserFollow {
+  followerId  String
+  followingId String
+  createdAt   DateTime @default(now())
+
+  follower  User @relation("Followers", fields: [followerId], references: [id], onDelete: Cascade)
+  following User @relation("Following", fields: [followingId], references: [id], onDelete: Cascade)
+
+  @@id([followerId, followingId])
+}
+
+// ── Post Shares ───────────────────────────────────────────────────────────────
+
+model PostShare {
+  id         String   @id @default(uuid())
+  postId     String
+  senderId   String
+  receiverId String
+  viewed     Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  post     Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  sender   User @relation("SharesSent", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver User @relation("SharesReceived", fields: [receiverId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, senderId, receiverId])
 }

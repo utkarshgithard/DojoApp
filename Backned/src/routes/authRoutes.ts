@@ -4,6 +4,7 @@ import admin from '../lib/firebaseAdmin.js';
 import { verifyToken, AuthenticatedRequest } from '../middleware/authmiddleware.js';
 import generate6CharCode from '../utils/generateCode.js';
 import { cacheGet, cacheSet, cacheDel } from '../lib/redis.js';
+import { checkAndSyncAvatar } from '../utils/avatarSync.js';
 
 const userRouter = express.Router();
 
@@ -31,12 +32,13 @@ userRouter.get('/userDetails', verifyToken, async (req: AuthenticatedRequest, re
         friendCode: true,
         createdAt: true,
         bio: true,
-        department: true,
         avatarUrl: true,
       },
     });
 
     if (user) {
+      const avatarUrl = await checkAndSyncAvatar(user);
+      user.avatarUrl = avatarUrl;
       // Cache the profile details for 24 hours (86400 seconds)
       await cacheSet(cacheKey, JSON.stringify(user), 86400);
     }
@@ -45,6 +47,40 @@ userRouter.get('/userDetails', verifyToken, async (req: AuthenticatedRequest, re
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to fetch user.' });
+  }
+});
+
+// GET /api/auth/users/:id — fetch public details of another user
+userRouter.get('/users/:id', verifyToken, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const targetUserId = req.params.id as string;
+    const user = await prisma.user.findUnique({
+      where: { id: targetUserId },
+      select: {
+        id: true,
+        name: true,
+        avatarUrl: true,
+        bio: true,
+        role: true,
+        createdAt: true,
+      },
+    });
+
+    if (!user) {
+      res.status(404).json({ error: 'User not found.' });
+      return;
+    }
+
+    const avatarUrl = await checkAndSyncAvatar(user);
+    const userWithAvatar = {
+      ...user,
+      avatarUrl,
+    };
+
+    res.json({ user: userWithAvatar, success: true });
+  } catch (err) {
+    console.error('[getUserDetails]', err);
+    res.status(500).json({ error: 'Failed to fetch user profile.' });
   }
 });
 
@@ -67,7 +103,15 @@ userRouter.post('/sync', async (req: Request, res: Response): Promise<void> => {
     const existing = await prisma.user.findUnique({ where: { email } });
     
     if (existing) {
-      // User already exists, just return success (it's a login)
+      // If user has no avatar in DB but has a picture in Firebase, sync it
+      if (!existing.avatarUrl && decodedToken.picture) {
+        await prisma.user.update({
+          where: { id: existing.id },
+          data: { avatarUrl: decodedToken.picture },
+        });
+        await cacheDel(`profile:${existing.id}`);
+      }
+      
       res.status(200).json({
         message: 'User synced successfully.',
         userId: existing.id
@@ -92,6 +136,7 @@ userRouter.post('/sync', async (req: Request, res: Response): Promise<void> => {
         password: '', // Password is not used anymore
         verified: true, // Firebase handles verification
         friendCode: code,
+        avatarUrl: decodedToken.picture || null, // Sync photo URL from Google
       },
     });
 
@@ -122,7 +167,16 @@ userRouter.get('/friends-List', verifyToken, async (req: AuthenticatedRequest, r
     });
 
     const friends = userWithFriends?.friends.map((uf) => uf.friend) ?? [];
-    res.json({ friends });
+    const formattedFriends = await Promise.all(
+      friends.map(async (f) => {
+        const avatarUrl = await checkAndSyncAvatar(f);
+        return {
+          ...f,
+          avatarUrl,
+        };
+      })
+    );
+    res.json({ friends: formattedFriends });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to fetch friends' });
@@ -178,7 +232,7 @@ userRouter.post('/add', verifyToken, async (req: AuthenticatedRequest, res: Resp
 // PUT /api/auth/profile — update user profile
 userRouter.put('/profile', verifyToken, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
-    const { name, bio, department, avatarUrl } = req.body;
+    const { name, bio, avatarUrl } = req.body;
     const userId = req.userId!;
 
     const updatedUser = await prisma.user.update({
@@ -186,7 +240,6 @@ userRouter.put('/profile', verifyToken, async (req: AuthenticatedRequest, res: R
       data: {
         name: name !== undefined ? name : undefined,
         bio: bio !== undefined ? bio : undefined,
-        department: department !== undefined ? department : undefined,
         avatarUrl: avatarUrl !== undefined ? avatarUrl : undefined,
       },
       select: {
@@ -196,7 +249,6 @@ userRouter.put('/profile', verifyToken, async (req: AuthenticatedRequest, res: R
         verified: true,
         friendCode: true,
         bio: true,
-        department: true,
         avatarUrl: true,
       }
     });

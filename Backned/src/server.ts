@@ -15,6 +15,7 @@ import studySessionRouter from './routes/studySessionRoutes.js';
 import pushRouter from './routes/pushRoutes.js';
 import iceServersRouter from './routes/iceServersRoute.js';
 import notesRouter from './routes/notesRoutes.js';
+import communityRouter from './routes/communityRoutes.js';
 import prisma from './lib/prisma.js';
 import { setupSocketHandlers, setDbReady } from './socket.js';
 
@@ -49,6 +50,7 @@ app.use('/api/attendance', attendanceRouter);
 app.use('/api/study-session', studySessionRouter);
 app.use('/api/push', pushRouter);
 app.use('/api/notes', notesRouter);
+app.use('/api/community', communityRouter);
 
 app.get('/', (_req, res) => {
   res.send('Api Working.');

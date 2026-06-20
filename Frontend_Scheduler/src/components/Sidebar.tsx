@@ -15,7 +15,8 @@ import {
   Users,
   UserPlus,
   X,
-  Coffee
+  Coffee,
+  Hash
 } from 'lucide-react';
 import { useDarkMode } from '@/context/DarkModeContext';
 import { AuthContext } from '@/context/authContext';
@@ -24,7 +25,7 @@ import { auth } from '@/lib/firebase';
 
 const Sidebar = () => {
   const { darkMode, toggleDarkMode } = useDarkMode() as any;
-  const { logout, isAuthenticated, loading, userName, profileLoading } = useContext(AuthContext) as any;
+  const { logout, isAuthenticated, loading, userName, profileLoading, userDetails } = useContext(AuthContext) as any;
   const router = useRouter();
   const pathname = usePathname();
   const [userPhoto, setUserPhoto] = useState<string | null>(null);
@@ -56,16 +57,16 @@ const Sidebar = () => {
     }
   }, [latestInvite, lastSeenInviteId]);
 
-  // Sync photo from Firebase Auth
+  // Sync photo from Database or Firebase Auth fallback
   useEffect(() => {
     if (loading) return;
+    if (profileLoading) return; // Wait for database profile to load
     if (isAuthenticated) {
-      const currentUser = auth.currentUser;
-      setUserPhoto(currentUser?.photoURL || null);
+      setUserPhoto(userDetails?.avatarUrl || auth.currentUser?.photoURL || null);
     } else {
       setUserPhoto(null);
     }
-  }, [isAuthenticated, loading, pathname]);
+  }, [isAuthenticated, loading, profileLoading, pathname, userDetails]);
 
   const handleLogout = async () => {
     try {
@@ -89,6 +90,7 @@ const Sidebar = () => {
     { name: 'Dashboard', href: '/dashboard', icon: <LayoutDashboard size={16} /> },
     { name: 'Sessions', href: '/sessions', icon: <Users size={16} /> },
     { name: 'Friends', href: '/friends', icon: <UserPlus size={16} /> },
+    { name: 'Community', href: '/community', icon: <Hash size={16} /> },
     { name: 'Add Classes', href: '/setup-schedule', icon: <Clock size={16} /> },
     { name: 'Calendar', href: '/calendar', icon: <Calendar size={16} /> },
     { name: 'Settings', href: '/settings', icon: <Settings size={16} /> },
