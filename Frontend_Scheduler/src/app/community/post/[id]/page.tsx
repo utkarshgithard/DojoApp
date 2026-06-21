@@ -26,12 +26,6 @@ export default function PostDetailPage({ params }: PageProps) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!authLoading && !isAuthenticated) {
-      router.push('/');
-    }
-  }, [isAuthenticated, authLoading, router]);
-
-  useEffect(() => {
     const fetchPost = async () => {
       try {
         setLoading(true);
@@ -45,10 +39,10 @@ export default function PostDetailPage({ params }: PageProps) {
       }
     };
 
-    if (!authLoading && isAuthenticated) {
+    if (!authLoading) {
       fetchPost();
     }
-  }, [postId, isAuthenticated, authLoading]);
+  }, [postId, authLoading]);
 
   const handlePostDeleted = () => {
     router.push('/community');

@@ -14,6 +14,7 @@ const AuthProvider = (props: { children: React.ReactNode }) => {
     return null;
   });
   const [userId, setUserId] = useState<string | null>(null);
+  const [emailVerified, setEmailVerified] = useState<boolean>(true); // default true to avoid flicker before firebase resolves
   const [loading, setLoading] = useState(true);
   const [userName, setUserName] = useState('');
   const [profileLoading, setProfileLoading] = useState(true);
@@ -26,6 +27,7 @@ const AuthProvider = (props: { children: React.ReactNode }) => {
           const newToken = await user.getIdToken();
           setToken(newToken);
           setUserId(user.uid);
+          setEmailVerified(user.emailVerified);
           localStorage.setItem('token', newToken);
         } catch (error) {
           console.error("Firebase ID Token refresh error:", error);
@@ -35,6 +37,7 @@ const AuthProvider = (props: { children: React.ReactNode }) => {
       } else {
         setToken(null);
         setUserId(null);
+        setEmailVerified(false);
         localStorage.removeItem('token');
       }
       setLoading(false);
@@ -75,6 +78,12 @@ const AuthProvider = (props: { children: React.ReactNode }) => {
     setToken(newToken);
     if (uid) setUserId(uid);
     localStorage.setItem('token', newToken);
+    
+    // Attempt to read current firebase user verification status immediately on login call
+    const current = auth.currentUser;
+    if (current) {
+      setEmailVerified(current.emailVerified);
+    }
   }, []);
 
   const logout = useCallback(async () => {
@@ -83,6 +92,7 @@ const AuthProvider = (props: { children: React.ReactNode }) => {
     setUserId(null);
     setUserName('');
     setUserDetails(null);
+    setEmailVerified(false);
     localStorage.removeItem('token');
   }, []);
 
@@ -93,13 +103,14 @@ const AuthProvider = (props: { children: React.ReactNode }) => {
     login,
     logout,
     isAuthenticated,
+    emailVerified,
     loading,
     userName,
     profileLoading,
     setUserName,
     userDetails,
     setUserDetails
-  }), [token, userId, login, logout, isAuthenticated, loading, userName, profileLoading, userDetails]);
+  }), [token, userId, login, logout, isAuthenticated, emailVerified, loading, userName, profileLoading, userDetails]);
 
   return (
     <AuthContext.Provider value={value}>
@@ -117,4 +128,3 @@ export const useAuth = () => {
 };
 
 export default AuthProvider;
-

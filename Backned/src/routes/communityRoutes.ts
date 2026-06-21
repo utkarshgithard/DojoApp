@@ -1,5 +1,5 @@
 import express from 'express';
-import { verifyToken } from '../middleware/authmiddleware.js';
+import { verifyToken, optionalVerifyToken } from '../middleware/authmiddleware.js';
 import {
   getPosts,
   getPostById,
@@ -23,37 +23,35 @@ import { getSignedUploadUrl } from '../controllers/mediaController.js';
 
 const communityRouter = express.Router();
 
-// All community routes require authentication
-communityRouter.use(verifyToken);
-
 // ── Posts ─────────────────────────────────────────────────────────────────────
-communityRouter.get('/posts', getPosts);
-communityRouter.get('/posts/:id', getPostById);
-communityRouter.post('/posts', createPost);
-communityRouter.delete('/posts/:id', deletePost);
-communityRouter.get('/users/:userId/posts', getUserPosts);
+communityRouter.get('/posts', optionalVerifyToken, getPosts);
+communityRouter.get('/posts/:id', optionalVerifyToken, getPostById);
+communityRouter.post('/posts', verifyToken, createPost);
+communityRouter.delete('/posts/:id', verifyToken, deletePost);
+communityRouter.get('/users/:userId/posts', optionalVerifyToken, getUserPosts);
 
 // ── Likes ─────────────────────────────────────────────────────────────────────
-communityRouter.post('/posts/:id/like', toggleLike);
+communityRouter.post('/posts/:id/like', verifyToken, toggleLike);
 
 // ── Share ─────────────────────────────────────────────────────────────────────
-communityRouter.post('/posts/:id/share', sharePost);
-communityRouter.get('/shared-with-me', getSharedWithMe);
-communityRouter.post('/shares/:shareId/read', markShareAsViewed);
+communityRouter.post('/posts/:id/share', verifyToken, sharePost);
+communityRouter.get('/shared-with-me', verifyToken, getSharedWithMe);
+communityRouter.post('/shares/:shareId/read', verifyToken, markShareAsViewed);
 
 // ── Comments ──────────────────────────────────────────────────────────────────
-communityRouter.get('/posts/:id/comments', getComments);
-communityRouter.post('/posts/:id/comments', addComment);
-communityRouter.delete('/comments/:commentId', deleteComment);
+communityRouter.get('/posts/:id/comments', optionalVerifyToken, getComments);
+communityRouter.post('/posts/:id/comments', verifyToken, addComment);
+communityRouter.delete('/comments/:commentId', verifyToken, deleteComment);
 
 // ── Follow ────────────────────────────────────────────────────────────────────
-communityRouter.post('/users/:userId/follow', toggleFollow);
-communityRouter.get('/users/:userId/follow-status', getFollowStatus);
-communityRouter.get('/users/:userId/followers', getFollowers);
-communityRouter.get('/users/:userId/following', getFollowing);
-communityRouter.get('/my-network', getMyNetwork);
+communityRouter.post('/users/:userId/follow', verifyToken, toggleFollow);
+communityRouter.get('/users/:userId/follow-status', optionalVerifyToken, getFollowStatus);
+communityRouter.get('/users/:userId/followers', verifyToken, getFollowers);
+communityRouter.get('/users/:userId/following', verifyToken, getFollowing);
+communityRouter.get('/my-network', verifyToken, getMyNetwork);
 
 // ── Media upload signing ──────────────────────────────────────────────────────
-communityRouter.post('/media/sign', getSignedUploadUrl);
+communityRouter.post('/media/sign', verifyToken, getSignedUploadUrl);
 
 export default communityRouter;
+

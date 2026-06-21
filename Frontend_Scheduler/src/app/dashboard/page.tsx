@@ -31,7 +31,7 @@ const Dashboard = () => {
     holidayLoading
   } = useAttendance() as any;
 
-  const { isAuthenticated, loading, userName, profileLoading, userId: currentUserId } = useAuth() as any;
+  const { isAuthenticated, emailVerified, loading, userName, profileLoading, userId: currentUserId } = useAuth() as any;
 
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [attendanceConfirm, setAttendanceConfirm] = useState<{ subject: any; status: string } | null>(null);
@@ -40,10 +40,14 @@ const Dashboard = () => {
   const { sessions } = useSocket() as any;
 
   useEffect(() => {
-    if (!loading && !isAuthenticated) {
-      router.push('/');
+    if (!loading) {
+      if (!isAuthenticated) {
+        router.push('/');
+      } else if (!emailVerified) {
+        router.push('/verify-email');
+      }
     }
-  }, [isAuthenticated, loading, router]);
+  }, [isAuthenticated, emailVerified, loading, router]);
 
   const activeSession = React.useMemo(() => {
     if (!sessions || sessions.length === 0) return null;

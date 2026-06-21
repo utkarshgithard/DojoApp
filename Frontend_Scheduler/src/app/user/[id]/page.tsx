@@ -74,12 +74,7 @@ export default function UserProfilePage({ params }: PageProps) {
   const [followLoading, setFollowLoading] = useState(false);
   const isOwnProfile = targetUserId === currentUserId;
 
-  // Redirect if not auth
-  useEffect(() => {
-    if (!authLoading && !isAuthenticated) {
-      router.push('/');
-    }
-  }, [isAuthenticated, authLoading, router]);
+
 
   const fetchProfileAndPosts = useCallback(async () => {
     if (hasFetched.current) return;
@@ -115,10 +110,10 @@ export default function UserProfilePage({ params }: PageProps) {
   }, [targetUserId]);
 
   useEffect(() => {
-    if (isAuthenticated && targetUserId) {
+    if (targetUserId) {
       fetchProfileAndPosts();
     }
-  }, [isAuthenticated, targetUserId, fetchProfileAndPosts]);
+  }, [targetUserId, fetchProfileAndPosts]);
 
   const handleLoadMore = async () => {
     if (!nextCursor || fetchingMore) return;
@@ -139,6 +134,10 @@ export default function UserProfilePage({ params }: PageProps) {
   };
 
   const handleFollow = async () => {
+    if (!currentUserId) {
+      router.push('/login');
+      return;
+    }
     if (followLoading) return;
     setFollowLoading(true);
     const wasFollowing = following;

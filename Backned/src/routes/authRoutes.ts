@@ -1,7 +1,7 @@
 import express, { Request, Response } from 'express';
 import prisma from '../lib/prisma.js';
 import admin from '../lib/firebaseAdmin.js';
-import { verifyToken, AuthenticatedRequest } from '../middleware/authmiddleware.js';
+import { verifyToken, optionalVerifyToken, AuthenticatedRequest } from '../middleware/authmiddleware.js';
 import generate6CharCode from '../utils/generateCode.js';
 import { cacheGet, cacheSet, cacheDel } from '../lib/redis.js';
 import { checkAndSyncAvatar } from '../utils/avatarSync.js';
@@ -51,7 +51,7 @@ userRouter.get('/userDetails', verifyToken, async (req: AuthenticatedRequest, re
 });
 
 // GET /api/auth/users/:id — fetch public details of another user
-userRouter.get('/users/:id', verifyToken, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+userRouter.get('/users/:id', optionalVerifyToken, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const targetUserId = req.params.id as string;
     const user = await prisma.user.findUnique({

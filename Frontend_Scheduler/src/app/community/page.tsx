@@ -60,16 +60,9 @@ export default function CommunityPage() {
     applyNewPosts,
   } = useCommunity();
 
-  // Redirect if not auth
-  useEffect(() => {
-    if (!loading && !isAuthenticated) {
-      router.push('/');
-    }
-  }, [isAuthenticated, loading, router]);
-
   // Initial load or silent revalidation
   useEffect(() => {
-    if (!loading && isAuthenticated) {
+    if (!loading) {
       if (posts.length === 0) {
         fetchPosts();
       } else {
@@ -77,11 +70,11 @@ export default function CommunityPage() {
         fetchPosts(undefined, true);
       }
     }
-  }, [loading, isAuthenticated, fetchPosts, posts.length]);
+  }, [loading, fetchPosts, posts.length]);
 
   // Silent background revalidation on page visibility refocus (e.g. returning to tab)
   useEffect(() => {
-    if (!isAuthenticated || loading) return;
+    if (loading) return;
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
@@ -93,7 +86,7 @@ export default function CommunityPage() {
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [isAuthenticated, loading, fetchPosts]);
+  }, [loading, fetchPosts]);
 
   // Restore scroll position on mount
   useEffect(() => {
@@ -123,7 +116,7 @@ export default function CommunityPage() {
     }, 0);
   };
 
-  if (loading || (!isAuthenticated && !loading)) return null;
+  if (loading) return null;
 
   return (
     <div
@@ -172,7 +165,7 @@ export default function CommunityPage() {
           </div>
 
           {/* Mobile Post Composer & Inbox */}
-          {isAuthenticated && (
+          {isAuthenticated ? (
             <div className="xl:hidden relative mb-6 space-y-4">
               <CommunityPostComposer
                 currentUser={{ id: userId, name: userName || 'You', avatarUrl }}
@@ -180,6 +173,33 @@ export default function CommunityPage() {
                 onPostCreated={handlePostCreated}
               />
               <SharedInbox dark={dark} />
+            </div>
+          ) : (
+            <div className="xl:hidden relative mb-6">
+              <div className={`rounded-xl border p-5 text-center shadow-sm ${
+                dark ? 'bg-zinc-900 border-zinc-800 text-white' : 'bg-white border-zinc-200 text-zinc-900'
+              }`}>
+                <h3 className="font-semibold text-[15.5px] mb-1.5">Join the Dojo Community</h3>
+                <p className={`text-[12.5px] mb-4 leading-relaxed ${dark ? 'text-zinc-400' : 'text-zinc-500'}`}>
+                  Log in or sign up to post updates, like training highlights, reply to comments, and connect with other members.
+                </p>
+                <div className="flex gap-3 justify-center">
+                  <button
+                    onClick={() => router.push('/login')}
+                    className="px-4 py-2 text-[13px] font-semibold bg-indigo-650 hover:bg-indigo-700 text-white rounded-xl transition-all active:scale-95 shadow-sm"
+                  >
+                    Log In
+                  </button>
+                  <button
+                    onClick={() => router.push('/register')}
+                    className={`px-4 py-2 text-[13px] font-semibold border rounded-xl transition-all active:scale-95 ${
+                      dark ? 'border-zinc-700 text-zinc-300 hover:bg-zinc-800' : 'border-zinc-300 text-zinc-750 hover:bg-zinc-50'
+                    }`}
+                  >
+                    Sign Up
+                  </button>
+                </div>
+              </div>
             </div>
           )}
 
@@ -300,7 +320,7 @@ export default function CommunityPage() {
         </div>
 
         {/* Desktop right column: Composer + Shared Inbox */}
-        {isAuthenticated && (
+        {isAuthenticated ? (
           <div className="hidden xl:block sticky top-[24px] space-y-0">
             <CommunityPostComposer
               currentUser={{ id: userId, name: userName || 'You', avatarUrl }}
@@ -308,6 +328,33 @@ export default function CommunityPage() {
               onPostCreated={handlePostCreated}
             />
             <SharedInbox dark={dark} />
+          </div>
+        ) : (
+          <div className="hidden xl:block sticky top-[24px]">
+            <div className={`rounded-xl border p-6 text-center shadow-sm ${
+              dark ? 'bg-zinc-900 border-zinc-800 text-white' : 'bg-white border-zinc-200 text-zinc-900'
+            }`}>
+              <h3 className="font-semibold text-[16px] mb-2">Join the Dojo Community</h3>
+              <p className={`text-[13px] mb-5 leading-relaxed ${dark ? 'text-zinc-400' : 'text-zinc-500'}`}>
+                Log in or sign up to post updates, like posts, comment on discussions, and connect with other users in the dojo.
+              </p>
+              <div className="flex flex-col gap-2">
+                <button
+                  onClick={() => router.push('/login')}
+                  className="w-full py-2.5 text-[13.5px] font-semibold bg-indigo-650 hover:bg-indigo-700 text-white rounded-xl transition-all active:scale-95 shadow-sm"
+                >
+                  Log In
+                </button>
+                <button
+                  onClick={() => router.push('/register')}
+                  className={`w-full py-2.5 text-[13.5px] font-semibold border rounded-xl transition-all active:scale-95 ${
+                    dark ? 'border-zinc-700 text-zinc-300 hover:bg-zinc-800' : 'border-zinc-300 text-zinc-750 hover:bg-zinc-50'
+                  }`}
+                >
+                  Create an Account
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </div>

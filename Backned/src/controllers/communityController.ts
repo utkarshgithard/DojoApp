@@ -9,15 +9,18 @@ const POSTS_PER_PAGE = 10;
 
 export const getPosts = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
-    const userId = req.userId!;
+    const userId = req.userId;
     const cursor = req.query.cursor as string | undefined;
 
-    // Get the IDs of people the current user follows
-    const followingRecords = await prisma.userFollow.findMany({
-      where: { followerId: userId },
-      select: { followingId: true },
-    });
-    const followingIds = new Set(followingRecords.map((f) => f.followingId));
+    // Get the IDs of people the current user follows (only if logged in)
+    let followingIds = new Set<string>();
+    if (userId) {
+      const followingRecords = await prisma.userFollow.findMany({
+        where: { followerId: userId },
+        select: { followingId: true },
+      });
+      followingIds = new Set(followingRecords.map((f) => f.followingId));
+    }
 
     const posts = await prisma.post.findMany({
       take: POSTS_PER_PAGE + 1,
@@ -29,7 +32,7 @@ export const getPosts = async (req: AuthenticatedRequest, res: Response): Promis
         },
         media: { orderBy: { order: 'asc' } },
         _count: { select: { likes: true, comments: true } },
-        likes: { where: { userId }, select: { userId: true } },
+        likes: userId ? { where: { userId }, select: { userId: true } } : undefined,
       },
     });
 
@@ -52,16 +55,19 @@ export const getPosts = async (req: AuthenticatedRequest, res: Response): Promis
           media: post.media,
           likeCount: post._count.likes,
           commentCount: post._count.comments,
-          likedByMe: post.likes.length > 0,
-          followedByMe: followingIds.has(post.author.id),
+          likedByMe: userId ? (post.likes && post.likes.length > 0) : false,
+          followedByMe: userId ? followingIds.has(post.author.id) : false,
         };
       })
     );
 
-    // Boost followed-user posts to top, preserving recency order within each group
-    const followedPosts = formatted.filter((p) => p.followedByMe && p.author.id !== userId);
-    const otherPosts = formatted.filter((p) => !p.followedByMe || p.author.id === userId);
-    const sortedFormatted = [...followedPosts, ...otherPosts];
+    // Boost followed-user posts to top, preserving recency order within each group (only if logged in)
+    let sortedFormatted = formatted;
+    if (userId) {
+      const followedPosts = formatted.filter((p) => p.followedByMe && p.author.id !== userId);
+      const otherPosts = formatted.filter((p) => !p.followedByMe || p.author.id === userId);
+      sortedFormatted = [...followedPosts, ...otherPosts];
+    }
 
     res.json({ posts: sortedFormatted, nextCursor });
   } catch (err) {
@@ -72,7 +78,7 @@ export const getPosts = async (req: AuthenticatedRequest, res: Response): Promis
 
 export const getPostById = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
-    const userId = req.userId!;
+    const userId = req.userId;
     const id = req.params.id as string;
 
     const post = await prisma.post.findUnique({
@@ -83,7 +89,7 @@ export const getPostById = async (req: AuthenticatedRequest, res: Response): Pro
         },
         media: { orderBy: { order: 'asc' } },
         _count: { select: { likes: true, comments: true } },
-        likes: { where: { userId }, select: { userId: true } },
+        likes: userId ? { where: { userId }, select: { userId: true } } : undefined,
       },
     });
 
@@ -92,15 +98,18 @@ export const getPostById = async (req: AuthenticatedRequest, res: Response): Pro
       return;
     }
 
-    const followRecord = await prisma.userFollow.findUnique({
-      where: {
-        followerId_followingId: {
-          followerId: userId,
-          followingId: post.author.id,
+    let followedByMe = false;
+    if (userId) {
+      const followRecord = await prisma.userFollow.findUnique({
+        where: {
+          followerId_followingId: {
+            followerId: userId,
+            followingId: post.author.id,
+          },
         },
-      },
-    });
-    const followedByMe = !!followRecord;
+      });
+      followedByMe = !!followRecord;
+    }
 
     const avatarUrl = await checkAndSyncAvatar(post.author);
 
@@ -117,7 +126,7 @@ export const getPostById = async (req: AuthenticatedRequest, res: Response): Pro
         media: post.media,
         likeCount: post._count.likes,
         commentCount: post._count.comments,
-        likedByMe: post.likes.length > 0,
+        likedByMe: userId ? (post.likes && post.likes.length > 0) : false,
         followedByMe,
       },
     });
@@ -126,6 +135,7 @@ export const getPostById = async (req: AuthenticatedRequest, res: Response): Pro
     res.status(500).json({ error: 'Failed to fetch post' });
   }
 };
+
 
 // ── Create Post ───────────────────────────────────────────────────────────────
 
@@ -291,13 +301,15 @@ export const toggleFollow = async (req: AuthenticatedRequest, res: Response): Pr
 
 export const getFollowStatus = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
-    const followerId = req.userId!;
+    const followerId = req.userId;
     const followingId = req.params.userId as string;
 
     const [followRecord, followerCount, followingCount] = await Promise.all([
-      prisma.userFollow.findUnique({
-        where: { followerId_followingId: { followerId, followingId } },
-      }),
+      followerId
+        ? prisma.userFollow.findUnique({
+            where: { followerId_followingId: { followerId, followingId } },
+          })
+        : null,
       prisma.userFollow.count({ where: { followingId } }),
       prisma.userFollow.count({ where: { followerId: followingId } }),
     ]);
@@ -728,7 +740,7 @@ export const deleteComment = async (req: AuthenticatedRequest, res: Response): P
 
 export const getUserPosts = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
-    const currentUserId = req.userId!;
+    const currentUserId = req.userId;
     const targetUserId = req.params.userId as string;
     const cursor = req.query.cursor as string | undefined;
 
@@ -744,12 +756,14 @@ export const getUserPosts = async (req: AuthenticatedRequest, res: Response): Pr
           },
           media: { orderBy: { order: 'asc' } },
           _count: { select: { likes: true, comments: true } },
-          likes: { where: { userId: currentUserId }, select: { userId: true } },
+          likes: currentUserId ? { where: { userId: currentUserId }, select: { userId: true } } : undefined,
         },
       }),
-      prisma.userFollow.findUnique({
-        where: { followerId_followingId: { followerId: currentUserId, followingId: targetUserId } },
-      }),
+      currentUserId
+        ? prisma.userFollow.findUnique({
+            where: { followerId_followingId: { followerId: currentUserId, followingId: targetUserId } },
+          })
+        : null,
     ]);
 
     const followedByMe = !!followRecord;
@@ -773,7 +787,7 @@ export const getUserPosts = async (req: AuthenticatedRequest, res: Response): Pr
           media: post.media,
           likeCount: post._count.likes,
           commentCount: post._count.comments,
-          likedByMe: post.likes.length > 0,
+          likedByMe: currentUserId ? (post.likes && post.likes.length > 0) : false,
           followedByMe,
         };
       })
@@ -785,3 +799,4 @@ export const getUserPosts = async (req: AuthenticatedRequest, res: Response): Pr
     res.status(500).json({ error: 'Failed to fetch user posts' });
   }
 };
+

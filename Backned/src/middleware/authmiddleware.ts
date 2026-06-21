@@ -79,6 +79,62 @@ export const verifyToken = async (
   }
 };
 
+export const optionalVerifyToken = async (
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader) {
+    return next();
+  }
+
+  const token = authHeader.replace('Bearer ', '');
+  if (!token || token === 'null' || token === 'undefined') {
+    return next();
+  }
+
+  try {
+    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+    const cacheKey = `token:${tokenHash}`;
+    let decodedToken;
+
+    const cached = await cacheGet(cacheKey);
+    if (cached) {
+      decodedToken = JSON.parse(cached);
+    } else {
+      decodedToken = await admin.auth().verifyIdToken(token);
+      const remainingTime = decodedToken.exp - Math.floor(Date.now() / 1000);
+      if (remainingTime > 0) {
+        await cacheSet(cacheKey, JSON.stringify(decodedToken), Math.min(remainingTime, 900));
+      }
+    }
+    
+    req.userId = decodedToken.uid;
+
+    const user = await prisma.user.findUnique({
+      where: { id: decodedToken.uid },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        verified: true,
+        friendCode: true,
+        createdAt: true,
+      },
+    });
+
+    if (user) {
+      req.user = user;
+    }
+  } catch (err: any) {
+    // Optional token validation is bypassed on failure
+    console.log('Optional token validation bypassed/failed:', err.message || err);
+  }
+  next();
+};
+
+
 export async function verifySocketTokenAsync(token: string | undefined): Promise<string | null> {
   if (!token) return null;
   try {

@@ -168,6 +168,7 @@ export interface AuthContextType {
   login: (newToken: string, uid?: string) => void;
   logout: () => Promise<void>;
   isAuthenticated: boolean;
+  emailVerified: boolean;
   loading: boolean;
   userName: string;
   profileLoading: boolean;

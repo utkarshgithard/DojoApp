@@ -78,6 +78,10 @@ export default function CommunityPostCard({
   };
 
   const handleLike = async () => {
+    if (!currentUserId) {
+      router.push('/login');
+      return;
+    }
     const wasLiked = liked;
     setLiked(!wasLiked);
     setLikeCount((c) => (wasLiked ? c - 1 : c + 1));
@@ -92,6 +96,10 @@ export default function CommunityPostCard({
   };
 
   const handleFollow = async () => {
+    if (!currentUserId) {
+      router.push('/login');
+      return;
+    }
     if (followLoading) return;
     setFollowLoading(true);
     const wasFollowing = following;
@@ -279,7 +287,13 @@ export default function CommunityPostCard({
 
           {/* Share */}
           <button
-            onClick={() => setShowShareModal(true)}
+            onClick={() => {
+              if (!currentUserId) {
+                router.push('/login');
+              } else {
+                setShowShareModal(true);
+              }
+            }}
             className={`flex items-center gap-1.5 text-[13px] font-medium transition-colors group ml-auto ${
               dark ? 'text-zinc-500 hover:text-emerald-400' : 'text-zinc-400 hover:text-emerald-600'
             }`}
