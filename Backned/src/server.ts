@@ -17,6 +17,7 @@ import iceServersRouter from './routes/iceServersRoute.js';
 import notesRouter from './routes/notesRoutes.js';
 import communityRouter from './routes/communityRoutes.js';
 import communityGroupRouter from './routes/communityGroupRoutes.js';
+import notificationRouter from './routes/notificationRoutes.js';
 import prisma from './lib/prisma.js';
 import { setupSocketHandlers, setDbReady } from './socket.js';
 
@@ -28,12 +29,21 @@ app.use(express.urlencoded({ limit: '10mb', extended: true }));
 // ── DB health state ──────────────────────────────────────────────────────────
 let dbReady = false;
 
-// Middleware: block API requests until DB is connected
-app.use('/api', (_req, res, next) => {
+app.use((req, res, next) => {
+  // Bypassed endpoints
+  const bypass = [
+    '/health',
+    '/api/ice-servers',
+    '/api/auth/sync',
+    '/api/auth/register',
+  ];
+  if (bypass.includes(req.path)) {
+    return next();
+  }
   if (!dbReady) {
     res.status(503).json({
-      error: 'Service temporarily unavailable',
-      detail: 'Database is not yet connected. Please try again in a few seconds.',
+      error: 'Database connection offline. System operating in degraded mode.',
+      success: false,
     });
     return;
   }
@@ -53,6 +63,7 @@ app.use('/api/push', pushRouter);
 app.use('/api/notes', notesRouter);
 app.use('/api/community', communityRouter);
 app.use('/api/groups', communityGroupRouter);
+app.use('/api/notifications', notificationRouter);
 
 app.get('/', (_req, res) => {
   res.send('Api Working.');

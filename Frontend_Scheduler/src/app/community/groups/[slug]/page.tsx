@@ -136,7 +136,7 @@ export default function CommunityHomePage() {
   const canPost = isMember;
 
   return (
-    <div className={`min-h-screen pt-[50px] md:pt-0 transition-colors duration-300 ${dark ? 'bg-[#0a0a0a] text-white' : 'bg-[#f5f5f5] text-zinc-900'}`}>
+    <div className={`group min-h-screen pt-[50px] md:pt-0 transition-colors duration-300 ${dark ? 'bg-[#0a0a0a] text-white' : 'bg-[#f5f5f5] text-zinc-900'}`}>
 
       {/* Banner */}
       <div className={`relative h-36 sm:h-48 overflow-hidden ${dark ? 'bg-gradient-to-br from-indigo-950 via-zinc-900 to-zinc-950' : 'bg-gradient-to-br from-indigo-200 via-indigo-100 to-white'}`}>
@@ -428,7 +428,7 @@ export default function CommunityHomePage() {
       {canPost && (
         <button
           onClick={() => setIsComposeOpen(true)}
-          className="fixed bottom-6 right-6 z-40 w-14 h-14 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full flex items-center justify-center shadow-2xl active:scale-95 transition-all xl:hidden"
+          className="fixed bottom-6 right-6 z-40 w-14 h-14 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full flex items-center justify-center shadow-2xl active:scale-95 transition-all xl:hidden group-has-[textarea:focus]:opacity-0 group-has-[textarea:focus]:pointer-events-none duration-300"
         >
           <Plus size={24} />
         </button>

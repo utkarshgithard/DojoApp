@@ -2,6 +2,7 @@ import { Response } from 'express';
 import prisma from '../lib/prisma.js';
 import { AuthenticatedRequest } from '../middleware/authmiddleware.js';
 import { checkAndSyncAvatar } from '../utils/avatarSync.js';
+import { createNotification } from '../utils/notificationHelper.js';
 
 const POSTS_PER_PAGE = 10;
 
@@ -14,18 +15,33 @@ export const getPosts = async (req: AuthenticatedRequest, res: Response): Promis
 
     // Get the IDs of people the current user follows (only if logged in)
     let followingIds = new Set<string>();
+    let joinedCommunityIds: string[] = [];
     if (userId) {
-      const followingRecords = await prisma.userFollow.findMany({
-        where: { followerId: userId },
-        select: { followingId: true },
-      });
+      const [followingRecords, memberships] = await Promise.all([
+        prisma.userFollow.findMany({
+          where: { followerId: userId },
+          select: { followingId: true },
+        }),
+        prisma.communityMember.findMany({
+          where: { userId },
+          select: { communityId: true },
+        }),
+      ]);
       followingIds = new Set(followingRecords.map((f) => f.followingId));
+      joinedCommunityIds = memberships.map((m) => m.communityId);
     }
 
     const posts = await prisma.post.findMany({
       take: POSTS_PER_PAGE + 1,
       ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
-      where: { communityId: null },
+      where: userId ? {
+        OR: [
+          { communityId: null },
+          { communityId: { in: joinedCommunityIds } },
+        ]
+      } : {
+        communityId: null,
+      },
       orderBy: { createdAt: 'desc' },
       include: {
         author: {
@@ -34,6 +50,9 @@ export const getPosts = async (req: AuthenticatedRequest, res: Response): Promis
         media: { orderBy: { order: 'asc' } },
         _count: { select: { likes: true, comments: true } },
         likes: userId ? { where: { userId }, select: { userId: true } } : undefined,
+        community: {
+          select: { id: true, name: true, slug: true, avatarUrl: true }
+        }
       },
     });
 
@@ -58,6 +77,7 @@ export const getPosts = async (req: AuthenticatedRequest, res: Response): Promis
           commentCount: post._count.comments,
           likedByMe: userId ? (post.likes && post.likes.length > 0) : false,
           followedByMe: userId ? followingIds.has(post.author.id) : false,
+          community: post.community,
         };
       })
     );
@@ -91,6 +111,9 @@ export const getPostById = async (req: AuthenticatedRequest, res: Response): Pro
         media: { orderBy: { order: 'asc' } },
         _count: { select: { likes: true, comments: true } },
         likes: userId ? { where: { userId }, select: { userId: true } } : undefined,
+        community: {
+          select: { id: true, name: true, slug: true, avatarUrl: true }
+        }
       },
     });
 
@@ -129,6 +152,7 @@ export const getPostById = async (req: AuthenticatedRequest, res: Response): Pro
         commentCount: post._count.comments,
         likedByMe: userId ? (post.likes && post.likes.length > 0) : false,
         followedByMe,
+        community: post.community,
       },
     });
   } catch (err) {
@@ -270,14 +294,38 @@ export const toggleLike = async (req: AuthenticatedRequest, res: Response): Prom
     const userId = req.userId!;
     const postId = req.params.id as string;
 
+    const post = await prisma.post.findUnique({
+      where: { id: postId },
+      select: { id: true, userId: true },
+    });
+
+    if (!post) {
+      res.status(404).json({ error: 'Post not found' });
+      return;
+    }
+
     const existing = await prisma.postLike.findUnique({
       where: { postId_userId: { postId, userId } },
     });
 
     if (existing) {
       await prisma.postLike.delete({ where: { postId_userId: { postId, userId } } });
+      // Remove corresponding notification
+      await prisma.notification.deleteMany({
+        where: {
+          userId: post.userId,
+          senderId: userId,
+          type: 'like',
+          postId,
+        },
+      });
     } else {
       await prisma.postLike.create({ data: { postId, userId } });
+      // Trigger notification (if liking someone else's post)
+      if (post.userId !== userId) {
+        const io = req.app.get('io');
+        await createNotification(post.userId, userId, 'like', postId, undefined, io);
+      }
     }
 
     const likeCount = await prisma.postLike.count({ where: { postId } });
@@ -692,8 +740,8 @@ export const addComment = async (req: AuthenticatedRequest, res: Response): Prom
       return;
     }
 
-    const postExists = await prisma.post.findUnique({ where: { id: postId }, select: { id: true } });
-    if (!postExists) {
+    const post = await prisma.post.findUnique({ where: { id: postId }, select: { id: true, userId: true } });
+    if (!post) {
       res.status(404).json({ error: 'Post not found' });
       return;
     }
@@ -722,6 +770,12 @@ export const addComment = async (req: AuthenticatedRequest, res: Response): Prom
     });
 
     const avatarUrl = await checkAndSyncAvatar(comment.author);
+
+    // Trigger comment notification (if commenting on someone else's post)
+    if (post.userId !== userId) {
+      const io = req.app.get('io');
+      await createNotification(post.userId, userId, 'comment', postId, comment.id, io);
+    }
 
     res.status(201).json({
       comment: {
@@ -783,6 +837,9 @@ export const getUserPosts = async (req: AuthenticatedRequest, res: Response): Pr
           media: { orderBy: { order: 'asc' } },
           _count: { select: { likes: true, comments: true } },
           likes: currentUserId ? { where: { userId: currentUserId }, select: { userId: true } } : undefined,
+          community: {
+            select: { id: true, name: true, slug: true, avatarUrl: true }
+          }
         },
       }),
       currentUserId
@@ -815,6 +872,7 @@ export const getUserPosts = async (req: AuthenticatedRequest, res: Response): Pr
           commentCount: post._count.comments,
           likedByMe: currentUserId ? (post.likes && post.likes.length > 0) : false,
           followedByMe,
+          community: post.community,
         };
       })
     );

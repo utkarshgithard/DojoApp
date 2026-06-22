@@ -27,6 +27,13 @@ interface Post {
   likeCount: number;
   commentCount: number;
   likedByMe: boolean;
+  followedByMe?: boolean;
+  community?: {
+    id: string;
+    name: string;
+    slug: string;
+    avatarUrl?: string | null;
+  } | null;
 }
 
 interface CommunityPostComposerProps {

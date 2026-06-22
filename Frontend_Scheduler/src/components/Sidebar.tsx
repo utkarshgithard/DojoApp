@@ -18,11 +18,13 @@ import {
   Coffee,
   Hash,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Bell
 } from 'lucide-react';
 import { useDarkMode } from '@/context/DarkModeContext';
 import { AuthContext } from '@/context/authContext';
 import { useAttendance } from '@/context/AttendanceContext';
+import { useNotifications } from '@/context/NotificationContext';
 import { auth } from '@/lib/firebase';
 
 interface SidebarProps {
@@ -41,6 +43,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed = false, toggleCollapse }) 
   const [qrBlurred, setQrBlurred] = useState(true);
 
   const attendance = useAttendance();
+  const { unreadCount } = useNotifications();
   const invites = attendance?.invites || [];
   const [lastSeenInviteId, setLastSeenInviteId] = useState<string | null>(null);
   const [isDismissed, setIsDismissed] = useState(false);
@@ -98,6 +101,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed = false, toggleCollapse }) 
     { name: 'Sessions', href: '/sessions', icon: <Users size={16} /> },
     { name: 'Friends', href: '/friends', icon: <UserPlus size={16} /> },
     { name: 'Community', href: '/community', icon: <Hash size={16} /> },
+    { name: 'Notifications', href: '/notifications', icon: <Bell size={16} /> },
     { name: 'Add Classes', href: '/setup-schedule', icon: <Clock size={16} /> },
     { name: 'Calendar', href: '/calendar', icon: <Calendar size={16} /> },
     { name: 'Settings', href: '/settings', icon: <Settings size={16} /> },
@@ -167,6 +171,11 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed = false, toggleCollapse }) 
                 {isSessions && activeInvites.length > 0 && (
                   <span className={`${collapsed ? 'absolute top-0 right-0' : 'ml-auto'} inline-flex items-center justify-center w-5 h-5 text-[10px] font-bold text-white bg-red-500 rounded-full animate-pulse shrink-0`}>
                     {activeInvites.length}
+                  </span>
+                )}
+                {item.name === 'Notifications' && unreadCount > 0 && (
+                  <span className={`${collapsed ? 'absolute top-0 right-0' : 'ml-auto'} inline-flex items-center justify-center w-5 h-5 text-[10px] font-bold text-white bg-red-500 rounded-full animate-pulse shrink-0`}>
+                    {unreadCount}
                   </span>
                 )}
               </Link>

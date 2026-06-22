@@ -187,7 +187,7 @@ export default function CommunityPostCard({
           </button>
 
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-1.5 flex-wrap">
               <button
                 onClick={handleUserClick}
                 className={`text-[14px] font-semibold hover:underline outline-none text-left transition-colors ${
@@ -196,6 +196,20 @@ export default function CommunityPostCard({
               >
                 {post.author.name}
               </button>
+
+              {post.community && (
+                <>
+                  <span className={`text-[13px] ${dark ? 'text-zinc-400' : 'text-zinc-500'}`}>
+                    posted in the
+                  </span>
+                  <button
+                    onClick={() => router.push(`/community/groups/${post.community?.slug}`)}
+                    className="text-[13px] font-semibold text-indigo-600 dark:text-indigo-400 hover:underline outline-none text-left transition-colors"
+                  >
+                    /{post.community.name}
+                  </button>
+                </>
+              )}
 
               {/* Follow pill — only for other users' posts */}
               {!isOwnPost && (
@@ -306,7 +320,7 @@ export default function CommunityPostCard({
                 setShowShareModal(true);
               }
             }}
-            className={`flex items-center gap-1.5 text-[13px] font-medium transition-colors group ml-auto ${
+            className={`flex items-center gap-1.5 text-[13px] font-medium transition-colors group ${
               dark ? 'text-zinc-500 hover:text-emerald-400' : 'text-zinc-400 hover:text-emerald-600'
             }`}
           >

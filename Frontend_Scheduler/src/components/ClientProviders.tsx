@@ -7,6 +7,7 @@ import AuthProvider from "@/context/authContext";
 import { CommunityProvider } from "@/context/CommunityContext";
 import { CommunityGroupProvider } from "@/context/CommunityGroupContext";
 import { NetworkProvider } from "@/context/NetworkContext";
+import { NotificationProvider } from "@/context/NotificationContext";
 import React, { useState, useEffect } from "react";
 import { usePathname } from "next/navigation";
 import Sidebar from "./Sidebar";
@@ -21,7 +22,7 @@ export default function ClientProviders({ children }: { children: React.ReactNod
   const showNavbar = !noNavbarRoutes.some(route => pathname === route || pathname.startsWith('/verify-email/'))
     && !pathname.startsWith('/session/');
   
-  const sidebarRoutes = ['/dashboard', '/sessions', '/friends', '/community', '/setup-schedule', '/calendar', '/settings'];
+  const sidebarRoutes = ['/dashboard', '/sessions', '/friends', '/community', '/setup-schedule', '/calendar', '/settings', '/notifications'];
   const showSidebar = sidebarRoutes.some(route => pathname === route || pathname.startsWith(route + '/'));
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -43,30 +44,32 @@ export default function ClientProviders({ children }: { children: React.ReactNod
   return (
     <AuthProvider>
       <SocketProvider>
-        <AttendanceProvider>
-          <CommunityProvider>
-            <CommunityGroupProvider>
-            <NetworkProvider>
-              <DarkModeProvider>
-              <InternetStatus />
-              {showNavbar && <Navbar />}
-              {showSidebar ? (
-                <div className="min-h-screen w-full flex">
-                  <Sidebar collapsed={sidebarCollapsed} toggleCollapse={toggleSidebar} />
-                  <div className={`flex-1 w-full min-w-0 transition-all duration-300 ${mounted && sidebarCollapsed ? 'md:pl-20' : 'md:pl-64'}`}>
-                    {children}
+        <NotificationProvider>
+          <AttendanceProvider>
+            <CommunityProvider>
+              <CommunityGroupProvider>
+              <NetworkProvider>
+                <DarkModeProvider>
+                <InternetStatus />
+                {showNavbar && <Navbar />}
+                {showSidebar ? (
+                  <div className="min-h-screen w-full flex">
+                    <Sidebar collapsed={sidebarCollapsed} toggleCollapse={toggleSidebar} />
+                    <div className={`flex-1 w-full min-w-0 transition-all duration-300 ${mounted && sidebarCollapsed ? 'md:pl-20' : 'md:pl-64'}`}>
+                      {children}
+                    </div>
+                    <OnboardingTour />
                   </div>
-                  <OnboardingTour />
-                </div>
-              ) : (
-                children
-              )}
-              <Toaster />
-              </DarkModeProvider>
-            </NetworkProvider>
-            </CommunityGroupProvider>
-          </CommunityProvider>
-        </AttendanceProvider>
+                ) : (
+                  children
+                )}
+                <Toaster />
+                </DarkModeProvider>
+              </NetworkProvider>
+              </CommunityGroupProvider>
+            </CommunityProvider>
+          </AttendanceProvider>
+        </NotificationProvider>
       </SocketProvider>
     </AuthProvider>
   );

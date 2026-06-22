@@ -57,6 +57,8 @@ model User {
   communityMemberships CommunityMember[]
   invitesSent         CommunityInvite[] @relation("InvitesSent")
   invitesReceived     CommunityInvite[] @relation("InvitesReceived")
+  notificationsReceived Notification[] @relation("NotificationRecipient")
+  notificationsSent     Notification[] @relation("NotificationSender")
 }
 
 
@@ -255,6 +257,7 @@ model Post {
   likes     PostLike[]
   comments  PostComment[]
   shares    PostShare[]
+  notifications Notification[]
 }
 
 model PostMedia {
@@ -297,6 +300,7 @@ model PostComment {
 
   post   Post @relation(fields: [postId], references: [id], onDelete: Cascade)
   author User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  notifications Notification[]
 }
 
 enum UserRole {
@@ -393,4 +397,20 @@ model CommunityInvite {
   invited   User      @relation("InvitesReceived", fields: [invitedId], references: [id], onDelete: Cascade)
 
   @@unique([communityId, invitedId])
+}
+
+model Notification {
+  id          String   @id @default(uuid())
+  userId      String
+  senderId    String
+  type        String   // "like", "comment"
+  postId      String?
+  commentId   String?
+  read        Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  user        User     @relation("NotificationRecipient", fields: [userId], references: [id], onDelete: Cascade)
+  sender      User     @relation("NotificationSender", fields: [senderId], references: [id], onDelete: Cascade)
+  post        Post?    @relation(fields: [postId], references: [id], onDelete: Cascade)
+  comment     PostComment? @relation(fields: [commentId], references: [id], onDelete: Cascade)
 }

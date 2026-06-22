@@ -7,6 +7,7 @@ import { Moon, Sun, Menu, X, LogOut, LayoutDashboard, Calendar, Clock, Settings,
 import { useDarkMode } from '@/context/DarkModeContext';
 import { AuthContext } from '@/context/authContext';
 import { useAttendance } from '@/context/AttendanceContext';
+import { useNotifications } from '@/context/NotificationContext';
 import { auth } from '@/lib/firebase';
 
 const Navbar = () => {
@@ -16,6 +17,7 @@ const Navbar = () => {
   const pathname = usePathname();
 
   const attendance = useAttendance();
+  const { unreadCount } = useNotifications();
   const invites = attendance?.invites || [];
   const activeInvitesCount = invites.filter((invite: any) => {
     if (!invite.invitedAt) return true;
@@ -248,10 +250,10 @@ const Navbar = () => {
             >
               {isOpen ? <X size={16} /> : <Menu size={16} />}
             </button>
-            {activeInvitesCount > 0 && !isOpen && (
+            {(activeInvitesCount > 0 || unreadCount > 0) && !isOpen && (
               <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-red-500 border border-white dark:border-black animate-ping" />
             )}
-            {activeInvitesCount > 0 && !isOpen && (
+            {(activeInvitesCount > 0 || unreadCount > 0) && !isOpen && (
               <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-red-500 border border-white dark:border-black" />
             )}
           </div>
@@ -449,6 +451,21 @@ const Navbar = () => {
           >
             <Hash size={15} />
             <span>Community</span>
+          </Link>
+          <Link
+            href="/notifications"
+            onClick={closeMenu}
+            className={`flex items-center gap-2.5 text-[14px] font-medium py-1 w-full ${
+              pathname === '/notifications' ? textActive : textMuted
+            }`}
+          >
+            <Bell size={15} />
+            <span>Notifications</span>
+            {unreadCount > 0 && (
+              <span className="ml-auto inline-flex items-center justify-center w-5 h-5 text-[10px] font-bold text-white bg-red-500 rounded-full animate-pulse">
+                {unreadCount}
+              </span>
+            )}
           </Link>
           <Link
             href="/setup-schedule"
