@@ -23,6 +23,31 @@ export default function DiscoverCommunitiesPage() {
   const [filter, setFilter] = useState<'' | 'joined' | 'created'>('');
   const [showCreate, setShowCreate] = useState(false);
 
+  // Scroll detection to sync with global Navbar
+  const [showNavbar, setShowNavbar] = useState(true);
+  const [lastScrollY, setLastScrollY] = useState(0);
+
+  useEffect(() => {
+    let timeout: NodeJS.Timeout;
+    const controlNavbar = () => {
+      if (window.scrollY < lastScrollY) {
+        setShowNavbar(true);
+      } else {
+        setShowNavbar(false);
+      }
+      setLastScrollY(window.scrollY);
+
+      clearTimeout(timeout);
+      timeout = setTimeout(() => setShowNavbar(true), 1500);
+    };
+
+    window.addEventListener('scroll', controlNavbar);
+    return () => {
+      window.removeEventListener('scroll', controlNavbar);
+      clearTimeout(timeout);
+    };
+  }, [lastScrollY]);
+
   const [invites, setInvites] = useState<any[]>([]);
   const [invitesLoading, setInvitesLoading] = useState(false);
 
@@ -97,26 +122,26 @@ export default function DiscoverCommunitiesPage() {
 
   return (
     <div className={`min-h-screen pt-[50px] md:pt-0 transition-colors duration-300 ${dark ? 'bg-[#0a0a0a] text-white' : 'bg-[#f5f5f5] text-zinc-900'}`}>
-      <div className="max-w-[1100px] w-full mx-auto px-4 py-6">
+      <div className="max-w-[1100px] w-full mx-auto px-4 pt-2 pb-6 md:py-6">
 
         {/* Header */}
-        <div className={`sticky top-[50px] md:top-0 z-20 mb-6 backdrop-blur-md border rounded-2xl p-4 transition-all duration-300 ${
+        <div className={`sticky ${showNavbar ? 'top-[50px]' : 'top-0'} md:top-0 z-20 mb-6 backdrop-blur-md border rounded-2xl p-3 sm:p-4 transition-all duration-300 ${
           dark ? 'bg-zinc-950/40 border-zinc-800' : 'bg-white border-zinc-200'
         }`}>
           <div className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 sm:gap-3">
               <button
                 onClick={() => router.back()}
-                className={`p-2 rounded-xl transition-all ${dark ? 'text-zinc-400 hover:text-white hover:bg-zinc-900' : 'text-zinc-500 hover:text-zinc-800 hover:bg-zinc-100'}`}
+                className={`p-1.5 sm:p-2 rounded-xl transition-all mr-0.5 sm:mr-1 ${dark ? 'text-zinc-400 hover:text-white hover:bg-zinc-900' : 'text-zinc-500 hover:text-zinc-800 hover:bg-zinc-100'}`}
               >
-                <ArrowLeft size={20} />
+                <ArrowLeft size={18} />
               </button>
               <div className={`hidden sm:flex w-10 h-10 rounded-xl items-center justify-center ${dark ? 'bg-indigo-500/10 text-indigo-400' : 'bg-indigo-50 text-indigo-600'}`}>
                 <Compass size={20} />
               </div>
               <div>
-                <h1 className={`text-[20px] font-semibold tracking-tight ${dark ? 'text-white' : 'text-zinc-900'}`}>Discover</h1>
-                <p className={`text-[12.5px] ${dark ? 'text-zinc-500' : 'text-zinc-500'}`}>Find and join communities</p>
+                <h1 className={`text-[17px] sm:text-[20px] font-bold tracking-tight ${dark ? 'text-white' : 'text-zinc-900'}`}>Discover</h1>
+                <p className={`text-[12.5px] hidden sm:block ${dark ? 'text-zinc-500' : 'text-zinc-500'}`}>Find and join communities</p>
               </div>
             </div>
 

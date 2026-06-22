@@ -156,15 +156,15 @@ export default function CommunityPage() {
       <div className="max-w-[680px] xl:max-w-[1240px] w-full mx-auto px-4 relative xl:grid xl:grid-cols-[minmax(0,680px)_480px] xl:justify-center xl:gap-6 xl:items-start">
         <div className="w-full flex flex-col">
           {/* Page header */}
-          <div className={`sticky ${showNavbar ? 'top-[50px]' : 'top-0'} md:top-0 z-20 mb-4 backdrop-blur-md border rounded-md flex items-center justify-between p-4 transition-all duration-300 ${dark ? 'bg-zinc-950/40 border-zinc-800 text-white' : 'bg-white border-zinc-200 text-zinc-900'
+          <div className={`sticky ${showNavbar ? 'top-[50px]' : 'top-0'} md:top-0 z-20 mb-4 backdrop-blur-md border rounded-md flex items-center justify-between p-3 sm:p-4 transition-all duration-300 ${dark ? 'bg-zinc-950/40 border-zinc-800 text-white' : 'bg-white border-zinc-200 text-zinc-900'
             }`}>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 sm:gap-3">
               <button
                 onClick={() => router.back()}
-                className={`p-2 rounded-xl transition-all mr-1 ${dark ? 'text-zinc-400 hover:text-white hover:bg-zinc-900' : 'text-zinc-500 hover:text-zinc-800 hover:bg-zinc-100'}`}
+                className={`p-1.5 sm:p-2 rounded-xl transition-all mr-0.5 sm:mr-1 ${dark ? 'text-zinc-400 hover:text-white hover:bg-zinc-900' : 'text-zinc-500 hover:text-zinc-800 hover:bg-zinc-100'}`}
                 title="Go back"
               >
-                <ArrowLeft size={20} />
+                <ArrowLeft size={18} className="sm:w-5 sm:h-5" />
               </button>
               <div
                 className={`hidden sm:flex w-10 h-10 rounded-xl items-center justify-center ${dark ? 'bg-indigo-500/10 text-indigo-400' : 'bg-indigo-50 text-indigo-600'
@@ -173,10 +173,10 @@ export default function CommunityPage() {
                 <Users2 size={20} />
               </div>
               <div>
-                <h1 className={`text-[20px] font-semibold tracking-tight ${dark ? 'text-white' : 'text-zinc-900'}`}>
+                <h1 className={`text-[17px] sm:text-[20px] font-bold tracking-tight ${dark ? 'text-white' : 'text-zinc-900'}`}>
                   Community
                 </h1>
-                <p className={`text-[12.5px] ${dark ? 'text-zinc-500' : 'text-zinc-500'}`}>
+                <p className={`text-[12.5px] hidden sm:block ${dark ? 'text-zinc-500' : 'text-zinc-500'}`}>
                   Share updates from the dojo
                 </p>
               </div>
