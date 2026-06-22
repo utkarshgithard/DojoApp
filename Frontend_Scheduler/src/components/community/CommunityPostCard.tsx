@@ -35,15 +35,22 @@ interface Post {
   commentCount: number;
   likedByMe: boolean;
   followedByMe?: boolean;
+  community?: {
+    id: string;
+    name: string;
+    slug: string;
+    avatarUrl?: string | null;
+  } | null;
 }
 
 interface CommunityPostCardProps {
   post: Post;
   currentUserId: string;
   dark: boolean;
-  onDelete: (postId: string) => void;
+  onDelete?: (postId: string) => void;
   onUserClick?: (userId: string) => void;
   defaultShowComments?: boolean;
+  isModerator?: boolean;
 }
 
 export default function CommunityPostCard({
@@ -53,6 +60,7 @@ export default function CommunityPostCard({
   onDelete,
   onUserClick,
   defaultShowComments,
+  isModerator,
 }: CommunityPostCardProps) {
   const { userDetails } = useAuth() as any;
   const [liked, setLiked] = useState(post.likedByMe);
@@ -117,8 +125,12 @@ export default function CommunityPostCard({
     if (deleting) return;
     setDeleting(true);
     try {
-      await API.delete(`/community/posts/${post.id}`);
-      onDelete(post.id);
+      if (post.community?.slug && post.author.id !== currentUserId) {
+        await API.delete(`/groups/${post.community.slug}/posts/${post.id}`);
+      } else {
+        await API.delete(`/community/posts/${post.id}`);
+      }
+      onDelete?.(post.id);
     } catch {
       setDeleting(false);
     }
@@ -162,10 +174,10 @@ export default function CommunityPostCard({
   return (
     <>
       <article
-        className={`rounded-lg border transition-all duration-200 p-4 md:p-5 ${
+        className={`transition-all duration-200 p-4 md:p-5 ${
           dark
-            ? 'bg-zinc-900 border-zinc-800/80 hover:border-zinc-700/80 text-white'
-            : 'bg-white border-zinc-200 hover:border-zinc-300 text-zinc-900'
+            ? 'bg-zinc-900/10 hover:bg-zinc-900/30 text-white'
+            : 'bg-white hover:bg-zinc-50/50 text-zinc-900'
         } ${deleting ? 'opacity-50 pointer-events-none' : ''}`}
       >
         {/* Header: Avatar + Name + Timestamp + Follow + Menu */}
@@ -210,8 +222,8 @@ export default function CommunityPostCard({
             </p>
           </div>
 
-          {/* Options menu (delete) — own posts only */}
-          {isOwnPost && (
+          {/* Options menu (delete) — own posts or moderator */}
+          {(isOwnPost || isModerator) && (
             <div className="relative">
               <button
                 onClick={() => setMenuOpen((v) => !v)}

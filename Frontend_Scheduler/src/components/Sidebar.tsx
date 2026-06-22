@@ -16,14 +16,21 @@ import {
   UserPlus,
   X,
   Coffee,
-  Hash
+  Hash,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { useDarkMode } from '@/context/DarkModeContext';
 import { AuthContext } from '@/context/authContext';
 import { useAttendance } from '@/context/AttendanceContext';
 import { auth } from '@/lib/firebase';
 
-const Sidebar = () => {
+interface SidebarProps {
+  collapsed?: boolean;
+  toggleCollapse?: () => void;
+}
+
+const Sidebar: React.FC<SidebarProps> = ({ collapsed = false, toggleCollapse }) => {
   const { darkMode, toggleDarkMode } = useDarkMode() as any;
   const { logout, isAuthenticated, loading, userName, profileLoading, userDetails } = useContext(AuthContext) as any;
   const router = useRouter();
@@ -99,14 +106,15 @@ const Sidebar = () => {
   return (
     <aside
       className={`
-        hidden md:flex flex-col fixed top-0 left-0 h-screen w-64 z-40 
+        hidden md:flex flex-col fixed top-0 left-0 h-screen z-40 
         ${dark ? 'bg-black text-white' : 'bg-white text-gray-900'}
-        border-r ${border} transition-colors duration-300
+        border-r ${border} transition-all duration-300
+        ${collapsed ? 'w-20' : 'w-64'}
       `}
     >
       {/* Brand logo/name */}
-      <div className={`h-[76px] flex items-center px-6 border-b ${border}`}>
-        <Link href="/dashboard" className="flex items-center gap-2.5">
+      <div className={`h-[76px] flex items-center border-b ${border} relative ${collapsed ? 'justify-center px-0' : 'px-6'}`}>
+        <Link href="/dashboard" className={`flex items-center gap-2.5 ${collapsed ? 'hidden' : 'flex'}`}>
           <div className="w-8 h-8 flex items-center justify-center shrink-0">
             <img
               src="/favicon.png"
@@ -116,6 +124,27 @@ const Sidebar = () => {
           </div>
           <span className="text-[17px] font-semibold tracking-tight">DojoClass</span>
         </Link>
+        {collapsed && (
+          <Link href="/dashboard" className="w-8 h-8 flex items-center justify-center shrink-0">
+            <img
+              src="/favicon.png"
+              alt="DojoClass Logo"
+              className="w-full h-full object-contain"
+            />
+          </Link>
+        )}
+        
+        {toggleCollapse && (
+          <button
+            onClick={toggleCollapse}
+            className={`absolute top-1/2 -translate-y-1/2 -right-3 w-6 h-6 rounded-full border shadow-sm flex items-center justify-center transition-colors z-50 ${
+              dark ? 'bg-black border-gray-800 text-gray-400 hover:text-white' : 'bg-white border-gray-200 text-gray-500 hover:text-black'
+            }`}
+            title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          >
+            {collapsed ? <ChevronRight size={12} /> : <ChevronLeft size={12} />}
+          </button>
+        )}
       </div>
 
       {/* Navigation Links */}
@@ -127,15 +156,16 @@ const Sidebar = () => {
             <div key={item.href} className="relative" id={`sidebar-item-${item.name.toLowerCase().replace(/\s+/g, '-')}`}>
               <Link
                 href={item.href}
+                title={collapsed ? item.name : undefined}
                 className={`
-                  flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-[13.5px] font-medium transition-all duration-200
+                  flex items-center ${collapsed ? 'justify-center p-3 w-10 h-10 mx-auto' : 'gap-3 px-3.5 py-2.5 w-full'} rounded-xl text-[13.5px] font-medium transition-all duration-200
                   ${isActive ? textActive : textMuted}
                 `}
               >
                 <span className="shrink-0">{item.icon}</span>
-                <span>{item.name}</span>
+                {!collapsed && <span>{item.name}</span>}
                 {isSessions && activeInvites.length > 0 && (
-                  <span className="ml-auto inline-flex items-center justify-center w-5 h-5 text-[10px] font-bold text-white bg-red-500 rounded-full animate-pulse shrink-0">
+                  <span className={`${collapsed ? 'absolute top-0 right-0' : 'ml-auto'} inline-flex items-center justify-center w-5 h-5 text-[10px] font-bold text-white bg-red-500 rounded-full animate-pulse shrink-0`}>
                     {activeInvites.length}
                   </span>
                 )}
@@ -204,52 +234,80 @@ const Sidebar = () => {
       </nav>
 
       {/* Buy Me a Coffee Widget */}
-      <div className="px-4 pb-3.5">
-        <div className={`p-3.5 rounded-xl border text-center transition-all ${
-          dark 
-            ? 'bg-amber-950/10 border-amber-900/20 text-amber-200' 
-            : 'bg-amber-50/60 border-amber-100 text-amber-900'
-        }`}>
-          <div className="flex items-center justify-center mb-2">
-            <div className="w-9 h-9 rounded-full bg-amber-500/15 flex items-center justify-center">
-              <Coffee size={18} className="text-amber-500" />
+      {!collapsed ? (
+        <div className="px-4 pb-3.5">
+          <div className={`p-3.5 rounded-xl border text-center transition-all ${
+            dark 
+              ? 'bg-amber-950/10 border-amber-900/20 text-amber-200' 
+              : 'bg-amber-50/60 border-amber-100 text-amber-900'
+          }`}>
+            <div className="flex items-center justify-center mb-2">
+              <div className="w-9 h-9 rounded-full bg-amber-500/15 flex items-center justify-center">
+                <Coffee size={18} className="text-amber-500" />
+              </div>
             </div>
+            <p className="text-[11.5px] font-semibold leading-snug mb-2">
+              Dojo helped your studies?
+            </p>
+            <button
+              onClick={() => {
+                setShowCoffeeModal(true);
+                setQrBlurred(true);
+              }}
+              className="w-full py-1.5 rounded-lg text-[11.5px] font-semibold bg-amber-500 hover:bg-amber-600 text-white shadow-sm flex items-center justify-center gap-1.5 transition-all active:scale-[0.98]"
+            >
+              <Coffee size={12} />
+              <span>Buy us a coffee</span>
+            </button>
           </div>
-          <p className="text-[11.5px] font-semibold leading-snug mb-2">
-            Dojo helped your studies?
-          </p>
+        </div>
+      ) : (
+        <div className="px-4 pb-3.5 flex justify-center">
           <button
             onClick={() => {
               setShowCoffeeModal(true);
               setQrBlurred(true);
             }}
-            className="w-full py-1.5 rounded-lg text-[11.5px] font-semibold bg-amber-500 hover:bg-amber-600 text-white shadow-sm flex items-center justify-center gap-1.5 transition-all active:scale-[0.98]"
+            title="Buy me a coffee"
+            className="w-10 h-10 flex items-center justify-center rounded-xl bg-amber-500 hover:bg-amber-600 text-white shadow-sm transition-all"
           >
-            <Coffee size={12} />
-            <span>Buy us a coffee</span>
+            <Coffee size={16} />
           </button>
         </div>
-      </div>
+      )}
 
       {/* Bottom controls */}
-      <div className={`p-4 border-t ${border} space-y-4`}>
+      <div className={`p-4 border-t ${border} space-y-4 flex flex-col ${collapsed ? 'items-center px-2' : ''}`}>
         {/* Dark Mode Switcher Row */}
-        <div className={`flex items-center justify-between p-2 rounded-xl border ${border} ${dark ? 'bg-neutral-900/20' : 'bg-gray-50/50'}`}>
-          <span className={`text-[12px] font-medium ${muted}`}>Theme Mode</span>
+        {!collapsed ? (
+          <div className={`flex items-center justify-between p-2 rounded-xl border ${border} ${dark ? 'bg-neutral-900/20' : 'bg-gray-50/50'}`}>
+            <span className={`text-[12px] font-medium ${muted}`}>Theme Mode</span>
+            <button
+              onClick={toggleDarkMode}
+              className={`p-1.5 rounded-lg border transition-colors ${
+                dark ? 'border-gray-800 text-gray-300 hover:bg-gray-900' : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+              }`}
+              aria-label="Toggle dark mode"
+            >
+              {dark ? <Sun size={13} /> : <Moon size={13} />}
+            </button>
+          </div>
+        ) : (
           <button
             onClick={toggleDarkMode}
-            className={`p-1.5 rounded-lg border transition-colors ${
+            className={`w-10 h-10 flex items-center justify-center rounded-xl border transition-colors ${
               dark ? 'border-gray-800 text-gray-300 hover:bg-gray-900' : 'border-gray-200 text-gray-600 hover:bg-gray-50'
             }`}
             aria-label="Toggle dark mode"
+            title="Toggle theme"
           >
-            {dark ? <Sun size={13} /> : <Moon size={13} />}
+            {dark ? <Sun size={16} /> : <Moon size={16} />}
           </button>
-        </div>
+        )}
 
         {/* User profile details & Logout */}
-        <div className="flex items-center justify-between gap-3 px-2">
-          <div className="flex items-center gap-2.5 min-w-0">
+        <div className={`flex items-center ${collapsed ? 'flex-col gap-3 w-full' : 'justify-between gap-3 px-2 w-full'}`}>
+          <div className={`flex items-center gap-2.5 min-w-0 ${collapsed ? 'justify-center' : ''}`}>
             {/* User Photo */}
             <div className={`w-8 h-8 rounded-full border text-[12.5px] font-semibold flex items-center justify-center overflow-hidden shrink-0 ${
               dark ? 'border-gray-800 bg-gray-900 text-white' : 'border-gray-200 bg-gray-50 text-gray-900'
@@ -271,19 +329,21 @@ const Sidebar = () => {
             </div>
 
             {/* Name/Email Info */}
-            <div className="min-w-0">
-              <p className="text-[12.5px] font-semibold truncate text-current">{userName || 'My Account'}</p>
-              <p className={`text-[10px] truncate ${muted}`}>Online</p>
-            </div>
+            {!collapsed && (
+              <div className="min-w-0">
+                <p className="text-[12.5px] font-semibold truncate text-current">{userName || 'My Account'}</p>
+                <p className={`text-[10px] truncate ${muted}`}>Online</p>
+              </div>
+            )}
           </div>
 
           {/* Logout Button */}
           <button
             onClick={handleLogout}
-            className="p-1.5 rounded-lg text-red-500 hover:bg-red-500/5 transition-colors shrink-0"
+            className={`p-1.5 rounded-lg text-red-500 hover:bg-red-500/5 transition-colors shrink-0 ${collapsed ? 'w-10 h-10 flex items-center justify-center' : ''}`}
             title="Log out"
           >
-            <LogOut size={15} />
+            <LogOut size={collapsed ? 16 : 15} />
           </button>
         </div>
       </div>

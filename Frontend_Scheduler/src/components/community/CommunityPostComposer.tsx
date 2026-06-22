@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useRef, useState, useCallback } from 'react';
+import React, { useRef, useState, useCallback, useEffect } from 'react';
 import API from '@/lib/axios';
-import { Image as ImageIcon, Video, X, Send, Loader2, Plus } from 'lucide-react';
+import { Image as ImageIcon, Video, X, Send, Loader2, Plus, Camera } from 'lucide-react';
 import { auth } from '@/lib/firebase';
 
 
@@ -33,7 +33,10 @@ interface CommunityPostComposerProps {
   currentUser: { id: string; name: string; avatarUrl?: string | null };
   dark: boolean;
   onPostCreated: (post: Post) => void;
+  initialFile?: File | null;
+  communityId?: string;
 }
+
 
 // Generate video thumbnail using canvas
 const generateVideoThumbnail = (file: File): Promise<string> =>
@@ -78,11 +81,12 @@ const uploadThumbnail = async (
   return publicUrl;
 };
 
-export default function CommunityPostComposer({ currentUser, dark, onPostCreated }: CommunityPostComposerProps) {
+export default function CommunityPostComposer({ currentUser, dark, onPostCreated, initialFile, communityId }: CommunityPostComposerProps) {
   const [content, setContent] = useState('');
   const [attachments, setAttachments] = useState<MediaAttachment[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
   const MAX_CHARS = 500;
   const MAX_FILES = 5;
 
@@ -101,12 +105,12 @@ export default function CommunityPostComposer({ currentUser, dark, onPostCreated
     );
   };
 
-  const signUpload = async (fileName: string, mimeType: string) => {
+  const signUpload = useCallback(async (fileName: string, mimeType: string) => {
     const { data } = await API.post('/community/media/sign', { fileName, mimeType });
     return data as { uploadUrl: string; publicUrl: string; mediaType: string };
-  };
+  }, []);
 
-  const uploadFile = async (attachment: MediaAttachment, index: number) => {
+  const uploadFile = useCallback(async (attachment: MediaAttachment, index: number) => {
     try {
       setAttachments((prev) =>
         prev.map((a, i) => (i === index ? { ...a, uploading: true, progress: 0 } : a))
@@ -155,7 +159,36 @@ export default function CommunityPostComposer({ currentUser, dark, onPostCreated
         )
       );
     }
-  };
+  }, [signUpload]);
+
+  // Handle initial file selection (e.g. from mobile camera quick post)
+  useEffect(() => {
+    if (!initialFile) return;
+
+    const processInitialFile = async () => {
+      const type = initialFile.type.startsWith('video/') ? 'video' : 'image';
+      const localUrl = URL.createObjectURL(initialFile);
+      const thumbnailUrl = type === 'video' ? await generateVideoThumbnail(initialFile) : undefined;
+      const newAttachment: MediaAttachment = {
+        file: initialFile,
+        localUrl,
+        type,
+        thumbnailUrl,
+        progress: 0,
+        uploading: false,
+      };
+
+      setAttachments((prev) => {
+        if (prev.some((a) => a.file === initialFile)) return prev;
+        const updated = [...prev, newAttachment];
+        const idx = updated.length - 1;
+        uploadFile(newAttachment, idx);
+        return updated;
+      });
+    };
+
+    processInitialFile();
+  }, [initialFile, uploadFile]);
 
   const handleFileSelect = useCallback(
     async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -187,7 +220,7 @@ export default function CommunityPostComposer({ currentUser, dark, onPostCreated
       // Reset input so same file can be re-selected
       e.target.value = '';
     },
-    [attachments.length]
+    [attachments.length, uploadFile]
   );
 
   const removeAttachment = (index: number) => {
@@ -217,6 +250,7 @@ export default function CommunityPostComposer({ currentUser, dark, onPostCreated
       const { data } = await API.post('/community/posts', {
         content: content.trim(),
         media,
+        communityId,
       });
 
       onPostCreated(data.post);
@@ -233,15 +267,14 @@ export default function CommunityPostComposer({ currentUser, dark, onPostCreated
   const charLeft = MAX_CHARS - content.length;
 
   return (
-    <div className={`rounded-2xl border p-4 mb-6 transition-colors ${dark ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-zinc-200 shadow-sm'}`}>
+    <div className={`rounded-xl border p-4 mb-6 transition-colors ${dark ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-zinc-200 shadow-sm'}`}>
       <div className="flex gap-3">
         {getAvatar()}
         <div className="flex-1 min-w-0">
-          <div className={`rounded-xl border p-3 transition-all duration-200 focus-within:ring-2 focus-within:ring-indigo-500/20 focus-within:border-indigo-500 ${
-            dark 
-              ? 'bg-zinc-950 border-zinc-800 focus-within:bg-black' 
+          <div className={`rounded-lg border p-3 transition-all duration-200 focus-within:ring-2 focus-within:ring-indigo-500/20 focus-within:border-indigo-500 ${dark
+              ? 'bg-zinc-950 border-zinc-800 focus-within:bg-black'
               : 'bg-zinc-50 border-zinc-200 focus-within:bg-white focus-within:shadow-sm'
-          }`}>
+            }`}>
             <textarea
               value={content}
               onChange={(e) => setContent(e.target.value.slice(0, MAX_CHARS))}
@@ -255,7 +288,7 @@ export default function CommunityPostComposer({ currentUser, dark, onPostCreated
             {attachments.length > 0 && (
               <div className="mt-3 flex flex-wrap gap-2">
                 {attachments.map((att, idx) => (
-                  <div key={idx} className="relative w-20 h-20 rounded-xl overflow-hidden bg-zinc-100 dark:bg-zinc-800 group shrink-0 border border-zinc-200 dark:border-zinc-800">
+                  <div key={idx} className="relative w-20 h-20 rounded-lg overflow-hidden bg-zinc-100 dark:bg-zinc-800 group shrink-0 border border-zinc-200 dark:border-zinc-800">
                     {att.type === 'image' ? (
                       <img src={att.localUrl} alt="" className="w-full h-full object-cover" />
                     ) : (
@@ -311,10 +344,10 @@ export default function CommunityPostComposer({ currentUser, dark, onPostCreated
                   <button
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
-                    className={`w-20 h-20 rounded-xl border-2 border-dashed flex flex-col items-center justify-center gap-1 transition-all shrink-0
+                    className={`w-20 h-20 rounded-md border-2 border-dashed flex flex-col items-center justify-center gap-1 transition-all shrink-0
                       ${dark
                         ? 'border-zinc-800 hover:border-indigo-500 text-zinc-500 hover:text-indigo-400 hover:bg-indigo-950/15'
-                        : 'border-zinc-300 hover:border-indigo-500 text-zinc-400 hover:text-indigo-650 hover:bg-indigo-50/20'
+                        : 'border-zinc-300 hover:border-indigo-500 text-zinc-400 hover:text-indigo-600 hover:bg-indigo-50/20'
                       }`}
                   >
                     <Plus size={18} />
@@ -324,23 +357,40 @@ export default function CommunityPostComposer({ currentUser, dark, onPostCreated
               </div>
             )}
           </div>
-
           {/* Toolbar */}
           <div className={`flex items-center justify-between mt-3 pt-3 border-t ${dark ? 'border-zinc-800' : 'border-zinc-100'}`}>
             <div className="flex items-center gap-1">
               <button
+                type="button"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={attachments.length >= MAX_FILES}
-                title="Attach image"
+                title="Attach image or video"
                 className={`p-2 rounded-lg transition-colors disabled:opacity-40 ${dark ? 'text-zinc-400 hover:text-white hover:bg-zinc-800' : 'text-zinc-500 hover:text-zinc-800 hover:bg-zinc-100'}`}
               >
                 <ImageIcon size={18} />
+              </button>
+              <button
+                type="button"
+                onClick={() => cameraInputRef.current?.click()}
+                disabled={attachments.length >= MAX_FILES}
+                title="Take photo with camera"
+                className={`p-2 rounded-lg transition-colors disabled:opacity-40 ${dark ? 'text-zinc-400 hover:text-white hover:bg-zinc-800' : 'text-zinc-500 hover:text-zinc-800 hover:bg-zinc-100'}`}
+              >
+                <Camera size={18} />
               </button>
               <input
                 ref={fileInputRef}
                 type="file"
                 accept="image/*,video/*"
                 multiple
+                className="hidden"
+                onChange={handleFileSelect}
+              />
+              <input
+                ref={cameraInputRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
                 className="hidden"
                 onChange={handleFileSelect}
               />

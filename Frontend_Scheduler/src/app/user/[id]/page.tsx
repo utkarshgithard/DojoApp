@@ -398,7 +398,9 @@ export default function UserProfilePage({ params }: PageProps) {
                   </p>
                 </div>
               ) : (
-                <div className="space-y-3">
+                <div className={`rounded-2xl border overflow-hidden shadow-sm divide-y ${
+                  dark ? 'bg-zinc-950/40 border-zinc-800 divide-zinc-800' : 'bg-white border-zinc-200 divide-zinc-200/80'
+                }`}>
                   {posts.map((post) => (
                     <CommunityPostCard
                       key={post.id}
@@ -411,7 +413,7 @@ export default function UserProfilePage({ params }: PageProps) {
 
                   {/* Load More posts */}
                   {nextCursor && (
-                    <div className="pt-2 flex justify-center">
+                    <div className="pt-4 pb-8 flex justify-center bg-white/50 dark:bg-zinc-950/10">
                       <button
                         onClick={handleLoadMore}
                         disabled={fetchingMore}
@@ -434,9 +436,11 @@ export default function UserProfilePage({ params }: PageProps) {
                   )}
 
                   {!nextCursor && posts.length > 0 && (
-                    <p className={`text-center text-[12.5px] pt-4 pb-2 ${dark ? 'text-zinc-500' : 'text-zinc-400'}`}>
-                      End of timeline feed
-                    </p>
+                    <div className="py-6 bg-white/50 dark:bg-zinc-950/10">
+                      <p className={`text-center text-[12px] ${dark ? 'text-zinc-500' : 'text-zinc-400'}`}>
+                        End of timeline feed
+                      </p>
+                    </div>
                   )}
                 </div>
               )}

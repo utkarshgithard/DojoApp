@@ -39,7 +39,7 @@ model User {
   pushSubscriptions   PushSubscription[]
   notes               Note[]
 
-  // Community
+  // Community posts & interactions
   posts               Post[]
   postLikes           PostLike[]
   postComments        PostComment[]
@@ -51,6 +51,12 @@ model User {
   // Shares
   sharesSent          PostShare[]  @relation("SharesSent")
   sharesReceived      PostShare[]  @relation("SharesReceived")
+
+  // Community groups
+  createdCommunities  Community[]       @relation("CommunityCreator")
+  communityMemberships CommunityMember[]
+  invitesSent         CommunityInvite[] @relation("InvitesSent")
+  invitesReceived     CommunityInvite[] @relation("InvitesReceived")
 }
 
 
@@ -234,17 +240,21 @@ model Note {
 // ── Community Feed ────────────────────────────────────────────────────────────
 
 model Post {
-  id        String   @id @default(uuid())
-  userId    String
-  content   String   @db.VarChar(500)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id          String   @id @default(uuid())
+  userId      String
+  content     String   @db.VarChar(500)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  author   User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  media    PostMedia[]
-  likes    PostLike[]
-  comments PostComment[]
-  shares   PostShare[]
+  // Optional: scoped to a community (null = global feed)
+  communityId String?
+
+  author    User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  community Community?    @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  media     PostMedia[]
+  likes     PostLike[]
+  comments  PostComment[]
+  shares    PostShare[]
 }
 
 model PostMedia {
@@ -323,4 +333,64 @@ model PostShare {
   receiver User @relation("SharesReceived", fields: [receiverId], references: [id], onDelete: Cascade)
 
   @@unique([postId, senderId, receiverId])
+}
+
+// ── Communities (Reddit-like groups) ─────────────────────────────────────────
+
+enum CommunityVisibility {
+  public
+  private
+  invite_only
+}
+
+enum CommunityRole {
+  creator
+  moderator
+  member
+}
+
+model Community {
+  id          String              @id @default(uuid())
+  name        String
+  slug        String              @unique        // e.g. "karate-tips" — URL-safe
+  description String?
+  avatarUrl   String?
+  bannerUrl   String?
+  visibility  CommunityVisibility @default(public)
+  creatorId   String
+  memberCount Int                 @default(0)   // denormalized for fast queries
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  creator User              @relation("CommunityCreator", fields: [creatorId], references: [id], onDelete: Cascade)
+  members CommunityMember[]
+  invites CommunityInvite[]
+  posts   Post[]
+}
+
+model CommunityMember {
+  communityId String
+  userId      String
+  role        CommunityRole @default(member)
+  joinedAt    DateTime      @default(now())
+
+  community Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([communityId, userId])
+}
+
+model CommunityInvite {
+  id          String   @id @default(uuid())
+  communityId String
+  invitedById String
+  invitedId   String
+  accepted    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  community Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  invitedBy User      @relation("InvitesSent", fields: [invitedById], references: [id], onDelete: Cascade)
+  invited   User      @relation("InvitesReceived", fields: [invitedId], references: [id], onDelete: Cascade)
+
+  @@unique([communityId, invitedId])
 }

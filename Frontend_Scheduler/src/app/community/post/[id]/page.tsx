@@ -93,13 +93,17 @@ export default function PostDetailPage({ params }: PageProps) {
           </div>
         ) : post ? (
           <div className="space-y-4">
-            <CommunityPostCard
-              post={post}
-              currentUserId={userId}
-              dark={dark}
-              onDelete={handlePostDeleted}
-              defaultShowComments={true}
-            />
+            <div className={`rounded-2xl border overflow-hidden shadow-sm ${
+              dark ? 'bg-zinc-950/40 border-zinc-800' : 'bg-white border-zinc-200'
+            }`}>
+              <CommunityPostCard
+                post={post}
+                currentUserId={userId}
+                dark={dark}
+                onDelete={handlePostDeleted}
+                defaultShowComments={true}
+              />
+            </div>
           </div>
         ) : null}
       </div>

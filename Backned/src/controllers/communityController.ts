@@ -25,6 +25,7 @@ export const getPosts = async (req: AuthenticatedRequest, res: Response): Promis
     const posts = await prisma.post.findMany({
       take: POSTS_PER_PAGE + 1,
       ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
+      where: { communityId: null },
       orderBy: { createdAt: 'desc' },
       include: {
         author: {
@@ -142,9 +143,10 @@ export const getPostById = async (req: AuthenticatedRequest, res: Response): Pro
 export const createPost = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const userId = req.userId!;
-    const { content, media } = req.body as {
+    const { content, media, communityId } = req.body as {
       content: string;
       media?: { url: string; type: 'image' | 'video'; thumbnailUrl?: string }[];
+      communityId?: string;
     };
 
     if (!content?.trim() && (!media || media.length === 0)) {
@@ -162,10 +164,32 @@ export const createPost = async (req: AuthenticatedRequest, res: Response): Prom
       return;
     }
 
+    // If posting to a community, verify membership and visibility
+    let communityData: { id: string; name: string; slug: string; avatarUrl: string | null } | null = null;
+    if (communityId) {
+      const community = await prisma.community.findUnique({
+        where: { id: communityId },
+        include: {
+          members: { where: { userId }, select: { userId: true } },
+        },
+      });
+      if (!community) {
+        res.status(404).json({ error: 'Community not found' });
+        return;
+      }
+      const isMember = (community as any).members?.length > 0;
+      if (!isMember) {
+        res.status(403).json({ error: 'You must be a member to post in this community' });
+        return;
+      }
+      communityData = { id: community.id, name: community.name, slug: community.slug, avatarUrl: community.avatarUrl };
+    }
+
     const post = await prisma.post.create({
       data: {
         userId,
         content: content?.trim() ?? '',
+        communityId: communityId || null,
         media: media && media.length > 0
           ? {
               create: media.map((m, idx) => ({
@@ -201,6 +225,7 @@ export const createPost = async (req: AuthenticatedRequest, res: Response): Prom
         commentCount: 0,
         likedByMe: false,
         followedByMe: false,
+        community: communityData,
       },
     });
   } catch (err) {
@@ -208,6 +233,7 @@ export const createPost = async (req: AuthenticatedRequest, res: Response): Prom
     res.status(500).json({ error: 'Failed to create post' });
   }
 };
+
 
 // ── Delete Post ───────────────────────────────────────────────────────────────
 

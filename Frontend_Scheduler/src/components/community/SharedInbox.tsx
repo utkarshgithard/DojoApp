@@ -9,6 +9,7 @@ import API from '@/lib/axios';
 
 interface SharedInboxProps {
   dark: boolean;
+  isPage?: boolean;
 }
 
 function SharedInboxSkeleton({ dark }: { dark: boolean }) {
@@ -45,7 +46,7 @@ function SharedInboxSkeleton({ dark }: { dark: boolean }) {
   );
 }
 
-export default function SharedInbox({ dark }: SharedInboxProps) {
+export default function SharedInbox({ dark, isPage = false }: SharedInboxProps) {
   const router = useRouter();
   const {
     shares,
@@ -105,34 +106,38 @@ export default function SharedInbox({ dark }: SharedInboxProps) {
 
   const displayedShares = showingHistory ? shares : shares.filter(s => !s.viewed);
 
+  const showBody = isPage ? true : !collapsed;
+
   return (
-    <div className={`rounded-xl border overflow-hidden shadow-sm ${dark ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-zinc-200'}`}>
+    <div className={isPage ? "w-full" : `rounded-xl border overflow-hidden shadow-sm ${dark ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-zinc-200'}`}>
       {/* Header */}
-      <button
-        onClick={() => setCollapsed((v) => !v)}
-        className={`w-full flex items-center justify-between px-4 py-3.5 transition-colors ${dark ? 'hover:bg-zinc-800/50' : 'hover:bg-zinc-50'}`}
-      >
-        <div className="flex items-center gap-2">
-          <Inbox size={14} className={dark ? 'text-indigo-400' : 'text-indigo-500'} />
-          <span className={`text-[13px] font-semibold ${dark ? 'text-white' : 'text-zinc-800'}`}>
-            Shared with me
-          </span>
-          {sharesTotalCount > 0 && (
-            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${dark ? 'bg-indigo-500/20 text-indigo-400' : 'bg-indigo-100 text-indigo-650'}`}>
-              {sharesTotalCount}
+      {!isPage && (
+        <button
+          onClick={() => setCollapsed((v) => !v)}
+          className={`w-full flex items-center justify-between px-4 py-3.5 transition-colors ${dark ? 'hover:bg-zinc-800/50' : 'hover:bg-zinc-50'}`}
+        >
+          <div className="flex items-center gap-2">
+            <Inbox size={14} className={dark ? 'text-indigo-400' : 'text-indigo-500'} />
+            <span className={`text-[13px] font-semibold ${dark ? 'text-white' : 'text-zinc-800'}`}>
+              Shared with me
             </span>
+            {sharesTotalCount > 0 && (
+              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${dark ? 'bg-indigo-500/20 text-indigo-400' : 'bg-indigo-100 text-indigo-700'}`}>
+                {sharesTotalCount}
+              </span>
+            )}
+          </div>
+          {collapsed ? (
+            <ChevronDown size={14} className={dark ? 'text-zinc-500' : 'text-zinc-400'} />
+          ) : (
+            <ChevronUp size={14} className={dark ? 'text-zinc-500' : 'text-zinc-400'} />
           )}
-        </div>
-        {collapsed ? (
-          <ChevronDown size={14} className={dark ? 'text-zinc-500' : 'text-zinc-400'} />
-        ) : (
-          <ChevronUp size={14} className={dark ? 'text-zinc-500' : 'text-zinc-400'} />
-        )}
-      </button>
+        </button>
+      )}
 
       {/* Body */}
-      {!collapsed && (
-        <div className={`border-t ${dark ? 'border-zinc-800' : 'border-zinc-100'}`}>
+      {showBody && (
+        <div className={isPage ? "" : `border-t ${dark ? 'border-zinc-800' : 'border-zinc-100'}`}>
           {loading ? (
             <SharedInboxSkeleton dark={dark} />
           ) : displayedShares.length === 0 ? (

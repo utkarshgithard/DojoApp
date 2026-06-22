@@ -9,7 +9,7 @@ import { useCommunity, Post } from '@/context/CommunityContext';
 import CommunityPostComposer from '@/components/community/CommunityPostComposer';
 import CommunityPostCard from '@/components/community/CommunityPostCard';
 import SharedInbox from '@/components/community/SharedInbox';
-import { Users2, RefreshCw, ArrowUp, ArrowLeft } from 'lucide-react';
+import { Users2, RefreshCw, ArrowUp, ArrowLeft, Inbox, Plus, X, Camera, Compass } from 'lucide-react';
 
 export default function CommunityPage() {
   const router = useRouter();
@@ -22,6 +22,26 @@ export default function CommunityPage() {
   // Scroll detection to sync with global Navbar
   const [showNavbar, setShowNavbar] = useState(true);
   const [lastScrollY, setLastScrollY] = useState(0);
+
+  // Mobile Compose Modal state
+  const [isComposeOpen, setIsComposeOpen] = useState(false);
+
+  // Preselected file (e.g. from camera quick action)
+  const [preselectedFile, setPreselectedFile] = useState<File | null>(null);
+  const cameraFabInputRef = useRef<HTMLInputElement>(null);
+
+  const handleCloseCompose = () => {
+    setIsComposeOpen(false);
+    setPreselectedFile(null);
+  };
+
+  const handleCameraFabSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files && files.length > 0) {
+      setPreselectedFile(files[0]);
+      setIsComposeOpen(true);
+    }
+  };
 
   useEffect(() => {
     let timeout: NodeJS.Timeout;
@@ -58,6 +78,9 @@ export default function CommunityPage() {
     refreshFeed,
     hasNewPosts,
     applyNewPosts,
+    sharesTotalCount,
+    hasSharesData,
+    fetchShares,
   } = useCommunity();
 
   // Initial load or silent revalidation
@@ -71,6 +94,13 @@ export default function CommunityPage() {
       }
     }
   }, [loading, fetchPosts, posts.length]);
+
+  // Fetch shared posts in the background for the mobile header badge count
+  useEffect(() => {
+    if (!loading && isAuthenticated && !hasSharesData) {
+      fetchShares(true);
+    }
+  }, [loading, isAuthenticated, hasSharesData, fetchShares]);
 
   // Silent background revalidation on page visibility refocus (e.g. returning to tab)
   useEffect(() => {
@@ -126,7 +156,7 @@ export default function CommunityPage() {
       <div className="max-w-[680px] xl:max-w-[1240px] w-full mx-auto px-4 relative xl:grid xl:grid-cols-[minmax(0,680px)_480px] xl:justify-center xl:gap-6 xl:items-start">
         <div className="w-full flex flex-col">
           {/* Page header */}
-          <div className={`sticky ${showNavbar ? 'top-[50px]' : 'top-0'} md:top-0 z-20 -mx-4 px-4 py-4 mb-6 backdrop-blur-md border-b flex items-center justify-between transition-all duration-300 ${dark ? 'bg-black/80 border-zinc-900/60' : 'bg-zinc-50/80 border-zinc-200/60'
+          <div className={`sticky ${showNavbar ? 'top-[50px]' : 'top-0'} md:top-0 z-20 mb-4 backdrop-blur-md border rounded-md flex items-center justify-between p-4 transition-all duration-300 ${dark ? 'bg-zinc-950/40 border-zinc-800 text-white' : 'bg-white border-zinc-200 text-zinc-900'
             }`}>
             <div className="flex items-center gap-3">
               <button
@@ -151,34 +181,57 @@ export default function CommunityPage() {
                 </p>
               </div>
             </div>
-            <button
-              onClick={handleRefresh}
-              disabled={fetching}
-              className={`p-2 rounded-xl border transition-all ${dark
-                ? 'border-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-900'
-                : 'border-zinc-200 text-zinc-500 hover:text-zinc-800 hover:bg-white'
-                } disabled:opacity-40`}
-              title="Refresh feed"
-            >
-              <RefreshCw size={16} className={fetching ? 'animate-spin' : ''} />
-            </button>
+
+            <div className="flex items-center gap-2">
+              {/* Mobile Shared Inbox Icon */}
+              {isAuthenticated && (
+                <button
+                  onClick={() => router.push('/community/shares')}
+                  className={`relative p-2 rounded-xl border transition-all xl:hidden ${dark
+                    ? 'border-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-900'
+                    : 'border-zinc-200 text-zinc-500 hover:text-zinc-800 hover:bg-white'
+                    }`}
+                  title="Shared with me"
+                >
+                  <Inbox size={16} />
+                  {sharesTotalCount > 0 && (
+                    <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center animate-pulse">
+                      {sharesTotalCount}
+                    </span>
+                  )}
+                </button>
+              )}
+
+              <button
+                onClick={() => router.push('/community/groups')}
+                className={`p-2 rounded-xl border transition-all ${dark
+                  ? 'border-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-900'
+                  : 'border-zinc-200 text-zinc-500 hover:text-zinc-800 hover:bg-zinc-100'
+                  }`}
+                title="Explore Communities"
+              >
+                <Compass size={16} />
+              </button>
+
+              <button
+                onClick={handleRefresh}
+                disabled={fetching}
+                className={`p-2 rounded-xl border transition-all ${dark
+                  ? 'border-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-900'
+                  : 'border-zinc-200 text-zinc-500 hover:text-zinc-800 hover:bg-zinc-100'
+                  } disabled:opacity-40`}
+                title="Refresh feed"
+              >
+                <RefreshCw size={16} className={fetching ? 'animate-spin' : ''} />
+              </button>
+            </div>
           </div>
 
-          {/* Mobile Post Composer & Inbox */}
-          {isAuthenticated ? (
-            <div className="xl:hidden relative mb-6 space-y-4">
-              <CommunityPostComposer
-                currentUser={{ id: userId, name: userName || 'You', avatarUrl }}
-                dark={dark}
-                onPostCreated={handlePostCreated}
-              />
-              <SharedInbox dark={dark} />
-            </div>
-          ) : (
+          {/* Mobile Login Prompt (Only shown if NOT logged in) */}
+          {!isAuthenticated && (
             <div className="xl:hidden relative mb-6">
-              <div className={`rounded-xl border p-5 text-center shadow-sm ${
-                dark ? 'bg-zinc-900 border-zinc-800 text-white' : 'bg-white border-zinc-200 text-zinc-900'
-              }`}>
+              <div className={`rounded-lg border p-5 text-center shadow-sm ${dark ? 'bg-zinc-900 border-zinc-800 text-white' : 'bg-white border-zinc-200 text-zinc-900'
+                }`}>
                 <h3 className="font-semibold text-[15.5px] mb-1.5">Join the Dojo Community</h3>
                 <p className={`text-[12.5px] mb-4 leading-relaxed ${dark ? 'text-zinc-400' : 'text-zinc-500'}`}>
                   Log in or sign up to post updates, like training highlights, reply to comments, and connect with other members.
@@ -186,15 +239,14 @@ export default function CommunityPage() {
                 <div className="flex gap-3 justify-center">
                   <button
                     onClick={() => router.push('/login')}
-                    className="px-4 py-2 text-[13px] font-semibold bg-indigo-650 hover:bg-indigo-700 text-white rounded-xl transition-all active:scale-95 shadow-sm"
+                    className="px-4 py-2 text-[13px] font-semibold bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl transition-all active:scale-95 shadow-sm"
                   >
                     Log In
                   </button>
                   <button
                     onClick={() => router.push('/register')}
-                    className={`px-4 py-2 text-[13px] font-semibold border rounded-xl transition-all active:scale-95 ${
-                      dark ? 'border-zinc-700 text-zinc-300 hover:bg-zinc-800' : 'border-zinc-300 text-zinc-750 hover:bg-zinc-50'
-                    }`}
+                    className={`px-4 py-2 text-[13px] font-semibold border rounded-xl transition-all active:scale-95 ${dark ? 'border-zinc-700 text-zinc-300 hover:bg-zinc-800' : 'border-zinc-300 text-zinc-750 hover:bg-zinc-50'
+                      }`}
                   >
                     Sign Up
                   </button>
@@ -213,7 +265,7 @@ export default function CommunityPage() {
                 }}
                 className={`flex items-center gap-2 px-5 py-2.5 rounded-full shadow-xl border text-[13px] font-semibold transition-all duration-300 hover:scale-105 active:scale-95 ${dark
                   ? 'bg-zinc-900/90 backdrop-blur-md border-zinc-800 text-indigo-400 hover:bg-zinc-800 hover:text-indigo-300'
-                  : 'bg-white/90 backdrop-blur-md border-zinc-200 text-indigo-650 hover:bg-zinc-50 hover:text-indigo-700'
+                  : 'bg-white/90 backdrop-blur-md border-zinc-200 text-indigo-600 hover:bg-zinc-50 hover:text-indigo-700'
                   } animate-bounce`}
                 style={{ animationDuration: '2.5s' }}
               >
@@ -229,7 +281,7 @@ export default function CommunityPage() {
               {[1, 2, 3].map((i) => (
                 <div
                   key={i}
-                  className={`rounded-lg border p-4 animate-pulse ${dark ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-zinc-200'
+                  className={`rounded-md border p-4 animate-pulse ${dark ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-zinc-200'
                     }`}
                 >
                   <div className="flex gap-3 mb-3">
@@ -246,7 +298,7 @@ export default function CommunityPage() {
             </div>
           ) : error ? (
             <div
-              className={`rounded-lg border p-8 text-center ${dark ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-zinc-200'
+              className={`rounded-md border p-8 text-center ${dark ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-zinc-200'
                 }`}
             >
               <p className={`text-[14px] mb-4 ${dark ? 'text-zinc-400' : 'text-zinc-500'}`}>{error}</p>
@@ -259,7 +311,7 @@ export default function CommunityPage() {
             </div>
           ) : posts.length === 0 ? (
             <div
-              className={`rounded-lg border p-12 text-center ${dark ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-zinc-200'
+              className={`rounded-md border p-12 text-center ${dark ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-zinc-200'
                 }`}
             >
               <div
@@ -276,7 +328,8 @@ export default function CommunityPage() {
               </p>
             </div>
           ) : (
-            <div className="space-y-[2px]">
+            <div className={`rounded-xl border overflow-hidden shadow-sm divide-y ${dark ? 'bg-zinc-950/40 border-zinc-800 divide-zinc-800' : 'bg-white border-zinc-200 divide-zinc-200/80'
+              }`}>
               {posts.map((post) => (
                 <CommunityPostCard
                   key={post.id}
@@ -289,13 +342,13 @@ export default function CommunityPage() {
 
               {/* Load More */}
               {nextCursor && (
-                <div className="pt-2 pb-8 flex justify-center">
+                <div className="pt-4 pb-8 flex justify-center bg-white/50 dark:bg-zinc-950/10">
                   <button
                     onClick={handleLoadMore}
                     disabled={fetching}
                     className={`px-6 py-2.5 rounded-xl border text-[13px] font-medium transition-all ${dark
-                      ? 'border-zinc-700 text-zinc-300 hover:bg-zinc-900 disabled:opacity-40'
-                      : 'border-zinc-300 text-zinc-700 hover:bg-white shadow-sm disabled:opacity-40'
+                        ? 'border-zinc-700 text-zinc-300 hover:bg-zinc-900 disabled:opacity-40'
+                        : 'border-zinc-300 text-zinc-700 hover:bg-white shadow-sm disabled:opacity-40'
                       }`}
                   >
                     {fetching ? (
@@ -311,29 +364,43 @@ export default function CommunityPage() {
               )}
 
               {!nextCursor && posts.length > 0 && (
-                <p className={`text-center text-[12px] pb-8 ${dark ? 'text-zinc-500' : 'text-zinc-400'}`}>
-                  You&apos;ve seen all the posts 🎉
-                </p>
+                <div className="py-6 bg-white/50 dark:bg-zinc-950/10">
+                  <p className={`text-center text-[12px] ${dark ? 'text-zinc-500' : 'text-zinc-400'}`}>
+                    You&apos;ve seen all the posts 🎉
+                  </p>
+                </div>
               )}
             </div>
           )}
         </div>
 
-        {/* Desktop right column: Composer + Shared Inbox */}
+        {/* Desktop right column: Composer + Shared Inbox + Explore Communities */}
         {isAuthenticated ? (
-          <div className="hidden xl:block sticky top-[24px] space-y-0">
+          <div className="hidden xl:block sticky top-[24px] space-y-4">
             <CommunityPostComposer
               currentUser={{ id: userId, name: userName || 'You', avatarUrl }}
               dark={dark}
               onPostCreated={handlePostCreated}
             />
+            <div className={`rounded-xl border p-5 ${dark ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-zinc-200 shadow-sm'}`}>
+              <h3 className={`text-[14px] font-bold mb-3 ${dark ? 'text-white' : 'text-zinc-800'}`}>Communities</h3>
+              <p className={`text-[12.5px] leading-relaxed mb-4 ${dark ? 'text-zinc-400' : 'text-zinc-500'}`}>
+                Join specialized interest groups, post to specific communities, or moderate your own.
+              </p>
+              <button
+                onClick={() => router.push('/community/groups')}
+                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-[13px] font-semibold transition-all active:scale-95 shadow-sm"
+              >
+                <Compass size={14} />
+                <span>Explore Communities</span>
+              </button>
+            </div>
             <SharedInbox dark={dark} />
           </div>
         ) : (
           <div className="hidden xl:block sticky top-[24px]">
-            <div className={`rounded-xl border p-6 text-center shadow-sm ${
-              dark ? 'bg-zinc-900 border-zinc-800 text-white' : 'bg-white border-zinc-200 text-zinc-900'
-            }`}>
+            <div className={`rounded-lg border p-6 text-center shadow-sm ${dark ? 'bg-zinc-900 border-zinc-800 text-white' : 'bg-white border-zinc-200 text-zinc-900'
+              }`}>
               <h3 className="font-semibold text-[16px] mb-2">Join the Dojo Community</h3>
               <p className={`text-[13px] mb-5 leading-relaxed ${dark ? 'text-zinc-400' : 'text-zinc-500'}`}>
                 Log in or sign up to post updates, like posts, comment on discussions, and connect with other users in the dojo.
@@ -341,15 +408,14 @@ export default function CommunityPage() {
               <div className="flex flex-col gap-2">
                 <button
                   onClick={() => router.push('/login')}
-                  className="w-full py-2.5 text-[13.5px] font-semibold bg-indigo-650 hover:bg-indigo-700 text-white rounded-xl transition-all active:scale-95 shadow-sm"
+                  className="w-full py-2.5 text-[13.5px] font-semibold bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl transition-all active:scale-95 shadow-sm"
                 >
                   Log In
                 </button>
                 <button
                   onClick={() => router.push('/register')}
-                  className={`w-full py-2.5 text-[13.5px] font-semibold border rounded-xl transition-all active:scale-95 ${
-                    dark ? 'border-zinc-700 text-zinc-300 hover:bg-zinc-800' : 'border-zinc-300 text-zinc-750 hover:bg-zinc-50'
-                  }`}
+                  className={`w-full py-2.5 text-[13.5px] font-semibold border rounded-xl transition-all active:scale-95 ${dark ? 'border-zinc-700 text-zinc-300 hover:bg-zinc-800' : 'border-zinc-300 text-zinc-750 hover:bg-zinc-50'
+                    }`}
                 >
                   Create an Account
                 </button>
@@ -358,6 +424,69 @@ export default function CommunityPage() {
           </div>
         )}
       </div>
+
+      {/* Floating Action Buttons (FAB) for Mobile Post & Camera Creation */}
+      {isAuthenticated && (
+        <div className="fixed bottom-6 right-6 z-40 flex flex-col gap-3 items-end xl:hidden">
+          {/* Quick Camera FAB */}
+          <button
+            onClick={() => cameraFabInputRef.current?.click()}
+            className={`w-12 h-12 rounded-full flex items-center justify-center shadow-lg border active:scale-95 transition-all ${dark
+                ? 'bg-zinc-900 border-zinc-800 text-zinc-300 hover:bg-zinc-800 hover:text-white'
+                : 'bg-white border-zinc-200 text-zinc-600 hover:bg-zinc-50 hover:text-zinc-900'
+              }`}
+            title="Snap a photo"
+          >
+            <Camera size={20} />
+          </button>
+
+          {/* Plus/Compose FAB */}
+          <button
+            onClick={() => setIsComposeOpen(true)}
+            className="w-14 h-14 bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600 text-white rounded-full flex items-center justify-center shadow-2xl active:scale-95 transition-all"
+            title="Create a post"
+          >
+            <Plus size={24} />
+          </button>
+
+          {/* Hidden input for quick camera capture */}
+          <input
+            ref={cameraFabInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            onChange={handleCameraFabSelect}
+          />
+        </div>
+      )}
+
+      {/* Mobile Compose Modal */}
+      {isComposeOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm transition-all duration-300 p-4">
+          <div className={`rounded-xl border p-5 max-w-lg w-full shadow-2xl relative animate-in fade-in zoom-in-95 duration-200 ${dark ? 'bg-black border-zinc-800 text-white' : 'bg-white border-zinc-200 text-zinc-900'
+            }`}>
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-[17px] font-semibold tracking-tight">Create Post</h3>
+              <button
+                onClick={handleCloseCompose}
+                className={`p-1.5 rounded-lg transition-colors ${dark ? 'text-zinc-400 hover:bg-zinc-900 hover:text-white' : 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800'}`}
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <CommunityPostComposer
+              currentUser={{ id: userId, name: userName || 'You', avatarUrl }}
+              dark={dark}
+              initialFile={preselectedFile}
+              onPostCreated={(post) => {
+                handlePostCreated(post);
+                handleCloseCompose();
+              }}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

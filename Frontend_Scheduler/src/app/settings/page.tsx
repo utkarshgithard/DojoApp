@@ -25,6 +25,7 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
 
   // ── Notification state ───────────────────────────────────────────────────
   const [pushSupported, setPushSupported] = useState(false);
@@ -289,16 +290,37 @@ export default function SettingsPage() {
                         className="hidden"
                       />
 
+                      {/* Hidden Camera Input */}
+                      <input 
+                        type="file"
+                        ref={cameraInputRef}
+                        onChange={handleFileChange}
+                        accept="image/*"
+                        capture="environment"
+                        className="hidden"
+                      />
+
                       <div>
                         <h2 className="text-[15px] font-semibold tracking-tight">{userData.name || 'User'}</h2>
                         <p className={`text-[12.5px] ${muted}`}>{userData.email}</p>
-                        <button
-                          type="button"
-                          onClick={() => fileInputRef.current?.click()}
-                          className="text-[11px] font-medium text-indigo-500 hover:text-indigo-400 mt-1 transition-colors"
-                        >
-                          Change Photo
-                        </button>
+                        <div className="flex gap-2 items-center mt-1">
+                          <button
+                            type="button"
+                            onClick={() => fileInputRef.current?.click()}
+                            className="text-[11px] font-medium text-indigo-500 hover:text-indigo-400 transition-colors"
+                          >
+                            Change Photo
+                          </button>
+                          <span className="text-zinc-300 dark:text-zinc-700 text-[11px]">•</span>
+                          <button
+                            type="button"
+                            onClick={() => cameraInputRef.current?.click()}
+                            className="text-[11px] font-medium text-indigo-500 hover:text-indigo-400 transition-colors flex items-center gap-1"
+                          >
+                            <Camera size={12} />
+                            Take Photo
+                          </button>
+                        </div>
                       </div>
                     </div>
 
