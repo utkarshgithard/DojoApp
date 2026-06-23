@@ -5,7 +5,7 @@
  */
 
 const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? '';
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000';
+const API_BASE = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:5000';
 
 /** Convert a base64url VAPID public key string to a Uint8Array for PushManager */
 function urlBase64ToUint8Array(base64String: string): Uint8Array<ArrayBuffer> {
