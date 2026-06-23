@@ -772,9 +772,20 @@ export const addComment = async (req: AuthenticatedRequest, res: Response): Prom
     const avatarUrl = await checkAndSyncAvatar(comment.author);
 
     // Trigger comment notification (if commenting on someone else's post)
+    const io = req.app.get('io');
     if (post.userId !== userId) {
-      const io = req.app.get('io');
       await createNotification(post.userId, userId, 'comment', postId, comment.id, io);
+    }
+
+    // Trigger reply notification (if replying to someone else's comment)
+    if (parentId) {
+      const parentComment = await prisma.postComment.findUnique({
+        where: { id: parentId },
+        select: { userId: true },
+      });
+      if (parentComment && parentComment.userId !== userId && parentComment.userId !== post.userId) {
+        await createNotification(parentComment.userId, userId, 'comment', postId, comment.id, io);
+      }
     }
 
     res.status(201).json({

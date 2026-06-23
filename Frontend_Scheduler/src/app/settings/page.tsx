@@ -463,7 +463,7 @@ export default function SettingsPage() {
                 <div className="space-y-6">
                   <div>
                     <h2 className="text-[15px] font-medium tracking-tight">Push Notifications</h2>
-                    <p className={`text-[12.5px] ${muted} mt-0.5`}>Get notified about study invites and live sessions even when DojoClass is closed.</p>
+                    <p className={`text-[12.5px] ${muted} mt-0.5`}>Get notified about study invites, live sessions, post likes, and comments even when DojoClass is closed.</p>
                   </div>
 
                   {!pushSupported ? (
@@ -528,6 +528,8 @@ export default function SettingsPage() {
                         {[
                           { icon: '📩', label: 'A friend invites you to a study session' },
                           { icon: '▶️', label: 'A study session you joined goes live' },
+                          { icon: '❤️', label: 'Someone likes your community post' },
+                          { icon: '💬', label: 'Someone comments on or replies to your post' },
                         ].map(({ icon, label }) => (
                           <div key={label} className={`flex items-center gap-2.5 text-[12.5px] ${dark ? 'text-gray-300' : 'text-gray-600'}`}>
                             <span>{icon}</span>
