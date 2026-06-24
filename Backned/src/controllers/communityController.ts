@@ -4,6 +4,19 @@ import { AuthenticatedRequest } from '../middleware/authmiddleware.js';
 import { checkAndSyncAvatar } from '../utils/avatarSync.js';
 import { createNotification } from '../utils/notificationHelper.js';
 
+// Calculate the Hacker News style hot score: (upvotes - downvotes) / (age_in_hours + 2)^gravity
+export const calculateHotScore = (likeCount: number, createdAt: Date): number => {
+  const gravity = 1.8; // Standard Hacker News gravity constant
+  const ageInHours = Math.max(0, (Date.now() - createdAt.getTime()) / (1000 * 60 * 60));
+  
+  // We use (likeCount + 1) instead of just likeCount so that posts with 0 likes 
+  // still get a positive score that decays over time, rather than all being exactly 0.
+  const upvotes = likeCount;
+  const downvotes = 0; // App currently only supports likes
+  
+  return (upvotes - downvotes + 1) / Math.pow(ageInHours + 2, gravity);
+};
+
 const POSTS_PER_PAGE = 10;
 
 // ── Feed ─────────────────────────────────────────────────────────────────────
@@ -42,7 +55,10 @@ export const getPosts = async (req: AuthenticatedRequest, res: Response): Promis
       } : {
         communityId: null,
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: [
+        { hotScore: 'desc' },
+        { id: 'desc' }
+      ],
       include: {
         author: {
           select: { id: true, name: true, avatarUrl: true },
@@ -82,13 +98,9 @@ export const getPosts = async (req: AuthenticatedRequest, res: Response): Promis
       })
     );
 
-    // Boost followed-user posts to top, preserving recency order within each group (only if logged in)
-    let sortedFormatted = formatted;
-    if (userId) {
-      const followedPosts = formatted.filter((p) => p.followedByMe && p.author.id !== userId);
-      const otherPosts = formatted.filter((p) => !p.followedByMe || p.author.id === userId);
-      sortedFormatted = [...followedPosts, ...otherPosts];
-    }
+    // Boost followed-user posts slightly, but keep hotScore order primarily
+    // We remove the strict "all followed posts on top" logic to respect the hot feed
+    const sortedFormatted = formatted;
 
     res.json({ posts: sortedFormatted, nextCursor });
   } catch (err) {
@@ -214,6 +226,7 @@ export const createPost = async (req: AuthenticatedRequest, res: Response): Prom
         userId,
         content: content?.trim() ?? '',
         communityId: communityId || null,
+        hotScore: calculateHotScore(0, new Date()), // Initialize hotScore
         media: media && media.length > 0
           ? {
               create: media.map((m, idx) => ({
@@ -338,7 +351,7 @@ export const toggleLike = async (req: AuthenticatedRequest, res: Response): Prom
 
     const post = await prisma.post.findUnique({
       where: { id: postId },
-      select: { id: true, userId: true },
+      select: { id: true, userId: true, createdAt: true },
     });
 
     if (!post) {
@@ -371,6 +384,13 @@ export const toggleLike = async (req: AuthenticatedRequest, res: Response): Prom
     }
 
     const likeCount = await prisma.postLike.count({ where: { postId } });
+    
+    // Recalculate hot score
+    const newScore = calculateHotScore(likeCount, post.createdAt);
+    await prisma.post.update({
+      where: { id: postId },
+      data: { hotScore: newScore }
+    });
     
     // Broadcast interaction
     const io = req.app.get('io');

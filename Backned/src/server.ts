@@ -20,6 +20,7 @@ import communityGroupRouter from './routes/communityGroupRoutes.js';
 import notificationRouter from './routes/notificationRoutes.js';
 import prisma from './lib/prisma.js';
 import { setupSocketHandlers, setDbReady } from './socket.js';
+import { calculateHotScore } from './controllers/communityController.js';
 
 const app = express();
 app.use(cors());
@@ -112,6 +113,7 @@ async function connectWithRetry(attempt = 1): Promise<void> {
     dbReady = true;
     setDbReady(true);
     console.log('✅ Successfully connected to the database and verified query capability!');
+    startHotScoreCronJob();
   } catch (err: any) {
     const isNetworkError =
       err?.message?.includes("Can't reach database") ||
@@ -145,6 +147,34 @@ async function connectWithRetry(attempt = 1): Promise<void> {
 
 // ── Start server ─────────────────────────────────────────────────────────────
 const isServerless = process.env.VERCEL === '1';
+
+function startHotScoreCronJob() {
+  if (isServerless) return; // Don't run long-lived intervals in serverless environments
+  const CRON_INTERVAL = 1000 * 60 * 60; // 1 hour
+  setInterval(async () => {
+    try {
+      console.log('🔄 Running background hotScore recalculation...');
+      // Only recalculate for posts from the last 30 days to save DB resources
+      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+      const postsToUpdate = await prisma.post.findMany({
+        where: { createdAt: { gte: thirtyDaysAgo } },
+        select: { id: true, createdAt: true, _count: { select: { likes: true } } },
+      });
+
+      // Update sequentially or in chunks (for simplicity we do sequential here)
+      for (const post of postsToUpdate) {
+        const newScore = calculateHotScore(post._count.likes, post.createdAt);
+        await prisma.post.update({
+          where: { id: post.id },
+          data: { hotScore: newScore }
+        });
+      }
+      console.log(`✅ Recalculated hotScore for ${postsToUpdate.length} recent posts.`);
+    } catch (err) {
+      console.error('❌ Error running hotScore cron job:', err);
+    }
+  }, CRON_INTERVAL);
+}
 
 if (isServerless) {
   // In serverless mode, attempt connection lazily (no blocking)

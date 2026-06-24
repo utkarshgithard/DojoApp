@@ -251,6 +251,8 @@ model Post {
   // Optional: scoped to a community (null = global feed)
   communityId String?
 
+  hotScore    Float    @default(0)
+
   author    User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   community Community?    @relation(fields: [communityId], references: [id], onDelete: Cascade)
   media     PostMedia[]
@@ -260,6 +262,8 @@ model Post {
   notifications Notification[]
 
   @@index([communityId, createdAt(sort: Desc)])
+  @@index([communityId, hotScore(sort: Desc)])
+  @@index([hotScore(sort: Desc)])
   @@index([userId, createdAt(sort: Desc)])
 }
 
