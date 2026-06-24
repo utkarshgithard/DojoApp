@@ -259,6 +259,48 @@ export const createPost = async (req: AuthenticatedRequest, res: Response): Prom
 };
 
 
+// ── Edit Post ─────────────────────────────────────────────────────────────────
+
+export const editPost = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const userId = req.userId!;
+    const id = req.params.id as string;
+    const { content } = req.body as { content: string };
+
+    if (!content?.trim()) {
+      res.status(400).json({ error: 'Post must have text' });
+      return;
+    }
+
+    if (content.length > 500) {
+      res.status(400).json({ error: 'Content exceeds 500 characters' });
+      return;
+    }
+
+    const post = await prisma.post.findUnique({ where: { id } });
+    if (!post) {
+      res.status(404).json({ error: 'Post not found' });
+      return;
+    }
+
+    if (post.userId !== userId) {
+      res.status(403).json({ error: 'Not authorised to edit this post' });
+      return;
+    }
+
+    const updatedPost = await prisma.post.update({
+      where: { id },
+      data: { content: content.trim() },
+    });
+
+    res.json({ success: true, post: updatedPost });
+  } catch (err) {
+    console.error('[editPost]', err);
+    res.status(500).json({ error: 'Failed to edit post' });
+  }
+};
+
+
 // ── Delete Post ───────────────────────────────────────────────────────────────
 
 export const deletePost = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
@@ -329,6 +371,13 @@ export const toggleLike = async (req: AuthenticatedRequest, res: Response): Prom
     }
 
     const likeCount = await prisma.postLike.count({ where: { postId } });
+    
+    // Broadcast interaction
+    const io = req.app.get('io');
+    if (io) {
+      io.emit('post_interaction', { postId, likeCount });
+    }
+
     res.json({ liked: !existing, likeCount });
   } catch (err) {
     console.error('[toggleLike]', err);
@@ -697,15 +746,32 @@ export const markShareAsViewed = async (req: AuthenticatedRequest, res: Response
 export const getComments = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const postId = req.params.id as string;
-    const comments = await prisma.postComment.findMany({
-      where: { postId },
-      orderBy: { createdAt: 'asc' },
-      include: {
-        author: { select: { id: true, name: true, avatarUrl: true } },
-      },
+    const limit = parseInt(req.query.limit as string) || 20;
+    const cursor = req.query.cursor as string | undefined;
+
+    const topLevelComments = await prisma.postComment.findMany({
+      where: { postId, parentId: null },
+      orderBy: { createdAt: 'desc' },
+      take: limit + 1,
+      ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
+      include: { author: { select: { id: true, name: true, avatarUrl: true } } },
     });
+
+    const hasNextPage = topLevelComments.length > limit;
+    const page = hasNextPage ? topLevelComments.slice(0, limit) : topLevelComments;
+    const nextCursor = hasNextPage ? page[page.length - 1].id : null;
+
+    const topLevelIds = page.map((c) => c.id);
+    const replies = await prisma.postComment.findMany({
+      where: { postId, parentId: { in: topLevelIds } },
+      orderBy: { createdAt: 'asc' },
+      include: { author: { select: { id: true, name: true, avatarUrl: true } } },
+    });
+
+    const allComments = [...page, ...replies].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+
     const formatted = await Promise.all(
-      comments.map(async (c) => {
+      allComments.map(async (c) => {
         const avatarUrl = await checkAndSyncAvatar(c.author);
         return {
           ...c,
@@ -717,7 +783,7 @@ export const getComments = async (req: AuthenticatedRequest, res: Response): Pro
       })
     );
 
-    res.json({ comments: formatted });
+    res.json({ comments: formatted, nextCursor });
   } catch (err) {
     console.error('[getComments]', err);
     res.status(500).json({ error: 'Failed to fetch comments' });
@@ -788,6 +854,11 @@ export const addComment = async (req: AuthenticatedRequest, res: Response): Prom
       }
     }
 
+    const commentCount = await prisma.postComment.count({ where: { postId } });
+    if (io) {
+      io.emit('post_interaction', { postId, commentCount });
+    }
+
     res.status(201).json({
       comment: {
         ...comment,
@@ -800,6 +871,45 @@ export const addComment = async (req: AuthenticatedRequest, res: Response): Prom
   } catch (err) {
     console.error('[addComment]', err);
     res.status(500).json({ error: 'Failed to add comment' });
+  }
+};
+
+export const editComment = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const userId = req.userId!;
+    const commentId = req.params.commentId as string;
+    const { content } = req.body as { content: string };
+
+    if (!content?.trim()) {
+      res.status(400).json({ error: 'Comment cannot be empty' });
+      return;
+    }
+
+    if (content.length > 300) {
+      res.status(400).json({ error: 'Comment exceeds 300 characters' });
+      return;
+    }
+
+    const comment = await prisma.postComment.findUnique({ where: { id: commentId } });
+    if (!comment) {
+      res.status(404).json({ error: 'Comment not found' });
+      return;
+    }
+
+    if (comment.userId !== userId) {
+      res.status(403).json({ error: 'Not authorised to edit this comment' });
+      return;
+    }
+
+    const updatedComment = await prisma.postComment.update({
+      where: { id: commentId },
+      data: { content: content.trim() },
+    });
+
+    res.json({ success: true, comment: updatedComment });
+  } catch (err) {
+    console.error('[editComment]', err);
+    res.status(500).json({ error: 'Failed to edit comment' });
   }
 };
 
@@ -822,6 +932,13 @@ export const deleteComment = async (req: AuthenticatedRequest, res: Response): P
     }
 
     await prisma.postComment.delete({ where: { id: commentId } });
+
+    const commentCount = await prisma.postComment.count({ where: { postId: comment.postId } });
+    const io = req.app.get('io');
+    if (io) {
+      io.emit('post_interaction', { postId: comment.postId, commentCount });
+    }
+
     res.json({ success: true });
   } catch (err) {
     console.error('[deleteComment]', err);

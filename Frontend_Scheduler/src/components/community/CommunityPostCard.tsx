@@ -10,6 +10,10 @@ import CommunityCommentSection from './CommunityCommentSection';
 import ShareModal from './ShareModal';
 import { auth } from '@/lib/firebase';
 import { useAuth } from '@/context/authContext';
+import { usePostContext } from '@/context/PostContext';
+import { useNetwork } from '@/context/NetworkContext';
+import { Edit2, Save, X as XIcon } from 'lucide-react';
+import { toast } from 'sonner';
 
 interface PostAuthor {
   id: string;
@@ -63,16 +67,40 @@ export default function CommunityPostCard({
   isModerator,
 }: CommunityPostCardProps) {
   const { userDetails } = useAuth() as any;
-  const [liked, setLiked] = useState(post.likedByMe);
-  const [likeCount, setLikeCount] = useState(post.likeCount);
+  const { postStates, syncPostState, updatePostState } = usePostContext();
+  const { followStates, syncFollowState, toggleFollow } = useNetwork();
+
+  React.useEffect(() => {
+    syncPostState(post.id, {
+      likeCount: post.likeCount,
+      likedByMe: post.likedByMe,
+      commentCount: post.commentCount,
+    });
+    if (post.followedByMe !== undefined && currentUserId && post.author.id !== currentUserId) {
+      syncFollowState(post.author.id, post.followedByMe);
+    }
+  }, [post.id, post.likeCount, post.likedByMe, post.commentCount, post.followedByMe, post.author.id, currentUserId, syncPostState, syncFollowState]);
+
+  const currentState = postStates[post.id] || {
+    likeCount: post.likeCount,
+    likedByMe: post.likedByMe,
+    commentCount: post.commentCount,
+  };
+
+  const following = followStates[post.author.id] || false;
+  const liked = currentState.likedByMe;
+  const likeCount = currentState.likeCount;
+  const commentCount = currentState.commentCount;
   const [showComments, setShowComments] = useState(defaultShowComments ?? false);
-  const [commentCount, setCommentCount] = useState(post.commentCount);
   const [menuOpen, setMenuOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [likeAnim, setLikeAnim] = useState(false);
-  const [following, setFollowing] = useState(post.followedByMe ?? false);
   const [followLoading, setFollowLoading] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editContent, setEditContent] = useState(post.content);
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [currentPostContent, setCurrentPostContent] = useState(post.content);
 
   const router = useRouter();
   const isOwnPost = post.author.id === currentUserId;
@@ -87,35 +115,40 @@ export default function CommunityPostCard({
 
   const handleLike = async () => {
     if (!currentUserId) {
-      router.push('/login');
+      window.dispatchEvent(new CustomEvent('open-auth-modal'));
       return;
     }
     const wasLiked = liked;
-    setLiked(!wasLiked);
-    setLikeCount((c) => (wasLiked ? c - 1 : c + 1));
+    updatePostState(post.id, {
+      likedByMe: !wasLiked,
+      likeCount: wasLiked ? Math.max(0, likeCount - 1) : likeCount + 1,
+    });
     setLikeAnim(true);
     setTimeout(() => setLikeAnim(false), 300);
     try {
       await API.post(`/community/posts/${post.id}/like`);
     } catch {
-      setLiked(wasLiked);
-      setLikeCount((c) => (wasLiked ? c + 1 : c - 1));
+      toast.error('Failed to like post');
+      // Revert on error
+      updatePostState(post.id, {
+        likedByMe: wasLiked,
+        likeCount: likeCount,
+      });
     }
   };
 
-  const handleFollow = async () => {
+  const handleFollowClick = async () => {
     if (!currentUserId) {
-      router.push('/login');
+      window.dispatchEvent(new CustomEvent('open-auth-modal'));
       return;
     }
     if (followLoading) return;
     setFollowLoading(true);
-    const wasFollowing = following;
-    setFollowing(!wasFollowing); // optimistic
     try {
-      await API.post(`/community/users/${post.author.id}/follow`);
+      await toggleFollow(post.author.id);
     } catch {
-      setFollowing(wasFollowing); // revert on error
+      toast.error('Failed to follow user');
+      // Errors are handled inside toggleFollow (optimistic revert)
     } finally {
       setFollowLoading(false);
     }
@@ -125,19 +158,36 @@ export default function CommunityPostCard({
     if (deleting) return;
     setDeleting(true);
     try {
-      if (post.community?.slug && post.author.id !== currentUserId) {
+      if (post.community?.slug && isModerator && !isOwnPost) {
         await API.delete(`/groups/${post.community.slug}/posts/${post.id}`);
       } else {
         await API.delete(`/community/posts/${post.id}`);
       }
       onDelete?.(post.id);
+      toast.success('Post deleted successfully');
     } catch {
+      toast.error('Failed to delete post');
       setDeleting(false);
     }
   };
 
+  const handleEditSave = async () => {
+    if (!editContent.trim() || savingEdit) return;
+    setSavingEdit(true);
+    try {
+      await API.put(`/community/posts/${post.id}`, { content: editContent.trim() });
+      setCurrentPostContent(editContent.trim());
+      setIsEditing(false);
+      toast.success('Post edited successfully');
+    } catch {
+      toast.error('Failed to edit post');
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
   const handleCommentToggle = () => setShowComments((v) => !v);
-  const handleCommentAdded = () => setCommentCount((c) => c + 1);
+  const handleCommentAdded = () => updatePostState(post.id, { commentCount: commentCount + 1 });
 
   const getAvatar = (author: PostAuthor) => {
     let avatarToRender = author.avatarUrl;
@@ -214,7 +264,7 @@ export default function CommunityPostCard({
               {/* Follow pill — only for other users' posts */}
               {!isOwnPost && (
                 <button
-                  onClick={handleFollow}
+                  onClick={handleFollowClick}
                   disabled={followLoading}
                   className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold border transition-all ${
                     following
@@ -253,6 +303,17 @@ export default function CommunityPostCard({
                       dark ? 'bg-zinc-900 border-zinc-700' : 'bg-white border-zinc-200'
                     }`}
                   >
+                    {isOwnPost && (
+                      <button
+                        onClick={() => { setMenuOpen(false); setIsEditing(true); }}
+                        className={`flex items-center gap-2 w-full px-3 py-2 rounded-lg text-[13px] font-medium transition-colors ${
+                          dark ? 'text-zinc-300 hover:bg-zinc-800' : 'text-zinc-700 hover:bg-zinc-100'
+                        }`}
+                      >
+                        <Edit2 size={13} />
+                        <span>Edit post</span>
+                      </button>
+                    )}
                     <button
                       onClick={() => { setMenuOpen(false); handleDelete(); }}
                       className="flex items-center gap-2 w-full px-3 py-2 rounded-lg text-[13px] font-medium text-red-500 hover:bg-red-500/5 transition-colors"
@@ -268,13 +329,45 @@ export default function CommunityPostCard({
         </div>
 
         {/* Post content */}
-        {post.content && (
-          <p className={`text-[14px] leading-relaxed whitespace-pre-wrap break-words ${dark ? 'text-zinc-200' : 'text-zinc-800'}`}>
-            {post.content}
-          </p>
+        {isEditing ? (
+          <div className={`mt-2 p-3 rounded-lg border ${dark ? 'bg-zinc-950 border-zinc-800' : 'bg-zinc-50 border-zinc-200'}`}>
+            <textarea
+              value={editContent}
+              onChange={(e) => setEditContent(e.target.value.slice(0, 500))}
+              className={`w-full resize-none text-[14px] leading-relaxed bg-transparent outline-none ${
+                dark ? 'text-zinc-200 placeholder:text-zinc-600' : 'text-zinc-800 placeholder:text-zinc-400'
+              }`}
+              rows={3}
+              autoFocus
+            />
+            <div className="flex justify-end gap-2 mt-2">
+              <button
+                onClick={() => { setIsEditing(false); setEditContent(currentPostContent); }}
+                className={`text-[12px] font-medium px-3 py-1.5 rounded-md transition-colors ${
+                  dark ? 'text-zinc-400 hover:bg-zinc-800' : 'text-zinc-500 hover:bg-zinc-200'
+                }`}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleEditSave}
+                disabled={savingEdit || !editContent.trim()}
+                className="flex items-center gap-1.5 text-[12px] font-semibold px-3 py-1.5 rounded-md bg-indigo-600 hover:bg-indigo-700 text-white disabled:opacity-50 transition-colors"
+              >
+                {savingEdit ? <span className="w-3 h-3 border-[1.5px] border-white border-t-transparent rounded-full animate-spin" /> : <Save size={13} />}
+                Save
+              </button>
+            </div>
+          </div>
+        ) : (
+          currentPostContent && (
+            <p className={`text-[14px] leading-relaxed whitespace-pre-wrap break-words ${dark ? 'text-zinc-200' : 'text-zinc-800'}`}>
+              {currentPostContent}
+            </p>
+          )
         )}
 
-        {/* Media */}
+        {/* Media Grid */}
         {post.media && post.media.length > 0 && (
           <CommunityMediaGrid media={post.media} />
         )}
@@ -315,7 +408,7 @@ export default function CommunityPostCard({
           <button
             onClick={() => {
               if (!currentUserId) {
-                router.push('/login');
+                window.dispatchEvent(new CustomEvent('open-auth-modal'));
               } else {
                 setShowShareModal(true);
               }
@@ -340,7 +433,7 @@ export default function CommunityPostCard({
             currentUserId={currentUserId}
             dark={dark}
             onCommentAdded={handleCommentAdded}
-            onCommentDeleted={(count) => setCommentCount((c) => Math.max(0, c - count))}
+            onCommentDeleted={(count) => updatePostState(post.id, { commentCount: Math.max(0, commentCount - count) })}
             onUserClick={onUserClick}
           />
         )}

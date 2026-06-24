@@ -258,6 +258,9 @@ model Post {
   comments  PostComment[]
   shares    PostShare[]
   notifications Notification[]
+
+  @@index([communityId, createdAt(sort: Desc)])
+  @@index([userId, createdAt(sort: Desc)])
 }
 
 model PostMedia {
@@ -301,6 +304,8 @@ model PostComment {
   post   Post @relation(fields: [postId], references: [id], onDelete: Cascade)
   author User @relation(fields: [userId], references: [id], onDelete: Cascade)
   notifications Notification[]
+
+  @@index([postId, createdAt(sort: Asc)])
 }
 
 enum UserRole {

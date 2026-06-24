@@ -457,6 +457,7 @@ export const getCommunityMembers = async (req: AuthenticatedRequest, res: Respon
 // ── Get Community Posts ───────────────────────────────────────────────────────
 export const getCommunityPosts = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
+    const { checkAndSyncAvatar } = await import('../utils/avatarSync.js');
     const userId = req.userId;
     const slug = req.params.slug as string;
     const cursor = req.query.cursor as string | undefined;
@@ -499,23 +500,28 @@ export const getCommunityPosts = async (req: AuthenticatedRequest, res: Response
     const page = hasNextPage ? posts.slice(0, POSTS_PER_PAGE) : posts;
     const nextCursor = hasNextPage ? page[page.length - 1].id : null;
 
-    const formatted = page.map((post) => ({
-      id: post.id,
-      content: post.content,
-      createdAt: post.createdAt,
-      updatedAt: post.updatedAt,
-      author: post.author,
-      media: post.media,
-      likeCount: post._count.likes,
-      commentCount: post._count.comments,
-      likedByMe: userId ? (post.likes && post.likes.length > 0) : false,
-      community: {
-        id: community.id,
-        name: community.name,
-        slug: community.slug,
-        avatarUrl: community.avatarUrl,
-      },
-    }));
+    const formatted = await Promise.all(
+      page.map(async (post) => {
+        const avatarUrl = await checkAndSyncAvatar(post.author);
+        return {
+          id: post.id,
+          content: post.content,
+          createdAt: post.createdAt,
+          updatedAt: post.updatedAt,
+          author: { ...post.author, avatarUrl },
+          media: post.media,
+          likeCount: post._count.likes,
+          commentCount: post._count.comments,
+          likedByMe: userId ? (post.likes && post.likes.length > 0) : false,
+          community: {
+            id: community.id,
+            name: community.name,
+            slug: community.slug,
+            avatarUrl: community.avatarUrl,
+          },
+        };
+      })
+    );
 
     res.json({ posts: formatted, nextCursor });
   } catch (err) {

@@ -9,10 +9,14 @@ import { AuthContextType, User } from '@/lib/types';
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const AuthProvider = (props: { children: React.ReactNode }) => {
-  const [token, setToken] = useState<string | null>(() => {
-    if (typeof window !== 'undefined') return localStorage.getItem('token');
-    return null;
-  });
+  const [token, setToken] = useState<string | null>(null);
+
+  useEffect(() => {
+    const savedToken = localStorage.getItem('token');
+    if (savedToken) {
+      setToken(savedToken);
+    }
+  }, []);
   const [userId, setUserId] = useState<string | null>(null);
   const [emailVerified, setEmailVerified] = useState<boolean>(true); // default true to avoid flicker before firebase resolves
   const [loading, setLoading] = useState(true);

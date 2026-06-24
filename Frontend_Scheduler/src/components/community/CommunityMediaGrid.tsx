@@ -51,8 +51,8 @@ export default function CommunityMediaGrid({ media }: CommunityMediaGridProps) {
             return (
               <div
                 key={img.id}
-                className={`relative overflow-hidden rounded-xl bg-zinc-100 dark:bg-zinc-800 cursor-pointer group
-                  ${images.length === 1 ? 'aspect-[16/9]' : 'aspect-square'}
+                className={`relative overflow-hidden rounded-xl bg-zinc-100 dark:bg-zinc-800 cursor-pointer group flex items-center justify-center
+                  ${images.length === 1 ? 'w-full max-h-[600px] bg-zinc-900/5 dark:bg-black/20' : 'aspect-square'}
                   ${images.length === 3 && idx === 0 ? 'row-span-2' : ''}
                 `}
                 onClick={() => setLightbox(img.url)}
@@ -60,7 +60,7 @@ export default function CommunityMediaGrid({ media }: CommunityMediaGridProps) {
                 <img
                   src={img.url}
                   alt={`Post image ${idx + 1}`}
-                  className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+                  className={`w-full ${images.length === 1 ? 'max-h-[600px] object-contain' : 'h-full object-cover'} transition-transform duration-300 group-hover:scale-[1.03]`}
                   loading="lazy"
                 />
                 {/* +N overlay for 5th+ images */}

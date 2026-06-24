@@ -2,13 +2,12 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import API from '@/lib/axios';
-import { Send, Trash2, X } from 'lucide-react';
+import { Send, Trash2, X, Edit2, Save } from 'lucide-react';
 import { formatDistanceToNowStrict } from 'date-fns';
 import { useRouter } from 'next/navigation';
 import { auth } from '@/lib/firebase';
 import { useAuth } from '@/context/authContext';
-
-
+import { toast } from 'sonner';
 
 interface Comment {
   id: string;
@@ -46,7 +45,12 @@ export default function CommunityCommentSection({
   const [text, setText] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [loadingComments, setLoadingComments] = useState(initialComments.length === 0);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [replyingTo, setReplyingTo] = useState<{ id: string; name: string; parentId: string } | null>(null);
+  const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
+  const [editCommentText, setEditCommentText] = useState('');
+  const [savingEdit, setSavingEdit] = useState(false);
   
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const router = useRouter();
@@ -62,11 +66,43 @@ export default function CommunityCommentSection({
   // Fetch comments when first opened
   useEffect(() => {
     if (initialComments.length > 0) return; // already seeded
-    API.get(`/community/posts/${postId}/comments`)
-      .then(({ data }) => setComments(data.comments || []))
+    API.get(`/community/posts/${postId}/comments?limit=10`)
+      .then(({ data }) => {
+        setComments(data.comments || []);
+        setNextCursor(data.nextCursor || null);
+      })
       .catch(() => {})
       .finally(() => setLoadingComments(false));
   }, [postId, initialComments.length]);
+
+  const loadMore = async () => {
+    if (!nextCursor || loadingMore) return;
+    setLoadingMore(true);
+    try {
+      const { data } = await API.get(`/community/posts/${postId}/comments?limit=10&cursor=${nextCursor}`);
+      
+      // Because we sort ascending, new (older) comments fetched from cursor should be prepended
+      // so they appear at the top, since they are older than what we currently have on screen.
+      // Wait, let's verify. We fetched top-level `desc` (newest first). 
+      // If we page through it, we get older and older comments.
+      // The API returns the chunk sorted `asc` (oldest in the chunk first, newest in the chunk last).
+      // So if we prepend the new chunk, the very oldest comments will be at the very top.
+      setComments((prev) => {
+        // Merge without duplicates just in case
+        const existingIds = new Set(prev.map(c => c.id));
+        const newComments = data.comments.filter((c: Comment) => !existingIds.has(c.id));
+        // Sort the combined array `asc` based on createdAt
+        const combined = [...prev, ...newComments];
+        combined.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+        return combined;
+      });
+      setNextCursor(data.nextCursor || null);
+    } catch {
+      toast.error('Failed to load more comments');
+    } finally {
+      setLoadingMore(false);
+    }
+  };
 
   const handleSubmit = async (e?: React.FormEvent) => {
     e?.preventDefault();
@@ -83,7 +119,7 @@ export default function CommunityCommentSection({
       setReplyingTo(null);
       onCommentAdded?.();
     } catch {
-      // silent fail
+      toast.error('Failed to add comment');
     } finally {
       setSubmitting(false);
     }
@@ -106,8 +142,25 @@ export default function CommunityCommentSection({
       }
       
       onCommentDeleted?.(countDeleted);
+      toast.success('Comment deleted successfully');
     } catch {
-      // silent
+      toast.error('Failed to delete comment');
+    }
+  };
+
+  const handleEditSave = async (commentId: string) => {
+    if (!editCommentText.trim() || savingEdit) return;
+    setSavingEdit(true);
+    try {
+      const { data } = await API.put(`/community/comments/${commentId}`, { content: editCommentText.trim() });
+      setComments((prev) => prev.map((c) => c.id === commentId ? { ...c, content: data.comment.content } : c));
+      setEditingCommentId(null);
+      setEditCommentText('');
+      toast.success('Comment edited successfully');
+    } catch {
+      toast.error('Failed to edit comment');
+    } finally {
+      setSavingEdit(false);
     }
   };
 
@@ -191,7 +244,23 @@ export default function CommunityCommentSection({
         ) : comments.length === 0 ? (
           <p className={`text-[12px] ${dark ? 'text-zinc-500' : 'text-zinc-400'}`}>No comments yet. Be the first!</p>
         ) : (
-          topLevelComments.map((c) => {
+          <>
+            {nextCursor && (
+              <div className="flex justify-center mb-4">
+                <button
+                  onClick={loadMore}
+                  disabled={loadingMore}
+                  className={`text-[11px] font-semibold px-3 py-1.5 rounded-full border transition-colors ${
+                    dark 
+                      ? 'border-zinc-700 text-zinc-300 hover:bg-zinc-800 disabled:opacity-50' 
+                      : 'border-zinc-200 text-zinc-600 hover:bg-zinc-100 disabled:opacity-50'
+                  }`}
+                >
+                  {loadingMore ? 'Loading...' : 'View previous comments'}
+                </button>
+              </div>
+            )}
+            {topLevelComments.map((c) => {
             const commentReplies = replies.filter((r) => r.parentId === c.id);
             return (
               <div key={c.id} className="space-y-3">
@@ -214,29 +283,76 @@ export default function CommunityCommentSection({
                         {formatDistanceToNowStrict(new Date(c.createdAt), { addSuffix: true })}
                       </span>
                     </div>
-                    <p className={`text-[13px] leading-relaxed mt-0.5 ${dark ? 'text-zinc-300' : 'text-zinc-700'}`}>
-                      {c.content}
-                    </p>
-                    <div className="flex items-center gap-2 mt-1">
+                    {editingCommentId === c.id ? (
+                      <div className="mt-1 flex flex-col gap-2">
+                        <textarea
+                          value={editCommentText}
+                          onChange={(e) => setEditCommentText(e.target.value.slice(0, 300))}
+                          className={`w-full text-[13px] rounded-lg border p-2 resize-none outline-none ${
+                            dark ? 'bg-zinc-800 border-zinc-700 text-white' : 'bg-white border-zinc-300 text-zinc-900'
+                          }`}
+                          rows={2}
+                          autoFocus
+                        />
+                        <div className="flex gap-2 justify-end">
+                          <button
+                            onClick={() => setEditingCommentId(null)}
+                            className={`text-[11px] font-medium px-2 py-1 rounded transition-colors ${dark ? 'text-zinc-400 hover:bg-zinc-800' : 'text-zinc-500 hover:bg-zinc-200'}`}
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            onClick={() => handleEditSave(c.id)}
+                            disabled={savingEdit || !editCommentText.trim()}
+                            className="flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded bg-indigo-600 text-white disabled:opacity-50"
+                          >
+                            {savingEdit ? <span className="w-3 h-3 border-[1.5px] border-white border-t-transparent rounded-full animate-spin" /> : <Save size={12} />}
+                            Save
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <p className={`text-[13px] leading-relaxed mt-0.5 ${dark ? 'text-zinc-300' : 'text-zinc-700'}`}>
+                          {c.content}
+                        </p>
+                        <div className="flex items-center gap-2 mt-1">
+                          <button
+                            onClick={() => {
+                              if (!currentUserId) {
+                                window.dispatchEvent(new CustomEvent('open-auth-modal'));
+                              } else {
+                                handleReplyClick(c);
+                              }
+                            }}
+                            className={`text-[11px] font-medium transition-colors ${
+                              dark ? 'text-zinc-500 hover:text-indigo-400' : 'text-zinc-400 hover:text-indigo-600'
+                            }`}
+                          >
+                            Reply
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                  {/* Delete / Edit buttons */}
+                  {c.author.id === currentUserId && !editingCommentId && (
+                    <div className="opacity-0 group-hover:opacity-100 flex items-center transition-all self-start">
                       <button
-                        onClick={() => handleReplyClick(c)}
-                        className={`text-[11px] font-medium transition-colors ${
-                          dark ? 'text-zinc-500 hover:text-indigo-400' : 'text-zinc-400 hover:text-indigo-600'
-                        }`}
+                        onClick={() => { setEditingCommentId(c.id); setEditCommentText(c.content); }}
+                        className="p-1 rounded transition-colors text-zinc-400 hover:text-indigo-500"
+                        title="Edit comment"
                       >
-                        Reply
+                        <Edit2 size={13} />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(c.id)}
+                        className="p-1 rounded transition-colors text-zinc-400 hover:text-red-500"
+                        title="Delete comment"
+                      >
+                        <Trash2 size={13} />
                       </button>
                     </div>
-                  </div>
-                  {/* Delete button */}
-                  {c.author.id === currentUserId && (
-                    <button
-                      onClick={() => handleDelete(c.id)}
-                      className="opacity-0 group-hover:opacity-100 p-1 rounded transition-all text-zinc-400 hover:text-red-500 shrink-0 self-start"
-                      title="Delete comment"
-                    >
-                      <Trash2 size={13} />
-                    </button>
                   )}
                 </div>
 
@@ -279,36 +395,77 @@ export default function CommunityCommentSection({
                               {formatDistanceToNowStrict(new Date(reply.createdAt), { addSuffix: true })}
                             </span>
                           </div>
-                          <p className={`text-[13px] leading-relaxed mt-0.5 ${dark ? 'text-zinc-300' : 'text-zinc-700'}`}>
-                            {renderCommentContent(reply.content)}
-                          </p>
-                          <div className="flex items-center gap-2 mt-1">
-                            <button
-                              onClick={() => {
-                                if (!currentUserId) {
-                                  router.push('/login');
-                                } else {
-                                  handleReplyClick(reply);
-                                }
-                              }}
-                              className={`text-[11px] font-medium transition-colors ${
-                                dark ? 'text-zinc-500 hover:text-indigo-400' : 'text-zinc-400 hover:text-indigo-600'
-                              }`}
-                            >
-                              Reply
-                            </button>
-                          </div>
+                          {editingCommentId === reply.id ? (
+                            <div className="mt-1 flex flex-col gap-2">
+                              <textarea
+                                value={editCommentText}
+                                onChange={(e) => setEditCommentText(e.target.value.slice(0, 300))}
+                                className={`w-full text-[13px] rounded-lg border p-2 resize-none outline-none ${
+                                  dark ? 'bg-zinc-800 border-zinc-700 text-white' : 'bg-white border-zinc-300 text-zinc-900'
+                                }`}
+                                rows={2}
+                                autoFocus
+                              />
+                              <div className="flex gap-2 justify-end">
+                                <button
+                                  onClick={() => setEditingCommentId(null)}
+                                  className={`text-[11px] font-medium px-2 py-1 rounded transition-colors ${dark ? 'text-zinc-400 hover:bg-zinc-800' : 'text-zinc-500 hover:bg-zinc-200'}`}
+                                >
+                                  Cancel
+                                </button>
+                                <button
+                                  onClick={() => handleEditSave(reply.id)}
+                                  disabled={savingEdit || !editCommentText.trim()}
+                                  className="flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded bg-indigo-600 text-white disabled:opacity-50"
+                                >
+                                  {savingEdit ? <span className="w-3 h-3 border-[1.5px] border-white border-t-transparent rounded-full animate-spin" /> : <Save size={12} />}
+                                  Save
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <>
+                              <p className={`text-[13px] leading-relaxed mt-0.5 ${dark ? 'text-zinc-300' : 'text-zinc-700'}`}>
+                                {renderCommentContent(reply.content)}
+                              </p>
+                              <div className="flex items-center gap-2 mt-1">
+                                <button
+                                  onClick={() => {
+                                    if (!currentUserId) {
+                                      window.dispatchEvent(new CustomEvent('open-auth-modal'));
+                                    } else {
+                                      handleReplyClick(reply);
+                                    }
+                                  }}
+                                  className={`text-[11px] font-medium transition-colors ${
+                                    dark ? 'text-zinc-500 hover:text-indigo-400' : 'text-zinc-400 hover:text-indigo-600'
+                                  }`}
+                                >
+                                  Reply
+                                </button>
+                              </div>
+                            </>
+                          )}
                         </div>
                         
-                        {/* Delete reply button */}
-                        {reply.author.id === currentUserId && (
-                          <button
-                            onClick={() => handleDelete(reply.id)}
-                            className="opacity-0 group-hover:opacity-100 p-1 rounded transition-all text-zinc-400 hover:text-red-500 shrink-0 self-start"
-                            title="Delete reply"
-                          >
-                            <Trash2 size={13} />
-                          </button>
+                        {/* Delete / Edit reply button */}
+                        {reply.author.id === currentUserId && !editingCommentId && (
+                          <div className="opacity-0 group-hover:opacity-100 flex items-center transition-all self-start">
+                            <button
+                              onClick={() => { setEditingCommentId(reply.id); setEditCommentText(reply.content); }}
+                              className="p-1 rounded transition-colors text-zinc-400 hover:text-indigo-500"
+                              title="Edit reply"
+                            >
+                              <Edit2 size={13} />
+                            </button>
+                            <button
+                              onClick={() => handleDelete(reply.id)}
+                              className="p-1 rounded transition-colors text-zinc-400 hover:text-red-500"
+                              title="Delete reply"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
                         )}
                       </div>
                     ))}
@@ -316,7 +473,8 @@ export default function CommunityCommentSection({
                 )}
               </div>
             );
-          })
+          })}
+          </>
         )}
       </div>
 
@@ -325,7 +483,7 @@ export default function CommunityCommentSection({
         <div className={`mt-3 p-4 rounded-xl border text-center text-[13px] ${
           dark ? 'bg-zinc-900/50 border-zinc-800 text-zinc-400' : 'bg-zinc-50 border-zinc-200 text-zinc-500'
         }`}>
-          Please <button onClick={() => router.push('/login')} className="text-indigo-500 hover:underline font-semibold">log in</button> or <button onClick={() => router.push('/register')} className="text-indigo-500 hover:underline font-semibold">sign up</button> to write comments or replies.
+          Please <button onClick={() => window.dispatchEvent(new CustomEvent('open-auth-modal'))} className="text-indigo-500 hover:underline font-semibold">log in</button> or <button onClick={() => window.dispatchEvent(new CustomEvent('open-auth-modal'))} className="text-indigo-500 hover:underline font-semibold">sign up</button> to write comments or replies.
         </div>
       ) : (
         <div className="flex flex-col mt-2">

@@ -4,6 +4,7 @@ import React, { useRef, useState, useCallback, useEffect } from 'react';
 import API from '@/lib/axios';
 import { Image as ImageIcon, Video, X, Send, Loader2, Plus, Camera } from 'lucide-react';
 import { auth } from '@/lib/firebase';
+import { toast } from 'sonner';
 
 
 interface MediaAttachment {
@@ -92,6 +93,7 @@ export default function CommunityPostComposer({ currentUser, dark, onPostCreated
   const [content, setContent] = useState('');
   const [attachments, setAttachments] = useState<MediaAttachment[]>([]);
   const [submitting, setSubmitting] = useState(false);
+  const [isProcessingFiles, setIsProcessingFiles] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const MAX_CHARS = 500;
@@ -202,7 +204,11 @@ export default function CommunityPostComposer({ currentUser, dark, onPostCreated
       const files = Array.from(e.target.files ?? []);
       if (!files.length) return;
 
+      setIsProcessingFiles(true);
       const remaining = MAX_FILES - attachments.length;
+      if (files.length > remaining) {
+        toast.error(`Maximum ${MAX_FILES} media attachments allowed`);
+      }
       const toAdd = files.slice(0, remaining);
 
       const newAttachments: MediaAttachment[] = await Promise.all(
@@ -226,6 +232,7 @@ export default function CommunityPostComposer({ currentUser, dark, onPostCreated
 
       // Reset input so same file can be re-selected
       e.target.value = '';
+      setIsProcessingFiles(false);
     },
     [attachments.length, uploadFile]
   );
@@ -239,6 +246,7 @@ export default function CommunityPostComposer({ currentUser, dark, onPostCreated
 
   const canSubmit =
     !submitting &&
+    !isProcessingFiles &&
     (content.trim().length > 0 || attachments.some((a) => a.publicUrl)) &&
     attachments.every((a) => !a.uploading && !a.error);
 
@@ -270,120 +278,116 @@ export default function CommunityPostComposer({ currentUser, dark, onPostCreated
     }
   };
 
-  const anyUploading = attachments.some((a) => a.uploading);
+  const anyUploading = isProcessingFiles || attachments.some((a) => a.uploading);
   const charLeft = MAX_CHARS - content.length;
 
   return (
-    <div className={`rounded-xl border p-4 mb-6 transition-colors ${dark ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-zinc-200 shadow-sm'}`}>
-      <div className="flex gap-3">
+    <div className={`rounded-md p-4 sm:p-5 mb-8 transition-all duration-300 ring-1 focus-within:ring-2 focus-within:ring-indigo-500/50 focus-within:shadow-md ${dark ? 'bg-[#121214] ring-zinc-800/50' : 'bg-white ring-zinc-200 shadow-sm'}`}>
+      <div className="flex gap-3 sm:gap-4">
         {getAvatar()}
-        <div className="flex-1 min-w-0">
-          <div className={`rounded-lg border p-3 transition-all duration-200 focus-within:ring-2 focus-within:ring-indigo-500/20 focus-within:border-indigo-500 ${dark
-              ? 'bg-zinc-950 border-zinc-800 focus-within:bg-black'
-              : 'bg-zinc-50 border-zinc-200 focus-within:bg-white focus-within:shadow-sm'
-            }`}>
-            <textarea
-              value={content}
-              onChange={(e) => setContent(e.target.value.slice(0, MAX_CHARS))}
-              placeholder="What's happening at the dojo?"
-              rows={3}
-              className={`w-full resize-none text-[14px] leading-relaxed bg-transparent outline-none placeholder:text-zinc-400
-                ${dark ? 'text-white' : 'text-zinc-900'}`}
-            />
+        <div className="flex-1 min-w-0 flex flex-col pt-1">
+          <textarea
+            value={content}
+            onChange={(e) => setContent(e.target.value.slice(0, MAX_CHARS))}
+            placeholder="What's happening at the dojo?"
+            rows={content.length > 0 || attachments.length > 0 ? 3 : 2}
+            className={`w-full resize-none text-[15px] leading-relaxed bg-transparent outline-none placeholder:text-zinc-500 transition-all duration-200 mb-2
+              ${dark ? 'text-zinc-100' : 'text-zinc-900'}`}
+          />
 
-            {/* Attachment previews */}
-            {attachments.length > 0 && (
-              <div className="mt-3 flex flex-wrap gap-2">
-                {attachments.map((att, idx) => (
-                  <div key={idx} className="relative w-20 h-20 rounded-lg overflow-hidden bg-zinc-100 dark:bg-zinc-800 group shrink-0 border border-zinc-200 dark:border-zinc-800">
-                    {att.type === 'image' ? (
-                      <img src={att.localUrl} alt="" className="w-full h-full object-cover" />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center">
-                        {att.thumbnailUrl
-                          ? <img src={att.thumbnailUrl} alt="" className="w-full h-full object-cover" />
-                          : <Video size={24} className="text-zinc-400" />
-                        }
-                        <div className="absolute inset-0 flex items-center justify-center bg-black/30">
-                          <Video size={14} className="text-white" />
-                        </div>
+          {/* Attachment previews */}
+          {attachments.length > 0 && (
+            <div className="mb-2 flex flex-wrap gap-2">
+              {attachments.map((att, idx) => (
+                <div key={idx} className="relative w-20 h-20 rounded-xl overflow-hidden bg-zinc-100 dark:bg-zinc-800/50 group shrink-0 border border-zinc-200 dark:border-zinc-700/50 transition-transform hover:scale-[1.02]">
+                  {att.type === 'image' ? (
+                    <img src={att.localUrl} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center">
+                      {att.thumbnailUrl
+                        ? <img src={att.thumbnailUrl} alt="" className="w-full h-full object-cover" />
+                        : <Video size={24} className="text-zinc-500" />
+                      }
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+                        <Video size={14} className="text-white" />
                       </div>
-                    )}
+                    </div>
+                  )}
 
-                    {/* Upload progress overlay */}
-                    {att.uploading && (
-                      <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center gap-1">
-                        <div className="w-12 h-1 bg-white/30 rounded-full overflow-hidden">
-                          <div className="h-full bg-white rounded-full transition-all duration-200" style={{ width: `${att.progress}%` }} />
-                        </div>
-                        <span className="text-white text-[9px] font-semibold">{att.progress}%</span>
+                  {/* Upload progress overlay */}
+                  {att.uploading && (
+                    <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center gap-1.5 backdrop-blur-[2px]">
+                      <div className="w-12 h-1.5 bg-white/20 rounded-full overflow-hidden">
+                        <div className="h-full bg-white rounded-full transition-all duration-200" style={{ width: `${att.progress}%` }} />
                       </div>
-                    )}
+                      <span className="text-white text-[10px] font-medium tracking-wide">{att.progress}%</span>
+                    </div>
+                  )}
 
-                    {/* Error overlay */}
-                    {att.error && (
-                      <div className="absolute inset-0 bg-red-500/70 flex items-center justify-center">
-                        <span className="text-white text-[10px] font-semibold">Failed</span>
-                      </div>
-                    )}
+                  {/* Error overlay */}
+                  {att.error && (
+                    <div className="absolute inset-0 bg-red-500/80 flex items-center justify-center backdrop-blur-[2px]">
+                      <span className="text-white text-[10px] font-bold tracking-wide">Failed</span>
+                    </div>
+                  )}
 
-                    {/* Success check */}
-                    {att.publicUrl && !att.uploading && !att.error && (
-                      <div className="absolute top-1 left-1 w-4.5 h-4.5 rounded-full bg-green-500 flex items-center justify-center shadow-sm">
-                        <svg viewBox="0 0 10 10" className="w-2.5 h-2.5 text-white fill-none stroke-current" strokeWidth={2}>
-                          <path d="M2 5l2 2 4-4" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                      </div>
-                    )}
+                  {/* Success check */}
+                  {att.publicUrl && !att.uploading && !att.error && (
+                    <div className="absolute top-1.5 left-1.5 w-5 h-5 rounded-full bg-emerald-500 flex items-center justify-center shadow-md">
+                      <svg viewBox="0 0 10 10" className="w-3 h-3 text-white fill-none stroke-current" strokeWidth={2.5}>
+                        <path d="M2 5l2 2 4-4" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </div>
+                  )}
 
-                    {/* Remove button */}
-                    <button
-                      onClick={() => removeAttachment(idx)}
-                      className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/60 text-white flex items-center justify-center hover:bg-black/80 transition-colors opacity-0 group-hover:opacity-100"
-                    >
-                      <X size={10} />
-                    </button>
-                  </div>
-                ))}
-
-                {/* Add more button */}
-                {attachments.length < MAX_FILES && (
+                  {/* Remove button */}
                   <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    className={`w-20 h-20 rounded-md border-2 border-dashed flex flex-col items-center justify-center gap-1 transition-all shrink-0
-                      ${dark
-                        ? 'border-zinc-800 hover:border-indigo-500 text-zinc-500 hover:text-indigo-400 hover:bg-indigo-950/15'
-                        : 'border-zinc-300 hover:border-indigo-500 text-zinc-400 hover:text-indigo-600 hover:bg-indigo-50/20'
-                      }`}
+                    onClick={() => removeAttachment(idx)}
+                    className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-black/50 text-white flex items-center justify-center hover:bg-black/80 hover:scale-110 transition-all opacity-0 group-hover:opacity-100 backdrop-blur-sm"
                   >
-                    <Plus size={18} />
-                    <span className="text-[9px] font-bold">Add more</span>
+                    <X size={12} strokeWidth={2.5} />
                   </button>
-                )}
-              </div>
-            )}
-          </div>
+                </div>
+              ))}
+
+              {/* Add more button */}
+              {attachments.length < MAX_FILES && (
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className={`w-20 h-20 rounded-xl border-2 border-dashed flex flex-col items-center justify-center gap-1.5 transition-all shrink-0
+                    ${dark
+                      ? 'border-zinc-800 hover:border-indigo-500 text-zinc-500 hover:text-indigo-400 hover:bg-indigo-500/10'
+                      : 'border-zinc-200 hover:border-indigo-500 text-zinc-400 hover:text-indigo-600 hover:bg-indigo-50/50'
+                    }`}
+                >
+                  <Plus size={20} />
+                  <span className="text-[10px] font-semibold tracking-wide">Add</span>
+                </button>
+              )}
+            </div>
+          )}
+
           {/* Toolbar */}
-          <div className={`flex items-center justify-between mt-3 pt-3 border-t ${dark ? 'border-zinc-800' : 'border-zinc-100'}`}>
-            <div className="flex items-center gap-1">
+          <div className={`flex items-center justify-between pt-3 border-t transition-colors ${dark ? 'border-zinc-800/60' : 'border-zinc-100'}`}>
+            <div className="flex items-center gap-0.5 sm:gap-1 -ml-2">
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={attachments.length >= MAX_FILES}
                 title="Attach image or video"
-                className={`p-2 rounded-lg transition-colors disabled:opacity-40 ${dark ? 'text-zinc-400 hover:text-white hover:bg-zinc-800' : 'text-zinc-500 hover:text-zinc-800 hover:bg-zinc-100'}`}
+                className={`p-2.5 rounded-full transition-all disabled:opacity-40 ${dark ? 'text-indigo-400 hover:text-indigo-300 hover:bg-indigo-500/10' : 'text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50'}`}
               >
-                <ImageIcon size={18} />
+                <ImageIcon size={18} strokeWidth={2} />
               </button>
               <button
                 type="button"
                 onClick={() => cameraInputRef.current?.click()}
                 disabled={attachments.length >= MAX_FILES}
                 title="Take photo with camera"
-                className={`p-2 rounded-lg transition-colors disabled:opacity-40 ${dark ? 'text-zinc-400 hover:text-white hover:bg-zinc-800' : 'text-zinc-500 hover:text-zinc-800 hover:bg-zinc-100'}`}
+                className={`p-2.5 rounded-full transition-all disabled:opacity-40 ${dark ? 'text-indigo-400 hover:text-indigo-300 hover:bg-indigo-500/10' : 'text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50'}`}
               >
-                <Camera size={18} />
+                <Camera size={18} strokeWidth={2} />
               </button>
               <input
                 ref={fileInputRef}
@@ -401,27 +405,27 @@ export default function CommunityPostComposer({ currentUser, dark, onPostCreated
                 className="hidden"
                 onChange={handleFileSelect}
               />
-              <span className={`text-[11px] ${dark ? 'text-zinc-600' : 'text-zinc-400'}`}>
+              <span className={`text-[12px] font-medium ml-2 ${dark ? 'text-zinc-500' : 'text-zinc-400'}`}>
                 {attachments.length > 0 && `${attachments.length}/${MAX_FILES} files`}
               </span>
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-4">
               {content.length > 0 && (
-                <span className={`text-[11px] font-medium ${charLeft < 50 ? 'text-orange-400' : dark ? 'text-zinc-600' : 'text-zinc-400'}`}>
+                <span className={`text-[12px] font-semibold ${charLeft < 50 ? 'text-red-400' : dark ? 'text-zinc-600' : 'text-zinc-400'}`}>
                   {charLeft}
                 </span>
               )}
               <button
                 onClick={handleSubmit}
                 disabled={!canSubmit}
-                className="flex items-center gap-2 px-4 py-2 rounded-xl text-[13px] font-semibold bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white transition-all active:scale-95 shadow-sm"
+                className="flex items-center gap-2 px-5 py-2 rounded-full text-[14px] font-bold bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:hover:bg-indigo-600 text-white transition-all active:scale-95 shadow-sm hover:shadow-md"
               >
                 {submitting || anyUploading
-                  ? <Loader2 size={14} className="animate-spin" />
-                  : <Send size={14} />
+                  ? <Loader2 size={16} className="animate-spin" />
+                  : <Send size={16} className="translate-x-[1px]" />
                 }
-                <span>{submitting ? 'Posting…' : anyUploading ? 'Uploading…' : 'Post'}</span>
+                <span>{submitting ? 'Posting' : anyUploading ? 'Uploading' : 'Post'}</span>
               </button>
             </div>
           </div>

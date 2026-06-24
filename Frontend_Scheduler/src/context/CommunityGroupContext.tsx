@@ -144,21 +144,30 @@ export const CommunityGroupProvider = ({ children }: { children: React.ReactNode
 
   const joinOrLeave = useCallback(async (slug: string): Promise<{ joined: boolean; memberCount: number }> => {
     const { data } = await API.post(`/groups/${slug}/join`);
-    // Update in both lists
-    const updateFn = (prev: CommunityGroup[]) =>
-      prev.map((c) => c.slug === slug ? { ...c, joined: data.joined, memberCount: data.memberCount } : c);
-    setCommunities(updateFn);
+    
+    let fullCommunity: CommunityGroup | undefined;
+    
+    // Update in all communities list
+    setCommunities((prev) => {
+      fullCommunity = prev.find((c) => c.slug === slug);
+      return prev.map((c) => c.slug === slug ? { ...c, joined: data.joined, memberCount: data.memberCount } : c);
+    });
+
     if (data.joined) {
       setMyCommunities((prev) => {
         const exists = prev.some((c) => c.slug === slug);
-        if (exists) return updateFn(prev);
-        const full = communities.find((c) => c.slug === slug);
-        if (full) return [{ ...full, joined: true, memberCount: data.memberCount }, ...prev];
+        if (exists) {
+          return prev.map((c) => c.slug === slug ? { ...c, joined: data.joined, memberCount: data.memberCount } : c);
+        }
+        if (fullCommunity) {
+          return [{ ...fullCommunity, joined: true, memberCount: data.memberCount }, ...prev];
+        }
         return prev;
       });
     } else {
       setMyCommunities((prev) => prev.filter((c) => c.slug !== slug));
     }
+
     // Update active community if currently viewing
     setActiveCommunity((prev) => {
       if (prev && prev.slug === slug) {
@@ -166,8 +175,9 @@ export const CommunityGroupProvider = ({ children }: { children: React.ReactNode
       }
       return prev;
     });
+
     return data;
-  }, [communities]);
+  }, []);
 
   const removeCommunityLocal = useCallback((slug: string) => {
     setCommunities((prev) => prev.filter((c) => c.slug !== slug));

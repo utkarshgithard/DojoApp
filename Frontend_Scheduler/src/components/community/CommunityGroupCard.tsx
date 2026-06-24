@@ -48,7 +48,7 @@ export default function CommunityGroupCard({
   const handleJoin = async (e: React.MouseEvent) => {
     e.stopPropagation();
     if (!isAuthenticated) {
-      router.push('/login');
+      window.dispatchEvent(new CustomEvent('open-auth-modal'));
       return;
     }
     if (joining) return;

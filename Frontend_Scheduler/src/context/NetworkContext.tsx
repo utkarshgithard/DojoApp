@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useState, useCallback, useRef } from 'react';
 import API from '@/lib/axios';
+import { toast } from 'sonner';
 
 export interface NetworkUser {
   id: string;
@@ -25,6 +26,7 @@ interface NetworkContextType {
   followStates: Record<string, boolean>;
   fetchNetwork: () => Promise<void>;
   silentRefresh: () => Promise<void>;
+  syncFollowState: (targetId: string, isFollowing: boolean) => void;
   toggleFollow: (targetId: string) => Promise<void>;
   addFriendOptimistic: (friend: NetworkUser) => void;
   addFriend: (friendCode: string) => Promise<{ success: boolean; message: string }>;
@@ -77,6 +79,15 @@ export const NetworkProvider = ({ children }: { children: React.ReactNode }) => 
     }
   }, []);
 
+  const syncFollowState = useCallback((targetId: string, isFollowing: boolean) => {
+    setFollowStates((prev) => {
+      if (prev[targetId] === undefined) {
+        return { ...prev, [targetId]: isFollowing };
+      }
+      return prev;
+    });
+  }, []);
+
   const toggleFollow = useCallback(async (targetId: string) => {
     const was = !!followStates[targetId];
     // Optimistic update
@@ -99,8 +110,9 @@ export const NetworkProvider = ({ children }: { children: React.ReactNode }) => 
     try {
       await API.post(`/community/users/${targetId}/follow`);
       // Silent refresh to get accurate data
-      silentRefresh();
+      await silentRefresh();
     } catch {
+      toast.error('Failed to follow/unfollow user');
       // Revert on error
       setFollowStates((prev) => ({ ...prev, [targetId]: was }));
       setNetwork((prev) => {
@@ -142,6 +154,7 @@ export const NetworkProvider = ({ children }: { children: React.ReactNode }) => 
       followStates,
       fetchNetwork,
       silentRefresh,
+      syncFollowState,
       toggleFollow,
       addFriendOptimistic,
       addFriend,

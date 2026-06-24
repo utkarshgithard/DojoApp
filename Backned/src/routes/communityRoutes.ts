@@ -4,11 +4,13 @@ import {
   getPosts,
   getPostById,
   createPost,
+  editPost,
   deletePost,
   getUserPosts,
   toggleLike,
   getComments,
   addComment,
+  editComment,
   deleteComment,
   toggleFollow,
   getFollowStatus,
@@ -27,6 +29,7 @@ const communityRouter = express.Router();
 communityRouter.get('/posts', optionalVerifyToken, getPosts);
 communityRouter.get('/posts/:id', optionalVerifyToken, getPostById);
 communityRouter.post('/posts', verifyToken, createPost);
+communityRouter.put('/posts/:id', verifyToken, editPost);
 communityRouter.delete('/posts/:id', verifyToken, deletePost);
 communityRouter.get('/users/:userId/posts', optionalVerifyToken, getUserPosts);
 
@@ -41,6 +44,7 @@ communityRouter.post('/shares/:shareId/read', verifyToken, markShareAsViewed);
 // ── Comments ──────────────────────────────────────────────────────────────────
 communityRouter.get('/posts/:id/comments', optionalVerifyToken, getComments);
 communityRouter.post('/posts/:id/comments', verifyToken, addComment);
+communityRouter.put('/comments/:commentId', verifyToken, editComment);
 communityRouter.delete('/comments/:commentId', verifyToken, deleteComment);
 
 // ── Follow ────────────────────────────────────────────────────────────────────

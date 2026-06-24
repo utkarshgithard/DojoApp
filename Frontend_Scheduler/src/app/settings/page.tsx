@@ -2,10 +2,38 @@
 
 import { useAuth } from '@/context/authContext';
 import { useRouter } from 'next/navigation';
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useCallback } from "react";
 import API from "@/lib/axios";
 import { useDarkMode } from '@/context/DarkModeContext';
-import { User, Palette, Copy, Check, Settings, Mail, BookOpen, Camera, Bell, BellOff, BellRing } from 'lucide-react';
+import { User, Palette, Copy, Check, Settings, Mail, BookOpen, Camera, Bell, BellOff, BellRing, X } from 'lucide-react';
+import Cropper, { Area } from 'react-easy-crop';
+
+const getCroppedImg = async (imageSrc: string, pixelCrop: Area): Promise<string> => {
+  const image = new Image();
+  image.src = imageSrc;
+  await new Promise((resolve) => (image.onload = resolve));
+
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return '';
+
+  canvas.width = pixelCrop.width;
+  canvas.height = pixelCrop.height;
+
+  ctx.drawImage(
+    image,
+    pixelCrop.x,
+    pixelCrop.y,
+    pixelCrop.width,
+    pixelCrop.height,
+    0,
+    0,
+    pixelCrop.width,
+    pixelCrop.height
+  );
+
+  return canvas.toDataURL('image/jpeg', 0.9);
+};
 import { toast } from 'sonner';
 import { auth } from '@/lib/firebase';
 import {
@@ -26,6 +54,12 @@ export default function SettingsPage() {
   const [copied, setCopied] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
+
+  const [cropModalOpen, setCropModalOpen] = useState(false);
+  const [imageToCrop, setImageToCrop] = useState<string | null>(null);
+  const [crop, setCrop] = useState({ x: 0, y: 0 });
+  const [zoom, setZoom] = useState(1);
+  const [croppedAreaPixels, setCroppedAreaPixels] = useState<Area | null>(null);
 
   // ── Notification state ───────────────────────────────────────────────────
   const [pushSupported, setPushSupported] = useState(false);
@@ -79,14 +113,32 @@ export default function SettingsPage() {
       if (!file.type.startsWith('image/')) {
         return toast.error('Please upload an image file');
       }
-      if (file.size > 1.5 * 1024 * 1024) {
-        return toast.error('Image size must be less than 1.5MB');
+      if (file.size > 2.5 * 1024 * 1024) {
+        return toast.error('Image size must be less than 2.5MB');
       }
       const reader = new FileReader();
       reader.onloadend = () => {
-        setUserData(prev => ({ ...prev, avatarUrl: reader.result as string }));
+        setImageToCrop(reader.result as string);
+        setCropModalOpen(true);
       };
       reader.readAsDataURL(file);
+    }
+  };
+
+  const onCropComplete = useCallback((croppedArea: Area, croppedAreaPixels: Area) => {
+    setCroppedAreaPixels(croppedAreaPixels);
+  }, []);
+
+  const handleCropSubmit = async () => {
+    if (!imageToCrop || !croppedAreaPixels) return;
+    try {
+      const croppedImage = await getCroppedImg(imageToCrop, croppedAreaPixels);
+      setUserData(prev => ({ ...prev, avatarUrl: croppedImage }));
+      setCropModalOpen(false);
+      setImageToCrop(null);
+    } catch (e) {
+      console.error(e);
+      toast.error('Failed to crop image');
     }
   };
 
@@ -546,6 +598,65 @@ export default function SettingsPage() {
           </div>
         </div>
       </div>
+
+      {cropModalOpen && imageToCrop && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className={`w-full max-w-md rounded-2xl overflow-hidden shadow-2xl flex flex-col ${dark ? 'bg-zinc-900 border border-zinc-800' : 'bg-white border border-zinc-200'}`}>
+            <div className={`flex items-center justify-between p-4 border-b ${dark ? 'border-zinc-800' : 'border-zinc-100'}`}>
+              <h3 className="text-[15px] font-semibold">Crop your photo</h3>
+              <button onClick={() => setCropModalOpen(false)} className={`p-1 rounded-full transition-colors ${dark ? 'hover:bg-zinc-800 text-zinc-400' : 'hover:bg-zinc-100 text-zinc-500'}`}>
+                <X size={18} />
+              </button>
+            </div>
+            
+            <div className="relative w-full h-[300px] bg-black">
+              <Cropper
+                image={imageToCrop}
+                crop={crop}
+                zoom={zoom}
+                aspect={1}
+                cropShape="round"
+                onCropChange={setCrop}
+                onCropComplete={onCropComplete}
+                onZoomChange={setZoom}
+              />
+            </div>
+            
+            <div className={`p-4 border-t flex flex-col gap-4 ${dark ? 'border-zinc-800 bg-zinc-900' : 'border-zinc-100 bg-zinc-50'}`}>
+              <div className="flex items-center gap-3 px-2">
+                <span className={`text-[12px] font-medium ${dark ? 'text-zinc-400' : 'text-zinc-500'}`}>Zoom</span>
+                <input
+                  type="range"
+                  value={zoom}
+                  min={1}
+                  max={3}
+                  step={0.1}
+                  aria-labelledby="Zoom"
+                  onChange={(e) => setZoom(Number(e.target.value))}
+                  className="w-full h-1 bg-zinc-200 rounded-lg appearance-none cursor-pointer dark:bg-zinc-700"
+                />
+              </div>
+              
+              <div className="flex gap-3 justify-end mt-2">
+                <button
+                  type="button"
+                  onClick={() => setCropModalOpen(false)}
+                  className={`px-4 py-2 rounded-xl text-[13px] font-semibold transition-colors ${dark ? 'bg-zinc-800 text-white hover:bg-zinc-700' : 'bg-zinc-200 text-black hover:bg-zinc-300'}`}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCropSubmit}
+                  className="px-5 py-2 rounded-xl text-[13px] font-bold bg-indigo-600 hover:bg-indigo-500 text-white transition-colors"
+                >
+                  Apply Crop
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
