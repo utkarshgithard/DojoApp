@@ -97,10 +97,10 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed = false, toggleCollapse }) 
   const muted = dark ? 'text-gray-400' : 'text-gray-500';
 
   const navItems = [
-    { name: 'Dashboard', href: '/dashboard', icon: <LayoutDashboard size={16} /> },
+    { name: 'Community', href: '/community', icon: <Hash size={16} /> },
     { name: 'Sessions', href: '/sessions', icon: <Users size={16} /> },
     { name: 'Friends', href: '/friends', icon: <UserPlus size={16} /> },
-    { name: 'Community', href: '/community', icon: <Hash size={16} /> },
+    { name: 'Dashboard', href: '/dashboard', icon: <LayoutDashboard size={16} /> },
     { name: 'Notifications', href: '/notifications', icon: <Bell size={16} /> },
     { name: 'Add Classes', href: '/setup-schedule', icon: <Clock size={16} /> },
     { name: 'Calendar', href: '/calendar', icon: <Calendar size={16} /> },
@@ -117,7 +117,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed = false, toggleCollapse }) 
       `}
     >
       {/* Brand logo/name */}
-      <div className={`h-[76px] flex items-center border-b ${border} relative ${collapsed ? 'justify-center px-0' : 'px-6'}`}>
+      <div className={`h-[76px] shrink-0 flex items-center border-b ${border} relative ${collapsed ? 'justify-center px-0' : 'px-6'}`}>
         <Link href="/dashboard" className={`flex items-center gap-2.5 ${collapsed ? 'hidden' : 'flex'}`}>
           <div className="w-8 h-8 flex items-center justify-center shrink-0">
             <img
@@ -152,7 +152,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed = false, toggleCollapse }) 
       </div>
 
       {/* Navigation Links */}
-      <nav className="flex-1 px-4 py-6 space-y-1.5">
+      <nav className="flex-1 overflow-y-auto px-4 py-4 space-y-1">
         {navItems.map((item) => {
           const isActive = pathname === item.href;
           const isSessions = item.name === 'Sessions';
@@ -162,7 +162,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed = false, toggleCollapse }) 
                 href={item.href}
                 title={collapsed ? item.name : undefined}
                 className={`
-                  flex items-center ${collapsed ? 'justify-center p-3 w-10 h-10 mx-auto' : 'gap-3 px-3.5 py-2.5 w-full'} rounded-xl text-[13.5px] font-medium transition-all duration-200
+                  flex items-center ${collapsed ? 'justify-center p-3 w-10 h-10 mx-auto' : 'gap-3 px-3 py-2 w-full'} rounded-xl text-[13.5px] font-medium transition-all duration-200
                   ${isActive ? textActive : textMuted}
                 `}
               >
@@ -244,43 +244,42 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed = false, toggleCollapse }) 
 
       {/* Buy Me a Coffee Widget */}
       {!collapsed ? (
-        <div className="px-4 pb-3.5">
-          <div className={`p-3.5 rounded-xl border text-center transition-all ${
+        <div className="px-4 pb-3">
+          <div className={`p-2.5 rounded-xl border flex items-center justify-between gap-2 transition-all ${
             dark 
               ? 'bg-amber-950/10 border-amber-900/20 text-amber-200' 
               : 'bg-amber-50/60 border-amber-100 text-amber-900'
           }`}>
-            <div className="flex items-center justify-center mb-2">
-              <div className="w-9 h-9 rounded-full bg-amber-500/15 flex items-center justify-center">
-                <Coffee size={18} className="text-amber-500" />
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-full bg-amber-500/15 flex items-center justify-center shrink-0">
+                <Coffee size={13} className="text-amber-500" />
+              </div>
+              <div className="text-left leading-tight">
+                <p className="text-[10.5px] font-semibold">Dojo helped?</p>
               </div>
             </div>
-            <p className="text-[11.5px] font-semibold leading-snug mb-2">
-              Dojo helped your studies?
-            </p>
             <button
               onClick={() => {
                 setShowCoffeeModal(true);
                 setQrBlurred(true);
               }}
-              className="w-full py-1.5 rounded-lg text-[11.5px] font-semibold bg-amber-500 hover:bg-amber-600 text-white shadow-sm flex items-center justify-center gap-1.5 transition-all active:scale-[0.98]"
+              className="px-2.5 py-1.5 rounded-md text-[10px] font-semibold bg-amber-500 hover:bg-amber-600 text-white shadow-sm transition-all active:scale-[0.98]"
             >
-              <Coffee size={12} />
-              <span>Buy us a coffee</span>
+              Donate
             </button>
           </div>
         </div>
       ) : (
-        <div className="px-4 pb-3.5 flex justify-center">
+        <div className="px-4 pb-3 flex justify-center shrink-0">
           <button
             onClick={() => {
               setShowCoffeeModal(true);
               setQrBlurred(true);
             }}
             title="Buy me a coffee"
-            className="w-10 h-10 flex items-center justify-center rounded-xl bg-amber-500 hover:bg-amber-600 text-white shadow-sm transition-all"
+            className="w-9 h-9 flex items-center justify-center rounded-xl bg-amber-500 hover:bg-amber-600 text-white shadow-sm transition-all"
           >
-            <Coffee size={16} />
+            <Coffee size={15} />
           </button>
         </div>
       )}

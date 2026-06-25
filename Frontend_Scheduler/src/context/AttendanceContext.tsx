@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import moment from 'moment';
 import { useSocket } from "./SocketContext";
 import { useAuth } from "./authContext";
+import { useRouter } from 'next/navigation';
 import { Subject, AttendanceContextType, SubjectStats } from '@/lib/types';
 
 const Ctx = createContext<AttendanceContextType | null>(null);
@@ -17,6 +18,7 @@ const DUMMY_CLASSES: Subject[] = [
 ];
 
 export const AttendanceProvider = ({ children }: { children: React.ReactNode }) => {
+  const router = useRouter();
   const socketContext = useSocket();
   const { isAuthenticated, loading } = useAuth();
   const [date, setDate] = useState(moment().format('YYYY-MM-DD'));
@@ -352,7 +354,7 @@ export const AttendanceProvider = ({ children }: { children: React.ReactNode }) 
           action: {
             label: 'View',
             onClick: () => {
-              window.location.href = '/sessions';
+              router.push('/sessions');
             }
           }
         });

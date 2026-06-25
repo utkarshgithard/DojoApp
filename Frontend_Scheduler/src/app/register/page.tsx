@@ -75,7 +75,7 @@ export default function Register() {
   const [verificationSent, setVerificationSent] = useState(false);
 
   useEffect(() => {
-    if (!authLoading && isAuthenticated) router.push('/dashboard');
+    if (!authLoading && isAuthenticated) router.push('/community');
   }, [isAuthenticated, authLoading, router]);
 
   const validateEmail = (value: string) => {
@@ -173,7 +173,7 @@ export default function Register() {
         { headers: { Authorization: `Bearer ${token}` } }
       );
       login(token);
-      router.push('/dashboard');
+      router.push('/community');
     } catch (err: any) {
       console.error(err);
       if (err.code !== 'auth/popup-closed-by-user') {
@@ -217,7 +217,7 @@ export default function Register() {
               You can still use the app while your email is unverified. Check your inbox (and spam folder).
             </p>
             <button
-              onClick={() => router.push('/dashboard')}
+              onClick={() => router.push('/community')}
               className={`w-full py-2.5 rounded-lg text-[13.5px] font-medium transition-opacity hover:opacity-80
                 ${dark ? 'bg-white text-black' : 'bg-black text-white'}`}
             >

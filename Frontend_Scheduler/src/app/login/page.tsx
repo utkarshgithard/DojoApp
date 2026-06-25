@@ -108,7 +108,7 @@ export default function Login() {
       window.localStorage.removeItem('nameForSignUp');
 
       login(token);
-      router.push('/dashboard');
+      router.push('/community');
     } catch (err: any) {
       console.error(err);
       setVerifyError(err.message || 'Failed to complete sign in. The link might be expired or already used.');
@@ -118,7 +118,7 @@ export default function Login() {
 
   useEffect(() => {
     if (!authLoading && isAuthenticated && !isVerifying) {
-      router.push('/dashboard');
+      router.push('/community');
     }
   }, [isAuthenticated, authLoading, router, isVerifying]);
 
@@ -167,7 +167,7 @@ export default function Login() {
       );
 
       login(token);
-      router.push('/dashboard');
+      router.push('/community');
     } catch (err: any) {
       console.error(err);
       const msg = friendlyAuthError(err.code, err.message);
@@ -212,7 +212,7 @@ export default function Login() {
         { headers: { Authorization: `Bearer ${token}` } }
       );
       login(token);
-      router.push('/dashboard');
+      router.push('/community');
     } catch (err: any) {
       console.error(err);
       if (err.code !== 'auth/popup-closed-by-user') {
