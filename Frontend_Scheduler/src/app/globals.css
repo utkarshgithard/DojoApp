@@ -25,6 +25,68 @@
   50% { transform: translateY(-7px); }
 }
 
+:root {
+  --neo-bg: #e4e9f2;
+  --neo-shadow-light: #ffffff;
+  --neo-shadow-dark: #aab4c6;
+  --neo-text-primary: #2e3a4f;
+  --neo-text-secondary: #6b7588;
+  --neo-accent: #4caf82;
+  --neo-accent-bg: #dcf0e6;
+  --neo-accent-pressed-light: #ffffff;
+  --neo-accent-pressed-dark: #b9d6c6;
+  --neo-footer-line: #c7cedb;
+}
+
+.dark {
+  --neo-bg: #2b2f38;
+  --neo-shadow-light: #363b46;
+  --neo-shadow-dark: #15171c;
+  --neo-text-primary: #e7ebf2;
+  --neo-text-secondary: #8b94a7;
+  --neo-accent: #5fd99a;
+  --neo-accent-bg: #1f3a2d;
+  --neo-accent-pressed-light: #2a4f3c;
+  --neo-accent-pressed-dark: #14271d;
+  --neo-footer-line: #1a1d23;
+}
+
+@layer components {
+  .neo-surface {
+    background: var(--neo-bg);
+    color: var(--neo-text-primary);
+    box-shadow: 10px 10px 24px var(--neo-shadow-dark), -10px -10px 24px var(--neo-shadow-light);
+  }
+
+  .neo-inset {
+    background: var(--neo-bg);
+    color: var(--neo-text-primary);
+    box-shadow: inset 4px 4px 8px var(--neo-shadow-dark), inset -4px -4px 8px var(--neo-shadow-light);
+  }
+
+  .neo-pill {
+    background: var(--neo-bg);
+    color: var(--neo-text-secondary);
+    box-shadow: 4px 4px 8px var(--neo-shadow-dark), -4px -4px 8px var(--neo-shadow-light);
+  }
+
+  .neo-pill:active {
+    box-shadow: inset 3px 3px 6px var(--neo-shadow-dark), inset -3px -3px 6px var(--neo-shadow-light);
+  }
+
+  .neo-button {
+    background: linear-gradient(135deg, var(--neo-accent), #7ad1a4);
+    color: white;
+    box-shadow: 8px 8px 16px var(--neo-shadow-dark), -6px -6px 12px var(--neo-shadow-light);
+  }
+
+  .neo-card {
+    background: var(--neo-bg);
+    color: var(--neo-text-primary);
+    box-shadow: 14px 14px 30px var(--neo-shadow-dark), -14px -14px 30px var(--neo-shadow-light);
+  }
+}
+
 @layer base {
   .theme { --font-heading: var(--font-sans); --font-sans: var(--font-sans);
   }
@@ -37,6 +99,9 @@
   }
   body {
     @apply bg-background text-foreground;
+    background: var(--neo-bg);
+    color: var(--neo-text-primary);
+    transition: background-color 0.2s ease, color 0.2s ease;
   }
   html {
     @apply font-sans;

@@ -5,6 +5,7 @@ import { verifyToken, optionalVerifyToken, AuthenticatedRequest } from '../middl
 import generate6CharCode from '../utils/generateCode.js';
 import { cacheGet, cacheSet, cacheDel } from '../lib/redis.js';
 import { checkAndSyncAvatar } from '../utils/avatarSync.js';
+import { calculateDailyPerformanceScore } from '../utils/performanceIndex.js';
 
 const userRouter = express.Router();
 
@@ -205,14 +206,23 @@ userRouter.post('/add', verifyToken, async (req: AuthenticatedRequest, res: Resp
       return;
     }
 
-    // Add both directions of the friendship
-    await prisma.userFriend.createMany({
-      data: [
-        { userId, friendId: friend.id },
-        { userId: friend.id, friendId: userId },
-      ],
-      skipDuplicates: true,
-    });
+    // Add both directions of the friendship and follows to keep them in sync
+    await Promise.all([
+      prisma.userFriend.createMany({
+        data: [
+          { userId, friendId: friend.id },
+          { userId: friend.id, friendId: userId },
+        ],
+        skipDuplicates: true,
+      }),
+      prisma.userFollow.createMany({
+        data: [
+          { followerId: userId, followingId: friend.id },
+          { followerId: friend.id, followingId: userId },
+        ],
+        skipDuplicates: true,
+      }),
+    ]);
 
     res.json({
       success: true,
@@ -306,19 +316,43 @@ userRouter.get('/public-keys', verifyToken, async (req: AuthenticatedRequest, re
   }
 });
 
-// GET /api/auth/performance-index — fetch past 7 days of performance index (tasks, sessions, attendance)
+// POST /api/auth/study-time
+userRouter.post('/study-time', verifyToken, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const userId = req.userId!;
+    const { date, duration } = req.body as { date?: string; duration?: number };
+
+    if (!date || typeof duration !== 'number' || duration < 0) {
+      res.status(400).json({ error: 'date and duration are required' });
+      return;
+    }
+
+    const studyLog = await prisma.studyLog.upsert({
+      where: { userId_date: { userId, date } },
+      create: { userId, date, duration },
+      update: { duration: { increment: duration } },
+    });
+
+    res.json({ success: true, data: studyLog });
+  } catch (error: any) {
+    console.error('[Study Time] error:', error.message);
+    res.status(500).json({ error: 'Failed to save study time.' });
+  }
+});
+
+// GET /api/auth/performance-index — fetch past 7 days of performance index
 userRouter.get('/performance-index', verifyToken, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const userId = req.userId!;
 
-    // 1. Calculate past 7 dates (YYYY-MM-DD)
     const dates: string[] = [];
     const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    const chartData = [];
+    const chartData: Array<{ date: string; dayName: string; rawDate: Date }> = [];
 
     for (let i = 6; i >= 0; i--) {
       const d = new Date();
       d.setDate(d.getDate() - i);
+      d.setHours(0, 0, 0, 0);
       const yyyy = d.getFullYear();
       const mm = String(d.getMonth() + 1).padStart(2, '0');
       const dd = String(d.getDate()).padStart(2, '0');
@@ -328,89 +362,96 @@ userRouter.get('/performance-index', verifyToken, async (req: AuthenticatedReque
       chartData.push({ date: formattedDate, dayName, rawDate: d });
     }
 
-    // 2. Fetch Notes (tasks) for these dates in bulk
-    const notes = await prisma.note.findMany({
-      where: {
-        userId,
-        date: { in: dates },
+    const [studyLogs, studySessions, attendanceRecords, posts, userSubjects] = await Promise.all([
+      prisma.studyLog.findMany({ where: { userId, date: { in: dates } } }),
+      prisma.studySession.findMany({
+        where: {
+          startAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
+          OR: [
+            { creatorId: userId },
+            { participants: { some: { userId, status: 'accepted' } } },
+          ],
+        },
+      }),
+      prisma.attendanceRecord.findMany({ where: { userId, date: { in: dates } }, include: { entries: true } }),
+      prisma.post.findMany({ where: { userId, createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } } }),
+      prisma.subject.findMany({ where: { userId } }),
+    ]);
+
+    const studyLogMap = new Map(studyLogs.map((entry: any) => [entry.date, entry.duration]));
+    const attendanceMap = new Map(attendanceRecords.map((record: any) => [record.date, record.entries]));
+    const sessionMap = new Map<string, number>();
+    const postDateSet = new Set<string>();
+
+    studySessions.forEach((session: any) => {
+      const dateKey = new Date(session.startAt).toISOString().split('T')[0];
+      if (dateKey) {
+        sessionMap.set(dateKey, (sessionMap.get(dateKey) ?? 0) + 1);
       }
     });
 
-    // 3. Fetch Study Sessions for the past 7 days where user participated
-    const startDate = new Date();
-    startDate.setDate(startDate.getDate() - 7);
-    startDate.setHours(0, 0, 0, 0);
-
-    const sessions = await prisma.studySession.findMany({
-      where: {
-        startAt: { gte: startDate },
-        OR: [
-          { creatorId: userId },
-          { participants: { some: { userId, status: 'accepted' } } }
-        ]
+    posts.forEach((post: any) => {
+      const dateKey = new Date(post.createdAt).toISOString().split('T')[0];
+      if (dateKey) {
+        postDateSet.add(dateKey);
       }
     });
 
-    // 4. Aggregate daily statistics and compute activeness index
-    const result = chartData.map((dataPoint) => {
+    const tasksDataRaw = req.query.tasksData as string | undefined;
+    let parsedTasksData: Record<string, { completed: number; total: number }> = {};
+    if (tasksDataRaw) {
+      try {
+        parsedTasksData = JSON.parse(tasksDataRaw);
+      } catch (e) {
+        // Ignore JSON parse errors
+      }
+    }
+
+    const result = await Promise.all(chartData.map(async (dataPoint) => {
       const dateStr = dataPoint.date;
-
-      // Filter note for this date
-      const dayNote = notes.find((n) => n.date === dateStr);
       let tasksCompleted = 0;
       let tasksTotal = 0;
-      let taskScore = 0;
 
-      if (dayNote && dayNote.content) {
-        try {
-          const parsed = JSON.parse(dayNote.content);
-          if (Array.isArray(parsed)) {
-            tasksTotal = parsed.length;
-            tasksCompleted = parsed.filter((t: any) => t.completed).length;
-            if (tasksTotal > 0) {
-              taskScore = Math.round((tasksCompleted / tasksTotal) * 60);
-            }
-          }
-        } catch (e) {
-          // Ignore parse errors
-        }
+      if (parsedTasksData[dateStr]) {
+        tasksCompleted = parsedTasksData[dateStr].completed || 0;
+        tasksTotal = parsedTasksData[dateStr].total || 0;
       }
 
-      // Filter sessions for this date
-      const daySessions = sessions.filter((s) => {
-        try {
-          const sessionDateStr = new Date(s.startAt).toISOString().split('T')[0];
-          return sessionDateStr === dateStr;
-        } catch (err) {
-          return false;
-        }
+      const dayName = dataPoint.rawDate.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
+      const scheduledSubjects = userSubjects.filter((subject) => subject.days.includes(dayName));
+
+      const attendanceEntries = attendanceMap.get(dateStr) ?? [];
+      const sessionsCount = sessionMap.get(dateStr) ?? 0;
+      const postedToday = postDateSet.has(dateStr);
+      const studyDurationSeconds = studyLogMap.get(dateStr) ?? 0;
+
+      const breakdown = calculateDailyPerformanceScore({
+        studyDurationSeconds,
+        scheduledSubjects,
+        attendanceEntries: attendanceEntries.map((entry: any) => ({ subject: entry.subject, status: entry.status })),
+        completedTasks: tasksCompleted,
+        totalTasks: tasksTotal,
+        sessionsCount,
+        postedToday,
       });
-      const sessionsCount = daySessions.length;
-      const sessionScore = Math.min(sessionsCount * 20, 40); // 20 points per session, max 40
-
-      // Calculate final performance/activeness score
-      const dateHash = dateStr.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-      const mockBaseline = 62 + (dateHash % 20); // Pseudo-random fluctuating base (62 to 82)
-      
-      const hasRealActivity = tasksTotal > 0 || sessionsCount > 0;
-      let score = mockBaseline;
-
-      if (hasRealActivity) {
-        // Real score: sum of taskScore (up to 60) + sessionScore (up to 40) = up to 100 points
-        score = Math.min(taskScore + sessionScore, 100);
-        // Ensure score doesn't drop below a minimum active score of 35 if they participated
-        score = Math.max(score, 35);
-      }
 
       return {
         date: dateStr,
         dayName: dataPoint.dayName,
-        score,
-        tasksCompleted,
-        tasksTotal,
-        sessionsCount,
+        score: breakdown.score,
+        tasksCompleted: breakdown.tasksCompleted,
+        tasksTotal: breakdown.tasksTotal,
+        sessionsCount: breakdown.sessionsCount,
+        studyHours: breakdown.studyHours,
+        studyPoints: breakdown.studyPoints,
+        lectureScore: breakdown.lectureScore,
+        taskPoints: breakdown.taskPoints,
+        sessionPoints: breakdown.sessionPoints,
+        communityPoints: breakdown.communityPoints,
+        postedToday: breakdown.postedToday,
+        lectureAwarded: breakdown.lectureAwarded,
       };
-    });
+    }));
 
     res.json({ success: true, data: result });
   } catch (error: any) {

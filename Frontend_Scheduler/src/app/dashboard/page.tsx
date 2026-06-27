@@ -15,6 +15,7 @@ import { CalendarIcon, Users } from 'lucide-react';
 import API from '@/lib/axios';
 import { useSocket } from '@/context/SocketContext';
 import PerformanceIndexChart from '@/components/dashboard/PerformanceIndexChart';
+import MasterCalendar from '@/components/MasterCalendar';
 
 const Dashboard = () => {
   const router = useRouter();
@@ -178,6 +179,8 @@ const Dashboard = () => {
             </button>
           </div>
         )}
+
+        <MasterCalendar />
 
         {/* Two column layout for Classes & Checklist */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-stretch mb-8">

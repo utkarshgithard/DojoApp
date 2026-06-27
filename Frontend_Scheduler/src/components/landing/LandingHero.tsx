@@ -113,8 +113,8 @@ export function LandingHero({ dark, textMutedClass }: LandingHeroProps) {
             <button
               onClick={() => router.push('/register')}
               className={`w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3.5 rounded-full text-sm font-medium border transition-all duration-300 hover:scale-102 ${dark
-                  ? 'bg-zinc-100 text-zinc-950 border-transparent hover:bg-white'
-                  : 'bg-zinc-950 text-white border-transparent hover:bg-zinc-800'
+                ? 'bg-zinc-100 text-zinc-950 border-transparent hover:bg-white'
+                : 'bg-zinc-950 text-white border-transparent hover:bg-zinc-800'
                 }`}
             >
               <span>Get started free</span>
@@ -123,8 +123,8 @@ export function LandingHero({ dark, textMutedClass }: LandingHeroProps) {
             <a
               href="#features"
               className={`w-full sm:w-auto text-center px-6 py-3.5 rounded-full text-sm font-medium border transition-all duration-300 ${dark
-                  ? 'border-zinc-800 text-zinc-300 bg-transparent hover:bg-zinc-900 hover:text-white'
-                  : 'border-[#EBEAE4] text-[#1C1917] bg-transparent hover:bg-[#FAF9F5]'
+                ? 'border-zinc-800 text-zinc-300 bg-transparent hover:bg-zinc-900 hover:text-white'
+                : 'border-[#EBEAE4] text-[#1C1917] bg-transparent hover:bg-[#FAF9F5]'
                 }`}
             >
               See how it works
@@ -217,8 +217,8 @@ export function LandingHero({ dark, textMutedClass }: LandingHeroProps) {
                 </div>
               </div>
               <div className={`px-2 py-0.5 rounded-full border text-[7.5px] font-bold tracking-wider uppercase transition-colors duration-300 pointer-events-auto ${dark
-                  ? 'bg-[#18181B] border-zinc-800 text-purple-400'
-                  : 'bg-white border-[#EBEAE4] text-purple-700 shadow-sm'
+                ? 'bg-[#18181B] border-zinc-800 text-purple-400'
+                : 'bg-white border-[#EBEAE4] text-purple-700 shadow-sm'
                 }`}>
                 Host Session
               </div>
@@ -237,8 +237,8 @@ export function LandingHero({ dark, textMutedClass }: LandingHeroProps) {
                 </div>
               </div>
               <div className={`px-2 py-0.5 rounded-full border text-[7.5px] font-bold tracking-wider uppercase transition-colors duration-300 pointer-events-auto ${dark
-                  ? 'bg-[#18181B] border-zinc-800 text-teal-400'
-                  : 'bg-white border-[#EBEAE4] text-teal-700 shadow-sm'
+                ? 'bg-[#18181B] border-zinc-800 text-teal-400'
+                : 'bg-white border-[#EBEAE4] text-teal-700 shadow-sm'
                 }`}>
                 Manage Everything
               </div>
@@ -297,8 +297,8 @@ export function LandingHero({ dark, textMutedClass }: LandingHeroProps) {
                 }`}>
                 <div className="flex items-center gap-3">
                   <div className={`w-10 h-10 rounded-full text-white flex items-center justify-center shrink-0 transition-all duration-300 ${isLocked
-                      ? 'bg-purple-600 scale-110 shadow-md shadow-purple-900/40 ring-4 ring-purple-500/20'
-                      : 'bg-purple-400 ring-4 ring-purple-400/10'
+                    ? 'bg-purple-600 scale-110 shadow-md shadow-purple-900/40 ring-4 ring-purple-500/20'
+                    : 'bg-purple-400 ring-4 ring-purple-400/10'
                     }`}>
                     {isLocked ? (
                       <Lock size={18} className="animate-lock-click" />
@@ -512,8 +512,8 @@ export function LandingHero({ dark, textMutedClass }: LandingHeroProps) {
                 }`}>
                 <div className="flex items-center gap-3">
                   <div className={`w-10 h-10 rounded-full text-white flex items-center justify-center shrink-0 transition-all duration-300 ${isLocked
-                      ? 'bg-purple-600 scale-110 shadow-md shadow-purple-900/40 ring-4 ring-purple-500/20'
-                      : 'bg-purple-400 ring-4 ring-purple-400/10'
+                    ? 'bg-purple-600 scale-110 shadow-md shadow-purple-900/40 ring-4 ring-purple-500/20'
+                    : 'bg-purple-400 ring-4 ring-purple-400/10'
                     }`}>
                     {isLocked ? (
                       <Lock size={18} className="animate-lock-click" />
@@ -666,4 +666,4 @@ export function LandingHero({ dark, textMutedClass }: LandingHeroProps) {
       </div>
     </section>
   );
-}
+};

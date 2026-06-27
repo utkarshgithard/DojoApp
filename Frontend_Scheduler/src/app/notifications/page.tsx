@@ -4,7 +4,7 @@ import React from 'react';
 import { useNotifications, Notification } from '@/context/NotificationContext';
 import { useDarkMode } from '@/context/DarkModeContext';
 import { useRouter } from 'next/navigation';
-import { Bell, Heart, MessageSquare, Check, Trash2, ArrowLeft, RefreshCw } from 'lucide-react';
+import { Bell, Heart, MessageSquare, Check, ArrowLeft, RefreshCw, User, UserPlus } from 'lucide-react';
 import moment from 'moment';
 
 export default function NotificationsPage() {
@@ -20,7 +20,9 @@ export default function NotificationsPage() {
     if (!n.read) {
       await markAsRead(n.id);
     }
-    if (n.postId) {
+    if (n.type === 'follow_request' || n.type === 'friendship_mutual') {
+      router.push('/friends');
+    } else if (n.postId) {
       router.push(`/community/post/${n.postId}`);
     }
   };
@@ -95,14 +97,31 @@ export default function NotificationsPage() {
             </div>
             <h3 className="text-[15px] font-bold">No notifications yet</h3>
             <p className={`text-[12.5px] max-w-[280px] mt-1 leading-relaxed ${textMuted}`}>
-              Likes and comments on your community posts will appear here.
+              Likes, comments, and new followers will appear here.
             </p>
           </div>
         ) : (
           <div className={`rounded-2xl border divide-y overflow-hidden shadow-sm ${dark ? 'bg-zinc-950/40 border-zinc-800 divide-zinc-900' : 'bg-white border-zinc-200 divide-zinc-100'}`}>
             {notifications.map((n) => {
-              const isLike = n.type === 'like';
               const relativeTime = moment(n.createdAt).fromNow();
+
+              let badgeBg = 'bg-indigo-650 text-white border-indigo-500';
+              let badgeIcon = <MessageSquare size={9} fill="white" />;
+              let bodyText = 'commented on your post.';
+
+              if (n.type === 'like') {
+                badgeBg = 'bg-rose-500 text-white border-rose-450';
+                badgeIcon = <Heart size={9} fill="white" />;
+                bodyText = 'liked your post.';
+              } else if (n.type === 'follow_request') {
+                badgeBg = 'bg-blue-500 text-white border-blue-450';
+                badgeIcon = <UserPlus size={9} />;
+                bodyText = 'started following you. Follow back to become friends!';
+              } else if (n.type === 'friendship_mutual') {
+                badgeBg = 'bg-emerald-500 text-white border-emerald-450';
+                badgeIcon = <User size={9} />;
+                bodyText = 'and you followed each other and are now friends! 🤝';
+              }
 
               return (
                 <div
@@ -129,12 +148,8 @@ export default function NotificationsPage() {
                     </div>
                     
                     {/* Badge */}
-                    <div className={`absolute -bottom-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center shadow border ${
-                      isLike 
-                        ? 'bg-rose-500 text-white border-rose-400' 
-                        : 'bg-indigo-600 text-white border-indigo-500'
-                    }`}>
-                      {isLike ? <Heart size={9} fill="white" /> : <MessageSquare size={9} fill="white" />}
+                    <div className={`absolute -bottom-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center shadow border ${badgeBg}`}>
+                      {badgeIcon}
                     </div>
                   </div>
 
@@ -142,7 +157,7 @@ export default function NotificationsPage() {
                   <div className="flex-1 min-w-0 space-y-1">
                     <p className="text-[13.5px] leading-snug break-words">
                       <span className="font-semibold text-current">{n.sender.name}</span>{' '}
-                      {isLike ? 'liked your post.' : 'commented on your post.'}
+                      {bodyText}
                     </p>
 
                     {/* Post Content Snippet Preview */}

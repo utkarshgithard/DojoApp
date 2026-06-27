@@ -1,10 +1,13 @@
 "use client";
 
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
+import useSWR from "swr";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { useDarkMode } from "@/context/DarkModeContext";
 import API from "@/lib/axios";
-import { TrendingUp, Flame, CheckCircle, BarChart3, HelpCircle } from "lucide-react";
+import { TrendingUp, Flame, CheckCircle, HelpCircle } from "lucide-react";
+
+import { useCalendarContext } from "@/context/CalendarContext";
 
 interface PerformanceData {
   date: string;
@@ -13,29 +16,78 @@ interface PerformanceData {
   tasksCompleted: number;
   tasksTotal: number;
   sessionsCount: number;
+  studyHours?: number;
+  lectureScore?: number;
+  taskPoints?: number;
+  sessionPoints?: number;
+  communityPoints?: number;
+  postedToday?: boolean;
+  lectureAwarded?: boolean;
 }
 
 export default function PerformanceIndexChart() {
   const { darkMode } = useDarkMode() as any;
   const dark = darkMode;
-  const [data, setData] = useState<PerformanceData[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { calendarData } = useCalendarContext();
+  const [cachedData, setCachedData] = useState<PerformanceData[]>([]);
 
   useEffect(() => {
-    const fetchPerformance = async () => {
-      try {
-        const res = await API.get("/auth/performance-index");
-        if (res.data && res.data.success) {
-          setData(res.data.data);
-        }
-      } catch (error) {
-        console.error("Error fetching performance index:", error);
-      } finally {
-        setLoading(false);
+    if (typeof window === "undefined") return;
+    try {
+      const cached = localStorage.getItem("performance-index-cache");
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        setCachedData(parsed.data as PerformanceData[]);
       }
-    };
-    fetchPerformance();
+    } catch {
+      // Ignore cache read issues
+    }
   }, []);
+
+  // Summarize checklist completed/total counts for the last 7 days from CalendarContext
+  const tasksSummary = useMemo(() => {
+    const summary: Record<string, { completed: number; total: number }> = {};
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const dd = String(d.getDate()).padStart(2, '0');
+      const dateStr = `${yyyy}-${mm}-${dd}`;
+      
+      const dayData = calendarData[dateStr];
+      const dayTasks = dayData?.tasks || [];
+      summary[dateStr] = {
+        completed: dayTasks.filter((t: any) => t.isChecked).length,
+        total: dayTasks.length
+      };
+    }
+    return summary;
+  }, [calendarData]);
+
+  // Construct dynamic SWR key to automatically trigger fetch on task updates
+  const swrKey = useMemo(() => {
+    return `/auth/performance-index?tasksData=${encodeURIComponent(JSON.stringify(tasksSummary))}`;
+  }, [tasksSummary]);
+
+  const fetcher = async (url: string) => {
+    const res = await API.get(url);
+    if (!res.data?.success) {
+      throw new Error("Failed to fetch performance index");
+    }
+    const nextData = res.data.data as PerformanceData[];
+    if (typeof window !== "undefined") {
+      localStorage.setItem("performance-index-cache", JSON.stringify({ timestamp: Date.now(), data: nextData }));
+    }
+    return nextData;
+  };
+
+  const { data = cachedData, isLoading } = useSWR<PerformanceData[]>(swrKey, fetcher, {
+    fallbackData: cachedData,
+    revalidateOnFocus: true,
+    revalidateOnReconnect: true,
+    keepPreviousData: true,
+  });
 
   // Calculate stats for today (the last element in the array)
   const todayStats = useMemo(() => {
@@ -58,7 +110,7 @@ export default function PerformanceIndexChart() {
   // Gold color styling
   const goldColor = "#d97706"; // amber-600
 
-  if (loading) {
+  if (isLoading && data.length === 0) {
     return (
       <div className={`p-6 border rounded-xl ${border} ${dark ? "bg-black" : "bg-white"} h-[350px] flex items-center justify-center`}>
         <span className="inline-block w-6 h-6 rounded-full border-[2px] border-current border-t-transparent animate-spin text-amber-500" />

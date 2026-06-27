@@ -20,7 +20,7 @@ const DUMMY_CLASSES: Subject[] = [
 export const AttendanceProvider = ({ children }: { children: React.ReactNode }) => {
   const router = useRouter();
   const socketContext = useSocket();
-  const { isAuthenticated, loading } = useAuth();
+  const { isAuthenticated, loading, userId } = useAuth();
   const [date, setDate] = useState(moment().format('YYYY-MM-DD'));
   const [unmarkedSubjects, setUnmarkedSubjects] = useState<Subject[]>([]);
   const [markedSubjects, setMarkedSubjects] = useState<Subject[]>([]);
@@ -33,6 +33,43 @@ export const AttendanceProvider = ({ children }: { children: React.ReactNode }) 
   const [attendanceLoading, setAttendanceLoading] = useState(true);
   const [holidayLoading, setHolidayLoading] = useState(false);
   const [friendsLoading, setFriendsLoading] = useState(true);
+
+  const getMarkedKey = useCallback((uid: string, targetDate: string) => `marked_classes_${uid}_${targetDate}`, []);
+  const getUnmarkedKey = useCallback((uid: string, targetDate: string) => `unmarked_classes_${uid}_${targetDate}`, []);
+
+  // Instantly load from localStorage on mount or date/user change (SWR cache)
+  useEffect(() => {
+    if (!isAuthenticated || loading) return;
+    const uid = userId || 'guest';
+    const cachedMarked = localStorage.getItem(getMarkedKey(uid, date));
+    const cachedUnmarked = localStorage.getItem(getUnmarkedKey(uid, date));
+
+    if (cachedMarked) {
+      try {
+        setMarkedSubjects(JSON.parse(cachedMarked));
+      } catch (e) {
+        console.error("Error parsing cached marked classes:", e);
+      }
+    } else {
+      setMarkedSubjects([]);
+    }
+
+    if (cachedUnmarked) {
+      try {
+        setUnmarkedSubjects(JSON.parse(cachedUnmarked));
+      } catch (e) {
+        console.error("Error parsing cached unmarked classes:", e);
+      }
+    } else {
+      setUnmarkedSubjects([]);
+    }
+
+    if (cachedMarked || cachedUnmarked) {
+      setAttendanceLoading(false);
+    } else {
+      setAttendanceLoading(true);
+    }
+  }, [date, isAuthenticated, loading, userId, getMarkedKey, getUnmarkedKey]);
 
   const fetchCalendarData = useCallback(async (retryCount = 0) => {
     try {
@@ -92,13 +129,24 @@ export const AttendanceProvider = ({ children }: { children: React.ReactNode }) 
           )
       );
       setUnmarkedSubjects(filteredSubjects);
+
+      const uid = userId || 'guest';
+      localStorage.setItem(getUnmarkedKey(uid, date), JSON.stringify(filteredSubjects));
     } catch (error) {
       console.error('Error fetching subjects:', error);
     }
-  }, [date]);
+  }, [date, userId, getUnmarkedKey]);
 
   const fetchSummary = useCallback(async (retryCount = 0) => {
-    setAttendanceLoading(true);
+    const uid = userId || 'guest';
+    const cachedMarked = localStorage.getItem(getMarkedKey(uid, date));
+    const cachedUnmarked = localStorage.getItem(getUnmarkedKey(uid, date));
+
+    // Only set loading to true if we don't have a cache hit yet
+    if (!cachedMarked && !cachedUnmarked) {
+      setAttendanceLoading(true);
+    }
+
     try {
       const res = await API.get(`/attendance/summary?date=${date}`);
 
@@ -112,6 +160,8 @@ export const AttendanceProvider = ({ children }: { children: React.ReactNode }) 
 
       const summaryArray: Subject[] = res.data.summary || [];
       setMarkedSubjects(summaryArray);
+      localStorage.setItem(getMarkedKey(uid, date), JSON.stringify(summaryArray));
+
       await fetchSubjects(summaryArray);
     } catch (error: any) {
       // Retry on 503 or 500 (server starting or DB down) — up to 3 times, 3s apart
@@ -124,7 +174,7 @@ export const AttendanceProvider = ({ children }: { children: React.ReactNode }) 
     } finally {
       setAttendanceLoading(false);
     }
-  }, [date, fetchSubjects]);
+  }, [date, userId, getMarkedKey, getUnmarkedKey, fetchSubjects]);
 
   const loadExistingInvites = useCallback(async (signal?: AbortSignal) => {
     try {
@@ -138,6 +188,8 @@ export const AttendanceProvider = ({ children }: { children: React.ReactNode }) 
   }, [setInvites]);
 
   const handleAttendance = useCallback(async (subject: Subject, status: string) => {
+    const uid = userId || 'guest';
+
     // Check if it was already marked to know how to rollback on failure
     const previousMarkedEntry = markedSubjects.find(s =>
       s.id === subject.id ||
@@ -145,27 +197,38 @@ export const AttendanceProvider = ({ children }: { children: React.ReactNode }) 
     );
 
     if (subject.isDummy) {
-      setUnmarkedSubjects(prev => prev.filter(s => s.id !== subject.id));
-      setMarkedSubjects(prev => {
-        const filtered = prev.filter(s =>
+      const updatedUnmarked = unmarkedSubjects.filter(s => s.id !== subject.id);
+      const updatedMarked = [
+        ...markedSubjects.filter(s =>
           s.id !== subject.id &&
           (s.subjectName || s.subject || '').toLowerCase() !== (subject.subjectName || subject.subject || '').toLowerCase()
-        );
-        return [...filtered, { ...subject, status }];
-      });
+        ),
+        { ...subject, status }
+      ];
+
+      setUnmarkedSubjects(updatedUnmarked);
+      setMarkedSubjects(updatedMarked);
+      localStorage.setItem(getUnmarkedKey(uid, date), JSON.stringify(updatedUnmarked));
+      localStorage.setItem(getMarkedKey(uid, date), JSON.stringify(updatedMarked));
+
       toast.success(`Demo: Marked "${subject.subjectName || subject.subject}" as ${status}. Configure your actual schedule in Setup Schedule!`);
       return;
     }
 
     // Optimistically update the UI instantly
-    setUnmarkedSubjects(prev => prev.filter(s => s.id !== subject.id));
-    setMarkedSubjects(prev => {
-      const filtered = prev.filter(s =>
+    const updatedUnmarked = unmarkedSubjects.filter(s => s.id !== subject.id);
+    const updatedMarked = [
+      ...markedSubjects.filter(s =>
         s.id !== subject.id &&
         (s.subjectName || s.subject || '').toLowerCase() !== (subject.subjectName || subject.subject || '').toLowerCase()
-      );
-      return [...filtered, { ...subject, status }];
-    });
+      ),
+      { ...subject, status }
+    ];
+
+    setUnmarkedSubjects(updatedUnmarked);
+    setMarkedSubjects(updatedMarked);
+    localStorage.setItem(getUnmarkedKey(uid, date), JSON.stringify(updatedUnmarked));
+    localStorage.setItem(getMarkedKey(uid, date), JSON.stringify(updatedMarked));
 
     try {
       await API.post('/attendance/mark', {
@@ -182,23 +245,31 @@ export const AttendanceProvider = ({ children }: { children: React.ReactNode }) 
       toast.error(`Failed to mark attendance as ${status}.`);
 
       // Revert optimistic update on failure
+      let revertedMarked = [...markedSubjects];
+      let revertedUnmarked = [...unmarkedSubjects];
+
       if (previousMarkedEntry) {
-        setMarkedSubjects(prev => {
-          const filtered = prev.filter(s =>
+        revertedMarked = [
+          ...markedSubjects.filter(s =>
             s.id !== subject.id &&
             (s.subjectName || s.subject || '').toLowerCase() !== (subject.subjectName || subject.subject || '').toLowerCase()
-          );
-          return [...filtered, previousMarkedEntry];
-        });
+          ),
+          previousMarkedEntry
+        ];
       } else {
-        setMarkedSubjects(prev => prev.filter(s =>
+        revertedMarked = markedSubjects.filter(s =>
           s.id !== subject.id &&
           (s.subjectName || s.subject || '').toLowerCase() !== (subject.subjectName || subject.subject || '').toLowerCase()
-        ));
-        setUnmarkedSubjects(prev => [...prev, subject]);
+        );
+        revertedUnmarked = [...unmarkedSubjects, subject];
       }
+
+      setMarkedSubjects(revertedMarked);
+      setUnmarkedSubjects(revertedUnmarked);
+      localStorage.setItem(getUnmarkedKey(uid, date), JSON.stringify(revertedUnmarked));
+      localStorage.setItem(getMarkedKey(uid, date), JSON.stringify(revertedMarked));
     }
-  }, [date, fetchSubjectStats, markedSubjects]);
+  }, [date, userId, fetchSubjectStats, markedSubjects, unmarkedSubjects, getMarkedKey, getUnmarkedKey]);
 
   const markHoliday = useCallback(async () => {
     const hasDummy = unmarkedSubjects.some(s => s.isDummy);

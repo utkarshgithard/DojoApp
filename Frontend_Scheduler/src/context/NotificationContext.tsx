@@ -110,17 +110,32 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
         
         // Show HTML5 Notification if permitted
         if (typeof window !== 'undefined' && window.Notification?.permission === 'granted') {
-          const bodyText = notification.type === 'like' 
-            ? `${notification.sender.name} liked your post.` 
-            : `${notification.sender.name} commented on your post.`;
+          let bodyText = "";
+          if (notification.type === 'like') bodyText = `${notification.sender.name} liked your post.`;
+          else if (notification.type === 'comment') bodyText = `${notification.sender.name} commented on your post.`;
+          else if (notification.type === 'follow_request') bodyText = `${notification.sender.name} started following you.`;
+          else if (notification.type === 'friendship_mutual') bodyText = `You and ${notification.sender.name} are now friends!`;
+          else bodyText = `New update from ${notification.sender.name}`;
+
           new window.Notification('New Notification!', { body: bodyText });
         }
 
         // Show premium sonner toast
-        const titleText = notification.type === 'like' ? 'New Like! ❤️' : 'New Comment! 💬';
-        const bodyText = notification.type === 'like' 
-          ? `${notification.sender.name} liked your post.` 
-          : `${notification.sender.name} commented on your post.`;
+        let titleText = 'New Notification! 🔔';
+        let bodyText = '';
+        if (notification.type === 'like') {
+          titleText = 'New Like! ❤️';
+          bodyText = `${notification.sender.name} liked your post.`;
+        } else if (notification.type === 'comment') {
+          titleText = 'New Comment! 💬';
+          bodyText = `${notification.sender.name} commented on your post.`;
+        } else if (notification.type === 'follow_request') {
+          titleText = 'New Follower! 👤';
+          bodyText = `${notification.sender.name} started following you. Follow back to become friends!`;
+        } else if (notification.type === 'friendship_mutual') {
+          titleText = 'New Friend! 🤝';
+          bodyText = `You and ${notification.sender.name} are now friends!`;
+        }
 
         toast.info(titleText, {
           description: bodyText,
@@ -128,7 +143,9 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
             label: 'View',
             onClick: () => {
               markAsRead(notification.id);
-              if (notification.postId) {
+              if (notification.type === 'follow_request' || notification.type === 'friendship_mutual') {
+                router.push('/friends');
+              } else if (notification.postId) {
                 router.push(`/community/post/${notification.postId}`);
               } else {
                 router.push('/notifications');

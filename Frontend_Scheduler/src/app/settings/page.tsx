@@ -197,9 +197,9 @@ export default function SettingsPage() {
     } disabled:opacity-40`;
 
   const tabs = [
-    { id: 'profile',       label: 'Profile Settings', icon: <User size={14} /> },
-    { id: 'appearance',    label: 'Theme Styling',    icon: <Palette size={14} /> },
-    { id: 'notifications', label: 'Notifications',    icon: <Bell size={14} /> },
+    { id: 'profile', label: 'Profile Settings', icon: <User size={14} /> },
+    { id: 'appearance', label: 'Theme Styling', icon: <Palette size={14} /> },
+    { id: 'notifications', label: 'Notifications', icon: <Bell size={14} /> },
   ];
 
   const handleTogglePush = async () => {
@@ -254,37 +254,35 @@ export default function SettingsPage() {
           <p className={`text-[13px] ${muted} mt-0.5`}>Manage your personal profile details, copy your friend invitation key, or customize themes.</p>
         </div>
 
-        <div className="flex flex-col md:flex-row gap-8 items-start">
-          {/* Settings Sidebar */}
-          <div className="w-full md:w-56 flex-shrink-0">
-            <div className={`${cardClass} p-3 space-y-1`}>
-              {tabs.map((item) => (
-                <button
-                  key={item.id}
-                  onClick={() => setActiveTab(item.id)}
-                  className={`w-full text-left px-3.5 py-2.5 rounded-lg text-[13px] font-medium transition-colors flex items-center gap-2.5 ${activeTab === item.id
-                      ? dark
-                        ? 'bg-white text-black'
-                        : 'bg-black text-white'
-                      : dark
-                        ? 'text-gray-400 hover:text-white hover:bg-gray-950'
-                        : 'text-gray-600 hover:text-black hover:bg-gray-50'
-                    }`}
-                >
-                  {item.icon}
-                  <span>{item.label}</span>
-                </button>
-              ))}
-            </div>
+        <div className="flex flex-col gap-3">
+          {/* Horizontal Navigation Pills */}
+          <div className="flex overflow-x-auto no-scrollbar gap-2 pb-1">
+            {tabs.map((item) => (
+              <button
+                key={item.id}
+                onClick={() => setActiveTab(item.id)}
+                className={`flex-shrink-0 px-4 py-2 rounded-full text-[13px] font-medium transition-colors flex items-center gap-2 border ${activeTab === item.id
+                  ? dark
+                    ? 'bg-white text-black border-white'
+                    : 'bg-black text-white border-black'
+                  : dark
+                    ? 'bg-transparent border-gray-800 text-gray-400 hover:text-white hover:bg-gray-900/50'
+                    : 'bg-transparent border-gray-200 text-gray-600 hover:text-black hover:bg-gray-50'
+                  }`}
+              >
+                {item.icon}
+                <span>{item.label}</span>
+              </button>
+            ))}
           </div>
 
           {/* Settings Main Panel */}
-          <div className="flex-1 w-full">
+          <div className="w-full">
             <div className={cardClass}>
 
               {activeTab === 'profile' && (
                 !userDetails ? (
-                  <div className="space-y-6 animate-pulse">
+                  <div className="space-y-5 animate-pulse">
                     <div>
                       <div className="h-5 bg-gray-200 dark:bg-gray-800 rounded w-1/4 mb-2"></div>
                       <div className="h-4 bg-gray-100 dark:bg-gray-900/50 rounded w-1/2"></div>
@@ -300,9 +298,9 @@ export default function SettingsPage() {
                     </div>
                   </div>
                 ) : (
-                  <div className="space-y-6">
+                  <div className="space-y-5">
                     <div className="flex items-center gap-4 border-b pb-5 border-gray-100 dark:border-gray-900">
-                      <div 
+                      <div
                         onClick={() => fileInputRef.current?.click()}
                         className="group relative w-16 h-16 rounded-full overflow-hidden border border-gray-200 dark:border-gray-800 text-[20px] font-semibold flex items-center justify-center bg-gray-50 dark:bg-gray-900 shrink-0 cursor-pointer select-none shadow-sm transition-transform active:scale-95"
                         title="Upload profile photo"
@@ -325,7 +323,7 @@ export default function SettingsPage() {
                         ) : (
                           '👤'
                         )}
-                        
+
                         {/* Hover Overlay with Camera Icon */}
                         <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-0.5 text-white">
                           <Camera size={15} />
@@ -334,7 +332,7 @@ export default function SettingsPage() {
                       </div>
 
                       {/* Hidden File Input */}
-                      <input 
+                      <input
                         type="file"
                         ref={fileInputRef}
                         onChange={handleFileChange}
@@ -343,7 +341,7 @@ export default function SettingsPage() {
                       />
 
                       {/* Hidden Camera Input */}
-                      <input 
+                      <input
                         type="file"
                         ref={cameraInputRef}
                         onChange={handleFileChange}
@@ -377,7 +375,7 @@ export default function SettingsPage() {
                     </div>
 
                     {/* Friend Code Master Card */}
-                    <div className={`p-4 rounded-xl border flex justify-between items-center gap-4 ${dark ? 'border-gray-800 bg-gray-950/20' : 'border-gray-200 bg-gray-50/50'
+                    <div className={`p-2 rounded-xl border flex justify-between items-center gap-4 ${dark ? 'border-gray-800 bg-gray-950/20' : 'border-gray-200 bg-gray-50/50'
                       }`}>
                       <div>
                         <p className={`text-[10px] font-semibold uppercase tracking-wider ${muted} mb-1`}>Your Dojo Friend Code</p>
@@ -393,8 +391,8 @@ export default function SettingsPage() {
                       </button>
                     </div>
 
-                    <div className="space-y-4">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                         {/* Name input */}
                         <div>
                           <label className={labelClass}>Full Name</label>
@@ -439,11 +437,11 @@ export default function SettingsPage() {
                     </div>
 
                     {/* Actions */}
-                    <div className="pt-4 border-t border-gray-50 dark:border-gray-900 flex justify-end">
+                    <div className="pt-2 border-t border-gray-50 dark:border-gray-900 flex justify-end">
                       <button
                         type="button"
                         onClick={handleSave}
-                        disabled={saving}
+                        disabled={saving || (userData.name === (details.name || '') && userData.bio === (details.bio || '') && userData.avatarUrl === (details.avatarUrl || auth.currentUser?.photoURL || ''))}
                         className={primaryBtn}
                       >
                         {saving ? 'Saving changes...' : 'Save Settings'}
@@ -464,8 +462,8 @@ export default function SettingsPage() {
                     {/* Light Mode Selector Card */}
                     <div
                       className={`border rounded-xl p-4 cursor-pointer flex flex-col transition-all ${!darkMode
-                          ? 'border-black dark:border-white bg-gray-50/50'
-                          : 'border-gray-200 dark:border-gray-800 hover:border-gray-400 dark:hover:border-gray-600'
+                        ? 'border-black dark:border-white bg-gray-50/50'
+                        : 'border-gray-200 dark:border-gray-800 hover:border-gray-400 dark:hover:border-gray-600'
                         }`}
                       onClick={() => darkMode && toggleDarkMode()}
                     >
@@ -478,8 +476,8 @@ export default function SettingsPage() {
                     {/* Dark Mode Selector Card */}
                     <div
                       className={`border rounded-xl p-4 cursor-pointer flex flex-col transition-all ${darkMode
-                          ? 'border-white dark:border-black bg-gray-950/20'
-                          : 'border-gray-200 dark:border-gray-800 hover:border-gray-300 dark:hover:border-gray-700'
+                        ? 'border-white dark:border-black bg-gray-950/20'
+                        : 'border-gray-200 dark:border-gray-800 hover:border-gray-300 dark:hover:border-gray-700'
                         }`}
                       onClick={() => !darkMode && toggleDarkMode()}
                     >
@@ -527,21 +525,19 @@ export default function SettingsPage() {
                       {/* Toggle card */}
                       <div className={`flex items-center justify-between p-4 rounded-xl border ${dark ? 'border-gray-800 bg-gray-950/20' : 'border-gray-200 bg-gray-50/50'}`}>
                         <div className="flex items-center gap-3">
-                          <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${
-                            pushSubscribed
-                              ? dark ? 'bg-emerald-950/40 text-emerald-400' : 'bg-emerald-50 text-emerald-600'
-                              : dark ? 'bg-gray-900 text-gray-500' : 'bg-gray-100 text-gray-400'
-                          }`}>
+                          <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${pushSubscribed
+                            ? dark ? 'bg-emerald-950/40 text-emerald-400' : 'bg-emerald-50 text-emerald-600'
+                            : dark ? 'bg-gray-900 text-gray-500' : 'bg-gray-100 text-gray-400'
+                            }`}>
                             {pushSubscribed ? <BellRing size={16} /> : <BellOff size={16} />}
                           </div>
                           <div>
                             <p className="text-[13px] font-medium">{pushSubscribed ? 'Notifications On' : 'Notifications Off'}</p>
                             <p className={`text-[11px] ${muted}`}>
-                              Permission: <span className={`font-semibold ${
-                                pushPermission === 'granted' ? 'text-emerald-500'
+                              Permission: <span className={`font-semibold ${pushPermission === 'granted' ? 'text-emerald-500'
                                 : pushPermission === 'denied' ? 'text-red-500'
-                                : dark ? 'text-gray-300' : 'text-gray-600'
-                              }`}>{pushPermission === 'granted' ? 'Granted' : pushPermission === 'denied' ? 'Blocked' : 'Not yet asked'}</span>
+                                  : dark ? 'text-gray-300' : 'text-gray-600'
+                                }`}>{pushPermission === 'granted' ? 'Granted' : pushPermission === 'denied' ? 'Blocked' : 'Not yet asked'}</span>
                             </p>
                           </div>
                         </div>
@@ -552,23 +548,20 @@ export default function SettingsPage() {
                           onClick={handleTogglePush}
                           disabled={pushLoading || pushPermission === 'denied'}
                           aria-label={pushSubscribed ? 'Disable push notifications' : 'Enable push notifications'}
-                          className={`relative w-11 h-6 rounded-full border-2 transition-all duration-300 focus:outline-none disabled:opacity-40 ${
-                            pushSubscribed
-                              ? 'bg-emerald-500 border-emerald-500'
-                              : dark ? 'bg-gray-800 border-gray-700' : 'bg-gray-200 border-gray-300'
-                          }`}
+                          className={`relative w-11 h-6 rounded-full border-2 transition-all duration-300 focus:outline-none disabled:opacity-40 ${pushSubscribed
+                            ? 'bg-emerald-500 border-emerald-500'
+                            : dark ? 'bg-gray-800 border-gray-700' : 'bg-gray-200 border-gray-300'
+                            }`}
                         >
-                          <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform duration-300 ${
-                            pushSubscribed ? 'translate-x-5' : 'translate-x-0'
-                          }`} />
+                          <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform duration-300 ${pushSubscribed ? 'translate-x-5' : 'translate-x-0'
+                            }`} />
                         </button>
                       </div>
 
                       {/* Blocked warning */}
                       {pushPermission === 'denied' && (
-                        <div className={`p-3.5 rounded-xl border text-[12px] leading-relaxed ${
-                          dark ? 'border-red-500/30 bg-red-950/20 text-red-300' : 'border-red-200 bg-red-50 text-red-700'
-                        }`}>
+                        <div className={`p-3.5 rounded-xl border text-[12px] leading-relaxed ${dark ? 'border-red-500/30 bg-red-950/20 text-red-300' : 'border-red-200 bg-red-50 text-red-700'
+                          }`}>
                           <p className="font-semibold mb-0.5">Notifications are blocked in your browser.</p>
                           <p>To re-enable: click the 🔒 icon in your browser address bar → Notifications → Allow.</p>
                         </div>
@@ -608,7 +601,7 @@ export default function SettingsPage() {
                 <X size={18} />
               </button>
             </div>
-            
+
             <div className="relative w-full h-[300px] bg-black">
               <Cropper
                 image={imageToCrop}
@@ -621,7 +614,7 @@ export default function SettingsPage() {
                 onZoomChange={setZoom}
               />
             </div>
-            
+
             <div className={`p-4 border-t flex flex-col gap-4 ${dark ? 'border-zinc-800 bg-zinc-900' : 'border-zinc-100 bg-zinc-50'}`}>
               <div className="flex items-center gap-3 px-2">
                 <span className={`text-[12px] font-medium ${dark ? 'text-zinc-400' : 'text-zinc-500'}`}>Zoom</span>
@@ -636,7 +629,7 @@ export default function SettingsPage() {
                   className="w-full h-1 bg-zinc-200 rounded-lg appearance-none cursor-pointer dark:bg-zinc-700"
                 />
               </div>
-              
+
               <div className="flex gap-3 justify-end mt-2">
                 <button
                   type="button"

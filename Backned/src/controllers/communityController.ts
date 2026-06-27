@@ -411,6 +411,7 @@ export const toggleFollow = async (req: AuthenticatedRequest, res: Response): Pr
   try {
     const followerId = req.userId!;
     const followingId = req.params.userId as string;
+    const io = req.app.get('io');
 
     if (followerId === followingId) {
       res.status(400).json({ error: 'You cannot follow yourself' });
@@ -428,13 +429,56 @@ export const toggleFollow = async (req: AuthenticatedRequest, res: Response): Pr
     });
 
     if (existing) {
+      // 1. Delete follow record
       await prisma.userFollow.delete({ where: { followerId_followingId: { followerId, followingId } } });
+      
+      // 2. Dissolve mutual friendship if they were friends
+      await prisma.userFriend.deleteMany({
+        where: {
+          OR: [
+            { userId: followerId, friendId: followingId },
+            { userId: followingId, friendId: followerId },
+          ]
+        }
+      });
+
       const followerCount = await prisma.userFollow.count({ where: { followingId } });
-      res.json({ following: false, followerCount });
+      res.json({ following: false, followerCount, isFriend: false });
     } else {
+      // 1. Create follow record
       await prisma.userFollow.create({ data: { followerId, followingId } });
+
+      // 2. Check if mutual follow exists
+      const mutualFollow = await prisma.userFollow.findUnique({
+        where: {
+          followerId_followingId: {
+            followerId: followingId, // B follows A
+            followingId: followerId, // A follows B
+          }
+        }
+      });
+
+      let isFriend = false;
+      if (mutualFollow) {
+        // Automatically become friends!
+        await prisma.userFriend.createMany({
+          data: [
+            { userId: followerId, friendId: followingId },
+            { userId: followingId, friendId: followerId },
+          ],
+          skipDuplicates: true,
+        });
+        isFriend = true;
+
+        // Trigger real-time mutual friendship notification
+        await createNotification(followingId, followerId, 'friendship_mutual', undefined, undefined, io);
+      } else {
+        // Trigger real-time follow request notification
+        await createNotification(followingId, followerId, 'follow_request', undefined, undefined, io);
+      }
+
       const followerCount = await prisma.userFollow.count({ where: { followingId } });
-      res.json({ following: true, followerCount });
+      res.json({ following: true, followerCount, isFriend });
     }
   } catch (err) {
     console.error('[toggleFollow]', err);

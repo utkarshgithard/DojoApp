@@ -14,7 +14,6 @@ import attendanceRouter from './routes/attendanceRoutes.js';
 import studySessionRouter from './routes/studySessionRoutes.js';
 import pushRouter from './routes/pushRoutes.js';
 import iceServersRouter from './routes/iceServersRoute.js';
-import notesRouter from './routes/notesRoutes.js';
 import communityRouter from './routes/communityRoutes.js';
 import communityGroupRouter from './routes/communityGroupRoutes.js';
 import notificationRouter from './routes/notificationRoutes.js';
@@ -61,7 +60,6 @@ app.use('/api/schedule', scheduleRouter);
 app.use('/api/attendance', attendanceRouter);
 app.use('/api/study-session', studySessionRouter);
 app.use('/api/push', pushRouter);
-app.use('/api/notes', notesRouter);
 app.use('/api/community', communityRouter);
 app.use('/api/groups', communityGroupRouter);
 app.use('/api/notifications', notificationRouter);
@@ -178,14 +176,14 @@ function startHotScoreCronJob() {
 
 if (isServerless) {
   // In serverless mode, attempt connection lazily (no blocking)
-  connectWithRetry().catch(() => {});
+  connectWithRetry().catch(() => { });
 } else {
   const PORT = process.env.PORT || 5000;
 
   // Start listening immediately — DB connects in the background
   server.listen(PORT, () => {
     console.log(`🚀 Server running on port ${PORT}`);
-    connectWithRetry().catch(() => {});
+    connectWithRetry().catch(() => { });
   });
 }
 

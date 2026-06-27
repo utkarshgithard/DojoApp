@@ -9,6 +9,8 @@ import { PostProvider } from "@/context/PostContext";
 import { CommunityGroupProvider } from "@/context/CommunityGroupContext";
 import { NetworkProvider } from "@/context/NetworkContext";
 import { NotificationProvider } from "@/context/NotificationContext";
+import { TimerProvider } from "@/context/TimerContext";
+import { CalendarProvider } from "@/context/CalendarContext";
 import React, { useState, useEffect } from "react";
 import { usePathname } from "next/navigation";
 import Sidebar from "./Sidebar";
@@ -17,6 +19,7 @@ import InternetStatus from "./InternetStatus";
 import OnboardingTour from "./OnboardingTour";
 import { Toaster } from "@/components/ui/sonner";
 import AuthPromptModal from "./community/AuthPromptModal";
+import AiChatbot from "./AiChatbot";
 
 function ClientProvidersInner({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuth() as any;
@@ -24,8 +27,8 @@ function ClientProvidersInner({ children }: { children: React.ReactNode }) {
   const noNavbarRoutes = ['/', '/login', '/register', '/verify', '/verify-email'];
   const showNavbar = !noNavbarRoutes.some(route => pathname === route || pathname.startsWith('/verify-email/'))
     && !pathname.startsWith('/session/');
-  
-  const sidebarRoutes = ['/dashboard', '/sessions', '/friends', '/community', '/setup-schedule', '/calendar', '/settings', '/notifications'];
+
+  const sidebarRoutes = ['/dashboard', '/sessions', '/friends', '/community', '/setup-schedule', '/calendar', '/exam-prep', '/settings', '/notifications'];
   const showSidebar = isAuthenticated && sidebarRoutes.some(route => pathname === route || pathname.startsWith(route + '/'));
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -61,6 +64,7 @@ function ClientProvidersInner({ children }: { children: React.ReactNode }) {
       )}
       <Toaster />
       <AuthPromptModal />
+      <AiChatbot />
     </>
   );
 }
@@ -76,9 +80,13 @@ export default function ClientProviders({ children }: { children: React.ReactNod
                 <CommunityGroupProvider>
                   <NetworkProvider>
                     <DarkModeProvider>
-                      <ClientProvidersInner>
-                        {children}
-                      </ClientProvidersInner>
+                      <TimerProvider>
+                        <CalendarProvider>
+                          <ClientProvidersInner>
+                            {children}
+                          </ClientProvidersInner>
+                        </CalendarProvider>
+                      </TimerProvider>
                     </DarkModeProvider>
                   </NetworkProvider>
                 </CommunityGroupProvider>

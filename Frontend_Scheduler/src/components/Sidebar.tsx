@@ -3,14 +3,14 @@
 import React, { useState, useContext, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
-import { 
-  LayoutDashboard, 
-  Calendar, 
-  Clock, 
-  Settings, 
-  LogOut, 
-  Sun, 
-  Moon, 
+import {
+  LayoutDashboard,
+  Calendar,
+  Clock,
+  Settings,
+  LogOut,
+  Sun,
+  Moon,
   User,
   Users,
   UserPlus,
@@ -19,7 +19,8 @@ import {
   Hash,
   ChevronLeft,
   ChevronRight,
-  Bell
+  Bell,
+  BookOpen
 } from 'lucide-react';
 import { useDarkMode } from '@/context/DarkModeContext';
 import { AuthContext } from '@/context/authContext';
@@ -98,13 +99,13 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed = false, toggleCollapse }) 
 
   const navItems = [
     { name: 'Community', href: '/community', icon: <Hash size={16} /> },
-    { name: 'Sessions', href: '/sessions', icon: <Users size={16} /> },
-    { name: 'Friends', href: '/friends', icon: <UserPlus size={16} /> },
     { name: 'Dashboard', href: '/dashboard', icon: <LayoutDashboard size={16} /> },
+    { name: 'Sessions', href: '/sessions', icon: <Users size={16} /> },
+    { name: 'Exam Prep', href: '/exam-prep', icon: <BookOpen size={16} /> },
+    { name: 'Friends', href: '/friends', icon: <UserPlus size={16} /> },
+    { name: 'Your Class', href: '/calendar', icon: <Calendar size={16} /> },
     { name: 'Notifications', href: '/notifications', icon: <Bell size={16} /> },
-    { name: 'Add Classes', href: '/setup-schedule', icon: <Clock size={16} /> },
-    { name: 'Calendar', href: '/calendar', icon: <Calendar size={16} /> },
-    { name: 'Settings', href: '/settings', icon: <Settings size={16} /> },
+    { name: 'Profile', href: '/settings', icon: <Settings size={16} /> },
   ];
 
   return (
@@ -137,13 +138,12 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed = false, toggleCollapse }) 
             />
           </Link>
         )}
-        
+
         {toggleCollapse && (
           <button
             onClick={toggleCollapse}
-            className={`absolute top-1/2 -translate-y-1/2 -right-3 w-6 h-6 rounded-full border shadow-sm flex items-center justify-center transition-colors z-50 ${
-              dark ? 'bg-black border-gray-800 text-gray-400 hover:text-white' : 'bg-white border-gray-200 text-gray-500 hover:text-black'
-            }`}
+            className={`absolute top-1/2 -translate-y-1/2 -right-3 w-6 h-6 rounded-full border shadow-sm flex items-center justify-center transition-colors z-50 ${dark ? 'bg-black border-gray-800 text-gray-400 hover:text-white' : 'bg-white border-gray-200 text-gray-500 hover:text-black'
+              }`}
             title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
           >
             {collapsed ? <ChevronRight size={12} /> : <ChevronLeft size={12} />}
@@ -187,11 +187,11 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed = false, toggleCollapse }) 
                   <div className="animate-float flex items-center relative">
                     {/* Left pointing arrow (triangle) */}
                     <div className="absolute right-full top-1/2 -translate-y-1/2 w-0 h-0 border-t-[6px] border-t-transparent border-b-[6px] border-b-transparent border-r-[8px] border-r-white dark:border-r-zinc-900 filter drop-shadow-[-1px_0_1px_rgba(0,0,0,0.1)]"></div>
-                    
+
                     {/* The cloud speech bubble */}
                     <div className="backdrop-blur-md bg-white/95 dark:bg-zinc-900/95 text-zinc-900 dark:text-zinc-100 border border-zinc-200/80 dark:border-zinc-800/80 shadow-2xl rounded-2xl p-3.5 pr-8 min-w-[200px] max-w-[250px] relative">
                       {/* Dismiss close button */}
-                      <button 
+                      <button
                         onClick={(e) => {
                           e.preventDefault();
                           e.stopPropagation();
@@ -231,7 +231,8 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed = false, toggleCollapse }) 
             </div>
           );
         })}
-        <style dangerouslySetInnerHTML={{__html: `
+        <style dangerouslySetInnerHTML={{
+          __html: `
           @keyframes float {
             0%, 100% { transform: translateY(0); }
             50% { transform: translateY(-5px); }
@@ -245,11 +246,10 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed = false, toggleCollapse }) 
       {/* Buy Me a Coffee Widget */}
       {!collapsed ? (
         <div className="px-4 pb-3">
-          <div className={`p-2.5 rounded-xl border flex items-center justify-between gap-2 transition-all ${
-            dark 
-              ? 'bg-amber-950/10 border-amber-900/20 text-amber-200' 
+          <div className={`p-2.5 rounded-xl border flex items-center justify-between gap-2 transition-all ${dark
+              ? 'bg-amber-950/10 border-amber-900/20 text-amber-200'
               : 'bg-amber-50/60 border-amber-100 text-amber-900'
-          }`}>
+            }`}>
             <div className="flex items-center gap-2">
               <div className="w-7 h-7 rounded-full bg-amber-500/15 flex items-center justify-center shrink-0">
                 <Coffee size={13} className="text-amber-500" />
@@ -292,9 +292,8 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed = false, toggleCollapse }) 
             <span className={`text-[12px] font-medium ${muted}`}>Theme Mode</span>
             <button
               onClick={toggleDarkMode}
-              className={`p-1.5 rounded-lg border transition-colors ${
-                dark ? 'border-gray-800 text-gray-300 hover:bg-gray-900' : 'border-gray-200 text-gray-600 hover:bg-gray-50'
-              }`}
+              className={`p-1.5 rounded-lg border transition-colors ${dark ? 'border-gray-800 text-gray-300 hover:bg-gray-900' : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+                }`}
               aria-label="Toggle dark mode"
             >
               {dark ? <Sun size={13} /> : <Moon size={13} />}
@@ -303,9 +302,8 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed = false, toggleCollapse }) 
         ) : (
           <button
             onClick={toggleDarkMode}
-            className={`w-10 h-10 flex items-center justify-center rounded-xl border transition-colors ${
-              dark ? 'border-gray-800 text-gray-300 hover:bg-gray-900' : 'border-gray-200 text-gray-600 hover:bg-gray-50'
-            }`}
+            className={`w-10 h-10 flex items-center justify-center rounded-xl border transition-colors ${dark ? 'border-gray-800 text-gray-300 hover:bg-gray-900' : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+              }`}
             aria-label="Toggle dark mode"
             title="Toggle theme"
           >
@@ -317,9 +315,8 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed = false, toggleCollapse }) 
         <div className={`flex items-center ${collapsed ? 'flex-col gap-3 w-full' : 'justify-between gap-3 px-2 w-full'}`}>
           <div className={`flex items-center gap-2.5 min-w-0 ${collapsed ? 'justify-center' : ''}`}>
             {/* User Photo */}
-            <div className={`w-8 h-8 rounded-full border text-[12.5px] font-semibold flex items-center justify-center overflow-hidden shrink-0 ${
-              dark ? 'border-gray-800 bg-gray-900 text-white' : 'border-gray-200 bg-gray-50 text-gray-900'
-            }`}>
+            <div className={`w-8 h-8 rounded-full border text-[12.5px] font-semibold flex items-center justify-center overflow-hidden shrink-0 ${dark ? 'border-gray-800 bg-gray-900 text-white' : 'border-gray-200 bg-gray-50 text-gray-900'
+              }`}>
               {profileLoading ? (
                 <span className="w-3.5 h-3.5 rounded-full border-[1.5px] border-current border-t-transparent animate-spin text-gray-400" />
               ) : userPhoto ? (
@@ -359,19 +356,17 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed = false, toggleCollapse }) 
       {/* Buy Me a Coffee QR Modal */}
       {showCoffeeModal && (
         <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/70 backdrop-blur-md p-4 transition-all duration-300 pointer-events-auto">
-          <div 
-            className="fixed inset-0 cursor-default" 
+          <div
+            className="fixed inset-0 cursor-default"
             onClick={() => setShowCoffeeModal(false)}
           />
-          <div className={`relative z-10 w-full max-w-[320px] rounded-2xl border p-5 text-center shadow-2xl animate-in zoom-in-95 duration-200 ${
-            dark ? 'bg-zinc-950 border-zinc-800 text-white' : 'bg-white border-zinc-200 text-zinc-900'
-          }`}>
+          <div className={`relative z-10 w-full max-w-[320px] rounded-2xl border p-5 text-center shadow-2xl animate-in zoom-in-95 duration-200 ${dark ? 'bg-zinc-950 border-zinc-800 text-white' : 'bg-white border-zinc-200 text-zinc-900'
+            }`}>
             {/* Close button */}
             <button
               onClick={() => setShowCoffeeModal(false)}
-              className={`absolute top-4 right-4 p-1 rounded-lg transition-colors ${
-                dark ? 'hover:bg-zinc-900 text-zinc-400' : 'hover:bg-zinc-100 text-zinc-500'
-              }`}
+              className={`absolute top-4 right-4 p-1 rounded-lg transition-colors ${dark ? 'hover:bg-zinc-900 text-zinc-400' : 'hover:bg-zinc-100 text-zinc-500'
+                }`}
               title="Close"
             >
               <X size={15} />
@@ -390,16 +385,15 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed = false, toggleCollapse }) 
               </p>
 
               {/* QR Image Wrapper with Blur Effect */}
-              <div 
+              <div
                 className="relative group w-56 h-[340px] rounded-xl overflow-hidden shadow-md border border-zinc-150 dark:border-zinc-850 cursor-pointer select-none bg-white mb-4"
                 onClick={() => setQrBlurred(!qrBlurred)}
               >
                 <img
                   src="/qr-code.jpg"
                   alt="UPI Donation QR Code"
-                  className={`w-full h-full object-cover transition-all duration-500 ease-in-out ${
-                    qrBlurred ? 'blur-md brightness-[0.75] scale-98' : 'blur-none brightness-100 scale-100'
-                  }`}
+                  className={`w-full h-full object-cover transition-all duration-500 ease-in-out ${qrBlurred ? 'blur-md brightness-[0.75] scale-98' : 'blur-none brightness-100 scale-100'
+                    }`}
                 />
 
                 {/* Blur reveal overlay indicator */}

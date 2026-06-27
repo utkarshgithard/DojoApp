@@ -1,6 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -12,114 +9,95 @@ datasource db {
 }
 
 model User {
-  id                String    @id @default(uuid())
-  name              String
-  email             String    @unique
-  password          String
-  verified          Boolean   @default(false)
-  friendCode        String    @unique
-  verificationToken String?
-  bio               String?
-  avatarUrl         String?
-  role              UserRole  @default(student)
-  createdAt         DateTime  @default(now())
-
-  // Self-referential friends relationship
-  friends           UserFriend[] @relation("UserFriends")
-  friendOf          UserFriend[] @relation("FriendOf")
-
-  // Other relations
-  subjects            Subject[]
-  schedules           Schedule[]
-  attendanceRecords   AttendanceRecord[]
-  createdSessions     StudySession[]  @relation("SessionCreator")
-  participantIn       Participant[]
-  messages            Message[]
-  publicKey           UserPublicKey?
-  pushSubscriptions   PushSubscription[]
-  notes               Note[]
-
-  // Community posts & interactions
-  posts               Post[]
-  postLikes           PostLike[]
-  postComments        PostComment[]
-
-  // Follow
-  following           UserFollow[] @relation("Followers")   // people this user follows
-  followers           UserFollow[] @relation("Following")   // people who follow this user
-
-  // Shares
-  sharesSent          PostShare[]  @relation("SharesSent")
-  sharesReceived      PostShare[]  @relation("SharesReceived")
-
-  // Community groups
-  createdCommunities  Community[]       @relation("CommunityCreator")
-  communityMemberships CommunityMember[]
-  invitesSent         CommunityInvite[] @relation("InvitesSent")
-  invitesReceived     CommunityInvite[] @relation("InvitesReceived")
-  notificationsReceived Notification[] @relation("NotificationRecipient")
-  notificationsSent     Notification[] @relation("NotificationSender")
+  id                    String             @id @default(uuid())
+  name                  String
+  email                 String             @unique
+  password              String
+  verified              Boolean            @default(false)
+  friendCode            String             @unique
+  verificationToken     String?
+  bio                   String?
+  createdAt             DateTime           @default(now())
+  avatarUrl             String?
+  role                  UserRole           @default(student)
+  attendanceRecords     AttendanceRecord[]
+  createdCommunities    Community[]        @relation("CommunityCreator")
+  invitesSent           CommunityInvite[]  @relation("InvitesSent")
+  invitesReceived       CommunityInvite[]  @relation("InvitesReceived")
+  communityMemberships  CommunityMember[]
+  messages              Message[]
+  notificationsSent     Notification[]     @relation("NotificationSender")
+  notificationsReceived Notification[]     @relation("NotificationRecipient")
+  participantIn         Participant[]
+  posts                 Post[]
+  postComments          PostComment[]
+  postLikes             PostLike[]
+  sharesReceived        PostShare[]        @relation("SharesReceived")
+  sharesSent            PostShare[]        @relation("SharesSent")
+  pushSubscriptions     PushSubscription[]
+  schedules             Schedule?
+  studyLogs             StudyLog[]
+  createdSessions       StudySession[]     @relation("SessionCreator")
+  subjects              Subject[]
+  following             UserFollow[]       @relation("Followers")
+  followers             UserFollow[]       @relation("Following")
+  friendOf              UserFriend[]       @relation("FriendOf")
+  friends               UserFriend[]       @relation("UserFriends")
+  publicKey             UserPublicKey?
 }
-
 
 /// Stores the user's ECDH P-256 public key for E2EE room key distribution.
 /// Updated each time the user opens the chat (ephemeral keys per session).
 model UserPublicKey {
   userId    String   @id
-  publicKey String   // base64 raw ECDH P-256 public key
+  publicKey String
   updatedAt DateTime @updatedAt
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model UserFriend {
-  userId    String
-  friendId  String
-
-  user      User   @relation("UserFriends", fields: [userId], references: [id], onDelete: Cascade)
-  friend    User   @relation("FriendOf", fields: [friendId], references: [id], onDelete: Cascade)
+  userId   String
+  friendId String
+  friend   User   @relation("FriendOf", fields: [friendId], references: [id], onDelete: Cascade)
+  user     User   @relation("UserFriends", fields: [userId], references: [id], onDelete: Cascade)
 
   @@id([userId, friendId])
 }
 
 model Subject {
-  id      String   @id @default(uuid())
-  name    String
-  time    String?
-  days    String[] // e.g. ["monday", "tuesday"]
-  userId  String
-
-  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id              String          @id @default(uuid())
+  name            String
+  time            String?
+  days            String[]
+  userId          String
   scheduleEntries ScheduleEntry[]
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model Schedule {
-  id     String @id @default(uuid())
-  userId String @unique
-
+  id      String          @id @default(uuid())
+  userId  String          @unique
   user    User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   entries ScheduleEntry[]
 }
 
 model ScheduleEntry {
-  id         String @id @default(uuid())
+  id         String   @id @default(uuid())
   scheduleId String
   subjectId  String
-  day        String // "monday", "tuesday", etc.
-
-  schedule Schedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
-  subject  Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  day        String
+  schedule   Schedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  subject    Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
 }
 
 model AttendanceRecord {
-  id        String   @id @default(uuid())
+  id        String            @id @default(uuid())
   userId    String
-  date      String   // "YYYY-MM-DD"
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  user    User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  entries AttendanceEntry[]
+  date      String
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+  entries   AttendanceEntry[]
+  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, date])
 }
@@ -129,14 +107,7 @@ model AttendanceEntry {
   attendanceRecordId String
   subject            String
   status             AttendanceStatus
-
-  record AttendanceRecord @relation(fields: [attendanceRecordId], references: [id], onDelete: Cascade)
-}
-
-enum AttendanceStatus {
-  attended
-  missed
-  cancelled
+  record             AttendanceRecord @relation(fields: [attendanceRecordId], references: [id], onDelete: Cascade)
 }
 
 model StudySession {
@@ -144,17 +115,217 @@ model StudySession {
   creatorId       String
   subject         String
   startAt         DateTime
-  duration        Int           // minutes
+  duration        Int
   note            String        @default("")
   visibility      Visibility    @default(private)
   status          SessionStatus @default(pending)
   actualStartTime DateTime?
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
+  messages        Message[]
+  participants    Participant[]
+  creator         User          @relation("SessionCreator", fields: [creatorId], references: [id])
+}
 
-  creator      User          @relation("SessionCreator", fields: [creatorId], references: [id])
-  participants Participant[]
-  messages     Message[]
+model Participant {
+  id          String            @id @default(uuid())
+  sessionId   String
+  userId      String
+  status      ParticipantStatus @default(invited)
+  invitedAt   DateTime          @default(now())
+  respondedAt DateTime?
+  session     StudySession      @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  user        User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, userId])
+}
+
+model Message {
+  id            String       @id @default(uuid())
+  sessionId     String
+  userId        String
+  name          String
+  /// Plaintext body (empty string for E2EE messages; kept for backward compat)
+  text          String       @default("")
+  ts            DateTime     @default(now())
+  /// base64 AES-GCM ciphertext of the message body
+  ciphertext    String?
+  /// JSON map of { userId: base64WrappedRoomKey } — one entry per recipient
+  encryptedKeys String?
+  /// base64 AES-GCM 12-byte IV used to encrypt ciphertext
+  iv            String?
+  session       StudySession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  user          User         @relation(fields: [userId], references: [id])
+}
+
+/// Browser Web Push subscription — one per browser/device per user.
+/// Deleted automatically when the user unsubscribes or the endpoint returns 410 Gone.
+model PushSubscription {
+  id        String   @id @default(uuid())
+  userId    String
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Post {
+  id            String         @id @default(uuid())
+  userId        String
+  content       String         @db.VarChar(500)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  communityId   String?
+  hotScore      Float          @default(0)
+  notifications Notification[]
+  community     Community?     @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  author        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  comments      PostComment[]
+  likes         PostLike[]
+  media         PostMedia[]
+  shares        PostShare[]
+
+  @@index([communityId, createdAt(sort: Desc)])
+  @@index([communityId, hotScore(sort: Desc)])
+  @@index([hotScore(sort: Desc)])
+  @@index([userId, createdAt(sort: Desc)])
+}
+
+model PostMedia {
+  id           String    @id @default(uuid())
+  postId       String
+  url          String
+  type         MediaType
+  thumbnailUrl String?
+  order        Int       @default(0)
+  post         Post      @relation(fields: [postId], references: [id], onDelete: Cascade)
+}
+
+model PostLike {
+  postId    String
+  userId    String
+  createdAt DateTime @default(now())
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([postId, userId])
+}
+
+model PostComment {
+  id            String         @id @default(uuid())
+  postId        String
+  userId        String
+  content       String         @db.VarChar(300)
+  createdAt     DateTime       @default(now())
+  parentId      String?
+  notifications Notification[]
+  parent        PostComment?   @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies       PostComment[]  @relation("CommentReplies")
+  post          Post           @relation(fields: [postId], references: [id], onDelete: Cascade)
+  author        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([postId, createdAt])
+}
+
+model UserFollow {
+  followerId  String
+  followingId String
+  createdAt   DateTime @default(now())
+  follower    User     @relation("Followers", fields: [followerId], references: [id], onDelete: Cascade)
+  following   User     @relation("Following", fields: [followingId], references: [id], onDelete: Cascade)
+
+  @@id([followerId, followingId])
+}
+
+model PostShare {
+  id         String   @id @default(uuid())
+  postId     String
+  senderId   String
+  receiverId String
+  createdAt  DateTime @default(now())
+  viewed     Boolean  @default(false)
+  post       Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  receiver   User     @relation("SharesReceived", fields: [receiverId], references: [id], onDelete: Cascade)
+  sender     User     @relation("SharesSent", fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, senderId, receiverId])
+}
+
+model Community {
+  id          String              @id @default(uuid())
+  name        String
+  slug        String              @unique
+  description String?
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+  avatarUrl   String?
+  bannerUrl   String?
+  creatorId   String
+  memberCount Int                 @default(0)
+  visibility  CommunityVisibility @default(public)
+  creator     User                @relation("CommunityCreator", fields: [creatorId], references: [id], onDelete: Cascade)
+  invites     CommunityInvite[]
+  members     CommunityMember[]
+  posts       Post[]
+}
+
+model CommunityMember {
+  communityId String
+  userId      String
+  joinedAt    DateTime      @default(now())
+  role        CommunityRole @default(member)
+  community   Community     @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([communityId, userId])
+}
+
+model CommunityInvite {
+  id          String    @id @default(uuid())
+  communityId String
+  invitedById String
+  invitedId   String
+  accepted    Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  community   Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  invitedBy   User      @relation("InvitesSent", fields: [invitedById], references: [id], onDelete: Cascade)
+  invited     User      @relation("InvitesReceived", fields: [invitedId], references: [id], onDelete: Cascade)
+
+  @@unique([communityId, invitedId])
+}
+
+model Notification {
+  id        String       @id @default(uuid())
+  userId    String
+  senderId  String
+  type      String
+  postId    String?
+  commentId String?
+  read      Boolean      @default(false)
+  createdAt DateTime     @default(now())
+  comment   PostComment? @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  post      Post?        @relation(fields: [postId], references: [id], onDelete: Cascade)
+  sender    User         @relation("NotificationSender", fields: [senderId], references: [id], onDelete: Cascade)
+  user      User         @relation("NotificationRecipient", fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model StudyLog {
+  id        String   @id @default(uuid())
+  userId    String
+  date      String
+  duration  Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date])
+}
+
+enum AttendanceStatus {
+  attended
+  missed
+  cancelled
 }
 
 enum Visibility {
@@ -170,20 +341,6 @@ enum SessionStatus {
   cancelled
 }
 
-model Participant {
-  id          String            @id @default(uuid())
-  sessionId   String
-  userId      String
-  status      ParticipantStatus @default(invited)
-  invitedAt   DateTime          @default(now())
-  respondedAt DateTime?
-
-  session StudySession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  user    User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([sessionId, userId])
-}
-
 enum ParticipantStatus {
   invited
   accepted
@@ -191,125 +348,9 @@ enum ParticipantStatus {
   removed
 }
 
-model Message {
-  id            String   @id @default(uuid())
-  sessionId     String
-  userId        String
-  name          String
-  /// Plaintext body (empty string for E2EE messages; kept for backward compat)
-  text          String   @default("")
-  ts            DateTime @default(now())
-
-  // ── E2EE fields (null for legacy plaintext messages) ──
-  /// base64 AES-GCM ciphertext of the message body
-  ciphertext    String?
-  /// base64 AES-GCM 12-byte IV used to encrypt ciphertext
-  iv            String?
-  /// JSON map of { userId: base64WrappedRoomKey } — one entry per recipient
-  encryptedKeys String?
-
-  session StudySession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  user    User         @relation(fields: [userId], references: [id])
-}
-
-/// Browser Web Push subscription — one per browser/device per user.
-/// Deleted automatically when the user unsubscribes or the endpoint returns 410 Gone.
-model PushSubscription {
-  id        String   @id @default(uuid())
-  userId    String
-  endpoint  String   @unique
-  p256dh    String
-  auth      String
-  createdAt DateTime @default(now())
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-}
-
-/// Daily notes — one per user per date, used on the dashboard.
-model Note {
-  id        String   @id @default(uuid())
-  userId    String
-  date      String   // "YYYY-MM-DD" — one note per day per user
-  content   String   @default("")
-  updatedAt DateTime @updatedAt
-  createdAt DateTime @default(now())
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, date])
-}
-
-// ── Community Feed ────────────────────────────────────────────────────────────
-
-model Post {
-  id          String   @id @default(uuid())
-  userId      String
-  content     String   @db.VarChar(500)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  // Optional: scoped to a community (null = global feed)
-  communityId String?
-
-  hotScore    Float    @default(0)
-
-  author    User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  community Community?    @relation(fields: [communityId], references: [id], onDelete: Cascade)
-  media     PostMedia[]
-  likes     PostLike[]
-  comments  PostComment[]
-  shares    PostShare[]
-  notifications Notification[]
-
-  @@index([communityId, createdAt(sort: Desc)])
-  @@index([communityId, hotScore(sort: Desc)])
-  @@index([hotScore(sort: Desc)])
-  @@index([userId, createdAt(sort: Desc)])
-}
-
-model PostMedia {
-  id           String    @id @default(uuid())
-  postId       String
-  url          String    // Supabase public URL
-  type         MediaType
-  thumbnailUrl String?   // for video preview
-  order        Int       @default(0)
-
-  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
-}
-
 enum MediaType {
   image
   video
-}
-
-model PostLike {
-  postId    String
-  userId    String
-  createdAt DateTime @default(now())
-
-  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@id([postId, userId])
-}
-
-model PostComment {
-  id        String   @id @default(uuid())
-  postId    String
-  userId    String
-  content   String   @db.VarChar(300)
-  createdAt DateTime @default(now())
-
-  parentId  String?
-  parent    PostComment?  @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
-  replies   PostComment[] @relation("CommentReplies")
-
-  post   Post @relation(fields: [postId], references: [id], onDelete: Cascade)
-  author User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  notifications Notification[]
-
-  @@index([postId, createdAt(sort: Asc)])
 }
 
 enum UserRole {
@@ -317,38 +358,6 @@ enum UserRole {
   instructor
   admin
 }
-
-// ── Follow System ─────────────────────────────────────────────────────────────
-
-model UserFollow {
-  followerId  String
-  followingId String
-  createdAt   DateTime @default(now())
-
-  follower  User @relation("Followers", fields: [followerId], references: [id], onDelete: Cascade)
-  following User @relation("Following", fields: [followingId], references: [id], onDelete: Cascade)
-
-  @@id([followerId, followingId])
-}
-
-// ── Post Shares ───────────────────────────────────────────────────────────────
-
-model PostShare {
-  id         String   @id @default(uuid())
-  postId     String
-  senderId   String
-  receiverId String
-  viewed     Boolean  @default(false)
-  createdAt  DateTime @default(now())
-
-  post     Post @relation(fields: [postId], references: [id], onDelete: Cascade)
-  sender   User @relation("SharesSent", fields: [senderId], references: [id], onDelete: Cascade)
-  receiver User @relation("SharesReceived", fields: [receiverId], references: [id], onDelete: Cascade)
-
-  @@unique([postId, senderId, receiverId])
-}
-
-// ── Communities (Reddit-like groups) ─────────────────────────────────────────
 
 enum CommunityVisibility {
   public
@@ -360,66 +369,4 @@ enum CommunityRole {
   creator
   moderator
   member
-}
-
-model Community {
-  id          String              @id @default(uuid())
-  name        String
-  slug        String              @unique        // e.g. "karate-tips" — URL-safe
-  description String?
-  avatarUrl   String?
-  bannerUrl   String?
-  visibility  CommunityVisibility @default(public)
-  creatorId   String
-  memberCount Int                 @default(0)   // denormalized for fast queries
-  createdAt   DateTime            @default(now())
-  updatedAt   DateTime            @updatedAt
-
-  creator User              @relation("CommunityCreator", fields: [creatorId], references: [id], onDelete: Cascade)
-  members CommunityMember[]
-  invites CommunityInvite[]
-  posts   Post[]
-}
-
-model CommunityMember {
-  communityId String
-  userId      String
-  role        CommunityRole @default(member)
-  joinedAt    DateTime      @default(now())
-
-  community Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@id([communityId, userId])
-}
-
-model CommunityInvite {
-  id          String   @id @default(uuid())
-  communityId String
-  invitedById String
-  invitedId   String
-  accepted    Boolean  @default(false)
-  createdAt   DateTime @default(now())
-
-  community Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
-  invitedBy User      @relation("InvitesSent", fields: [invitedById], references: [id], onDelete: Cascade)
-  invited   User      @relation("InvitesReceived", fields: [invitedId], references: [id], onDelete: Cascade)
-
-  @@unique([communityId, invitedId])
-}
-
-model Notification {
-  id          String   @id @default(uuid())
-  userId      String
-  senderId    String
-  type        String   // "like", "comment"
-  postId      String?
-  commentId   String?
-  read        Boolean  @default(false)
-  createdAt   DateTime @default(now())
-
-  user        User     @relation("NotificationRecipient", fields: [userId], references: [id], onDelete: Cascade)
-  sender      User     @relation("NotificationSender", fields: [senderId], references: [id], onDelete: Cascade)
-  post        Post?    @relation(fields: [postId], references: [id], onDelete: Cascade)
-  comment     PostComment? @relation(fields: [commentId], references: [id], onDelete: Cascade)
 }

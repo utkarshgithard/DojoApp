@@ -3,7 +3,7 @@
 import React, { useState, useContext, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
-import { Moon, Sun, Menu, X, LogOut, LayoutDashboard, Calendar, Clock, Settings, User, Users, UserPlus, Bell, Coffee, Hash } from 'lucide-react';
+import { Moon, Sun, Menu, X, LogOut, LayoutDashboard, Calendar, Clock, Settings, User, Users, UserPlus, Bell, Coffee, Hash, BookOpen } from 'lucide-react';
 import { useDarkMode } from '@/context/DarkModeContext';
 import { AuthContext } from '@/context/authContext';
 import { useAttendance } from '@/context/AttendanceContext';
@@ -201,20 +201,20 @@ const Navbar = () => {
             Community
           </Link>
           <Link
-            href="/setup-schedule"
-            className={`text-[13px] font-medium transition-colors ${
-              pathname === '/setup-schedule' ? textActive : textMuted
-            }`}
-          >
-            Add Classes
-          </Link>
-          <Link
             href="/calendar"
             className={`text-[13px] font-medium transition-colors ${
               pathname === '/calendar' ? textActive : textMuted
             }`}
           >
             Calendar
+          </Link>
+          <Link
+            href="/exam-prep"
+            className={`text-[13px] font-medium transition-colors ${
+              pathname === '/exam-prep' ? textActive : textMuted
+            }`}
+          >
+            Exam Prep
           </Link>
           <Link
             href="/settings"
@@ -468,16 +468,6 @@ const Navbar = () => {
             )}
           </Link>
           <Link
-            href="/setup-schedule"
-            onClick={closeMenu}
-            className={`flex items-center gap-2.5 text-[14px] font-medium py-1 ${
-              pathname === '/setup-schedule' ? textActive : textMuted
-            }`}
-          >
-            <Clock size={15} />
-            <span>Add Classes</span>
-          </Link>
-          <Link
             href="/calendar"
             onClick={closeMenu}
             className={`flex items-center gap-2.5 text-[14px] font-medium py-1 ${
@@ -486,6 +476,16 @@ const Navbar = () => {
           >
             <Calendar size={15} />
             <span>Calendar</span>
+          </Link>
+          <Link
+            href="/exam-prep"
+            onClick={closeMenu}
+            className={`flex items-center gap-2.5 text-[14px] font-medium py-1 ${
+              pathname === '/exam-prep' ? textActive : textMuted
+            }`}
+          >
+            <BookOpen size={15} />
+            <span>Exam Prep</span>
           </Link>
           <Link
             href="/settings"

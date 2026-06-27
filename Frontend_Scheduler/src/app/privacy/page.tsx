@@ -22,10 +22,17 @@ export default function PrivacyPolicy() {
         <div className="max-w-4xl mx-auto px-6 py-4 flex justify-between items-center">
           <button
             onClick={() => router.push("/")}
-            className="flex items-center gap-2 text-sm font-semibold tracking-tight font-serif hover:opacity-80 transition-opacity"
+            className="flex items-center gap-2 rounded-full px-4 py-2 text-xs font-semibold transition-all hover:scale-105"
+            style={{
+              boxShadow: dark
+                ? "3px 3px 6px rgba(0,0,0,0.45), -3px -3px 6px rgba(255,255,255,0.02)"
+                : "4px 4px 8px var(--neo-shadow-dark), -4px -4px 8px var(--neo-shadow-light)",
+              background: dark ? "#1f222b" : "#e4e9f2",
+              color: dark ? "#e7ebf2" : "#2e3a4f",
+            }}
           >
-            <ArrowLeft size={16} />
-            <span>DojoClass</span>
+            <ArrowLeft size={14} />
+            <span>Back to Home</span>
           </button>
           <span className="text-xs font-bold text-zinc-405 dark:text-zinc-500">PRIVACY POLICY</span>
         </div>

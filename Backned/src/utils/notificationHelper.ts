@@ -96,6 +96,14 @@ export async function createNotification(
         pushBody = `${notification.sender.name} commented on your post.`;
       }
       if (postId) pushUrl = `/community/post/${postId}`;
+    } else if (type === 'follow_request') {
+      pushTitle = 'New Follower! 👤';
+      pushBody = `${notification.sender.name} started following you. Follow back to become friends!`;
+      pushUrl = '/friends';
+    } else if (type === 'friendship_mutual') {
+      pushTitle = 'New Friend! 🤝';
+      pushBody = `You and ${notification.sender.name} are now friends!`;
+      pushUrl = '/friends';
     }
 
     await sendPushToUser(userId, {
