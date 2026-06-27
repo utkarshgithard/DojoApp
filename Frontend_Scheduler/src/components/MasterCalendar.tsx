@@ -31,6 +31,27 @@ export default function MasterCalendar({ fullView = false }: { fullView?: boolea
   const [currentDate, setCurrentDate] = useState(new Date());
   const [expandedWeekIndex, setExpandedWeekIndex] = useState<number>(() => getOngoingWeekIndex(new Date()));
   const [selectedWeekdayIndex, setSelectedWeekdayIndex] = useState<number>(() => new Date().getDay());
+  
+  const [mobileFocusDate, setMobileFocusDate] = useState(new Date());
+  const [isMobile, setIsMobile] = useState(false);
+
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  const getDayLabel = (date: Date) => {
+    const today = new Date();
+    if (isSameDay(date, today)) return "Today";
+    if (isSameDay(date, addDays(today, -1))) return "Yesterday";
+    if (isSameDay(date, addDays(today, 1))) return "Tomorrow";
+    return format(date, "EEE");
+  };
 
   // Modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -155,7 +176,9 @@ export default function MasterCalendar({ fullView = false }: { fullView?: boolea
       {/* Header */}
       <div className="flex items-center justify-between p-4 border-b border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/20">
         <div className="flex items-center gap-2">
-          <h2 className="text-[16px] font-semibold tracking-tight">{format(currentDate, "MMMM yyyy")}</h2>
+          <h2 className="text-[16px] font-semibold tracking-tight">
+            {format(isMobile ? mobileFocusDate : currentDate, "MMMM yyyy")}
+          </h2>
         </div>
         <div className="flex items-center gap-2">
           <button onClick={() => clearAITasks()} className="text-[11px] px-2 py-1 rounded-md border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-purple-500 font-medium">
@@ -164,154 +187,253 @@ export default function MasterCalendar({ fullView = false }: { fullView?: boolea
           <button onClick={() => clearCalendar()} className="text-[11px] px-2 py-1 rounded-md border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-red-500 mr-2">
             Clear All
           </button>
-          <button onClick={prevMonth} className="p-1.5 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-            <ChevronLeft size={16} />
-          </button>
-          <button onClick={nextMonth} className="p-1.5 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-            <ChevronRight size={16} />
-          </button>
+          {!isMobile && (
+            <>
+              <button onClick={prevMonth} className="p-1.5 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                <ChevronLeft size={16} />
+              </button>
+              <button onClick={nextMonth} className="p-1.5 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                <ChevronRight size={16} />
+              </button>
+            </>
+          )}
         </div>
       </div>
 
-      {/* Grid */}
+      {/* Grid / Content */}
       <div className="flex flex-col">
-        {/* Mobile Weekday Selector (Approach 3: Focus Day View) */}
-        <div className="flex md:hidden items-center justify-between p-2 border-b border-gray-100 dark:border-gray-800 bg-gray-50/30 dark:bg-gray-900/10">
-          <span className="text-[11px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider pl-2">Focus Day:</span>
-          <div className="flex gap-1.5 pr-2">
-            {rows[0]?.map((day, idx) => {
-              const isSelected = selectedWeekdayIndex === idx;
-              const label = format(day, "EEE"); // "Sun", "Mon", etc.
-              return (
-                <button
-                  key={idx}
-                  onClick={() => scrollToDay(idx)}
-                  className={`text-[12px] font-semibold w-7 h-7 flex items-center justify-center rounded-full transition-all ${
-                    isSelected 
-                      ? "bg-purple-500 text-white shadow-sm" 
-                      : "hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400"
-                  }`}
-                >
-                  {label.substring(0, 1)}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {rows.map((row, i) => {
-          const isExpanded = fullView || expandedWeekIndex === i;
-
-          if (!isExpanded) {
-            // Generate summary for collapsed view
-            const weekStartStr = format(row[0], "MMM d");
-            const weekEndStr = format(row[row.length - 1], "MMM d");
-
-            let colorSummary: string[] = [];
-            row.forEach(day => {
-              const dayData = calendarData[format(day, dateFormat)];
-              if (dayData && dayData.tasks) {
-                dayData.tasks.forEach(t => {
-                  if (t.difficulty === 'Easy') colorSummary.push('🟢');
-                  else if (t.difficulty === 'Medium') colorSummary.push('🟡');
-                  else if (t.difficulty === 'Hard') colorSummary.push('🔴');
-                  else colorSummary.push('⚪');
-                });
-              }
-            });
-
-            return (
-              <div
-                key={i}
-                onClick={() => setExpandedWeekIndex(i)}
-                className="flex items-center justify-between p-3 border-b border-gray-100 dark:border-gray-800 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-900/50 transition-colors"
+        {isMobile ? (
+          <div className="flex flex-col">
+            {/* Mobile Navigation Header */}
+            <div className="flex items-center justify-between p-3 border-b border-gray-100 dark:border-gray-800 bg-gray-50/20 dark:bg-gray-900/10">
+              <button 
+                onClick={() => setMobileFocusDate(addDays(mobileFocusDate, -1))}
+                className="p-1.5 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-purple-500"
               >
-                <div className="flex items-center gap-4">
-                  <span className={`text-[12px] font-semibold uppercase tracking-wider ${muted}`}>Week {i + 1}</span>
-                  <span className="text-[13px] text-gray-700 dark:text-gray-300">{weekStartStr} – {weekEndStr}</span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="text-[12px] tracking-[2px]">{colorSummary.slice(0, 10).join('')}{colorSummary.length > 10 ? '...' : ''}</div>
-                  <ChevronRight size={14} className="text-gray-400" />
-                </div>
-              </div>
-            );
-          }
+                <ChevronLeft size={16} />
+              </button>
+              <button 
+                onClick={() => setMobileFocusDate(new Date())}
+                className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-purple-500"
+              >
+                Snap to Today
+              </button>
+              <button 
+                onClick={() => setMobileFocusDate(addDays(mobileFocusDate, 1))}
+                className="p-1.5 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-purple-500"
+              >
+                <ChevronRight size={16} />
+              </button>
+            </div>
 
-          return (
-            <div key={i} className={`flex flex-col border-b border-gray-100 dark:border-gray-800 last:border-b-0 ${fullView ? 'mb-4 last:mb-0 border rounded-xl' : ''}`}>
-              {/* Expanded Week Header */}
-              {!fullView && (
-                <div
-                  className="flex items-center justify-between p-2 bg-gray-50/50 dark:bg-gray-900/20 border-b border-gray-100 dark:border-gray-800"
-                >
-                  <span className={`text-[10px] font-bold uppercase tracking-wider ${muted} ml-2`}>Week {i + 1} (Expanded)</span>
-                </div>
-              )}
-              <div className="flex flex-row w-full p-2 md:p-0 gap-1.5 md:gap-0">
-                {row.map((day, j) => {
-                  const dateStr = format(day, dateFormat);
-                  const dayData = calendarData[dateStr];
-                  const isCurrentMonth = isSameMonth(day, monthStart);
-                  const isToday = isSameDay(day, new Date());
+            {/* 3 Day Rows (Yesterday, Today, Tomorrow) */}
+            <div className="flex flex-col divide-y divide-zinc-100 dark:divide-zinc-900 bg-white dark:bg-black">
+              {[
+                addDays(mobileFocusDate, -1),
+                mobileFocusDate,
+                addDays(mobileFocusDate, 1),
+              ].map((day, idx) => {
+                const dateStr = format(day, dateFormat);
+                const dayData = calendarData[dateStr];
+                const tasks = dayData?.tasks || [];
+                const isToday = isSameDay(day, new Date());
+                const label = getDayLabel(day);
 
-                  const hasTasks = dayData?.tasks && dayData.tasks.length > 0;
-                  const flexWeight = hasTasks ? 3 : 1;
-
-                  const allChecked = hasTasks && dayData.tasks.every(t => t.isChecked);
-                  const bgClass = allChecked
-                    ? (darkMode ? 'bg-gray-900/30 opacity-70' : 'bg-gray-50 opacity-70')
-                    : dayData?.isPracticeTest
-                      ? (darkMode ? 'bg-purple-900/10' : 'bg-purple-50/50')
-                      : (darkMode ? 'hover:bg-gray-900/20' : 'hover:bg-gray-50');
-
-                  return (
-                    <div
-                      key={j}
-                      id={`day-${i}-${j}`}
-                      style={{ '--flex-weight': flexWeight } as React.CSSProperties}
-                      className={`min-h-[120px] md:min-h-[100px] p-2.5 md:p-2 border border-gray-100 dark:border-gray-800 md:border-0 md:border-r last:border-r-0 md:last:border-r-0 relative transition-all duration-300 w-auto flex-1 min-w-0 md:flex-[var(--flex-weight)] rounded-xl md:rounded-none shadow-sm md:shadow-none ${!isCurrentMonth ? 'opacity-40 bg-gray-50/50 dark:bg-gray-900/10' : bgClass}`}
+                return (
+                  <div key={idx} className="flex items-center gap-4 py-4 px-4 min-w-0">
+                    {/* Left: Date Badge */}
+                    <div 
                       onClick={() => openAddModal(dateStr)}
+                      className={`flex flex-col items-center justify-center w-[54px] h-[58px] rounded-2xl shrink-0 cursor-pointer transition-all active:scale-95 ${
+                        isToday 
+                          ? 'bg-blue-500/10 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400 font-bold border border-blue-200 dark:border-blue-500/20' 
+                          : 'text-zinc-700 dark:text-zinc-400'
+                      }`}
                     >
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-1.5">
-                          <span className={`uppercase font-bold tracking-wider transition-all ${
-                            hasTasks 
-                              ? 'text-[11px] text-purple-500/80 dark:text-purple-400/80 font-black' 
-                              : 'text-[10px] text-gray-400'
-                          }`}>
-                            {format(day, "EEE")}
-                          </span>
-                          <span className={`flex items-center justify-center rounded-full transition-all ${
-                            isToday 
-                              ? 'bg-purple-500 text-white w-7 h-7 text-[13px] font-semibold' 
-                              : hasTasks 
-                                ? 'text-[15px] font-bold text-purple-600 dark:text-purple-400 w-7 h-7' 
-                                : 'text-[12px] font-medium text-gray-700 dark:text-gray-300 w-6 h-6'
-                          }`}>
-                            {format(day, "d")}
-                          </span>
-                        </div>
-                        {dayData?.isPracticeTest && <Sparkles size={12} className="text-purple-500" />}
-                      </div>
+                      <span className="text-[10px] uppercase font-bold tracking-wider leading-none">
+                        {label.substring(0, 3)}
+                      </span>
+                      <span className="text-[19px] font-bold leading-none mt-1">
+                        {format(day, "d")}
+                      </span>
+                    </div>
 
-                      <div className="space-y-1 pb-6">
-                        {dayData?.tasks.map(task => renderTask(dateStr, task))}
-                      </div>
+                    {/* Middle: Horizontal Scrolling Tasks Container */}
+                    <div className="flex-1 min-w-0 flex items-center gap-2 overflow-x-auto no-scrollbar scroll-smooth">
+                      {tasks.map((task) => {
+                        let diffColor = 'bg-zinc-50 text-zinc-700 border-zinc-200 dark:bg-zinc-900 dark:text-zinc-300 dark:border-zinc-800';
+                        if (task.isPracticeTest) diffColor = 'bg-purple-500/10 text-purple-700 border-purple-500/20 dark:text-purple-400 dark:bg-purple-950/20 dark:border-purple-500/30';
+                        else if (task.difficulty === 'Easy') diffColor = 'bg-green-500/10 text-green-700 border-green-500/20 dark:text-green-400 dark:bg-green-950/20 dark:border-green-500/30';
+                        else if (task.difficulty === 'Medium') diffColor = 'bg-blue-500/10 text-blue-700 border-blue-500/20 dark:text-blue-400 dark:bg-blue-950/20 dark:border-blue-500/30';
+                        else if (task.difficulty === 'Hard') diffColor = 'bg-red-500/10 text-red-700 border-red-500/20 dark:text-red-400 dark:bg-red-950/20 dark:border-red-500/30';
 
+                        return (
+                          <div
+                            key={task.id}
+                            onClick={(e) => { e.stopPropagation(); openViewTaskModal(dateStr, task); }}
+                            className={`shrink-0 px-4 py-2 rounded-full border text-[13px] font-medium transition-all active:scale-95 cursor-pointer max-w-[200px] truncate ${diffColor} ${
+                              task.isChecked ? 'opacity-40 line-through' : ''
+                            }`}
+                          >
+                            {task.text}
+                          </div>
+                        );
+                      })}
+
+                      {/* Rightmost: Add Task Trigger inside horizontal flow */}
                       <button
-                        onClick={(e) => { e.stopPropagation(); openAddModal(dateStr); }}
-                        className="absolute bottom-1 right-1 p-1 rounded opacity-0 hover:opacity-100 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 transition-all"
+                        onClick={() => openAddModal(dateStr)}
+                        className="shrink-0 w-8 h-8 rounded-full border border-dashed border-zinc-350 dark:border-zinc-800 text-zinc-400 hover:text-purple-500 hover:border-purple-400 flex items-center justify-center transition-colors active:scale-95"
                       >
-                        <Plus size={12} />
+                        <Plus size={14} />
                       </button>
                     </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ) : (
+          <div className="flex flex-col">
+            {/* Mobile Weekday Selector (Approach 3: Focus Day View) */}
+            <div className="flex md:hidden items-center justify-between p-2 border-b border-gray-100 dark:border-gray-800 bg-gray-50/30 dark:bg-gray-900/10">
+              <span className="text-[11px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider pl-2">Focus Day:</span>
+              <div className="flex gap-1.5 pr-2">
+                {rows[0]?.map((day, idx) => {
+                  const isSelected = selectedWeekdayIndex === idx;
+                  const label = format(day, "EEE"); // "Sun", "Mon", etc.
+                  return (
+                    <button
+                      key={idx}
+                      onClick={() => scrollToDay(idx)}
+                      className={`text-[12px] font-semibold w-7 h-7 flex items-center justify-center rounded-full transition-all ${
+                        isSelected 
+                          ? "bg-purple-500 text-white shadow-sm" 
+                          : "hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400"
+                      }`}
+                    >
+                      {label.substring(0, 1)}
+                    </button>
                   );
                 })}
               </div>
             </div>
-          );
-        })}
+
+            {rows.map((row, i) => {
+              const isExpanded = fullView || expandedWeekIndex === i;
+
+              if (!isExpanded) {
+                // Generate summary for collapsed view
+                const weekStartStr = format(row[0], "MMM d");
+                const weekEndStr = format(row[row.length - 1], "MMM d");
+
+                let colorSummary: string[] = [];
+                row.forEach(day => {
+                  const dayData = calendarData[format(day, dateFormat)];
+                  if (dayData && dayData.tasks) {
+                    dayData.tasks.forEach(t => {
+                      if (t.difficulty === 'Easy') colorSummary.push('🟢');
+                      else if (t.difficulty === 'Medium') colorSummary.push('🟡');
+                      else if (t.difficulty === 'Hard') colorSummary.push('🔴');
+                      else colorSummary.push('⚪');
+                    });
+                  }
+                });
+
+                return (
+                  <div
+                    key={i}
+                    onClick={() => setExpandedWeekIndex(i)}
+                    className="flex items-center justify-between p-3 border-b border-gray-100 dark:border-gray-800 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-900/50 transition-colors"
+                  >
+                    <div className="flex items-center gap-4">
+                      <span className={`text-[12px] font-semibold uppercase tracking-wider ${muted}`}>Week {i + 1}</span>
+                      <span className="text-[13px] text-gray-700 dark:text-gray-300">{weekStartStr} – {weekEndStr}</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className="text-[12px] tracking-[2px]">{colorSummary.slice(0, 10).join('')}{colorSummary.length > 10 ? '...' : ''}</div>
+                      <ChevronRight size={14} className="text-gray-400" />
+                    </div>
+                  </div>
+                );
+              }
+
+              return (
+                <div key={i} className={`flex flex-col border-b border-gray-100 dark:border-gray-800 last:border-b-0 ${fullView ? 'mb-4 last:mb-0 border rounded-xl' : ''}`}>
+                  {/* Expanded Week Header */}
+                  {!fullView && (
+                    <div
+                      className="flex items-center justify-between p-2 bg-gray-50/50 dark:bg-gray-900/20 border-b border-gray-100 dark:border-gray-800"
+                    >
+                      <span className={`text-[10px] font-bold uppercase tracking-wider ${muted} ml-2`}>Week {i + 1} (Expanded)</span>
+                    </div>
+                  )}
+                  <div className="flex flex-row w-full p-2 md:p-0 gap-1.5 md:gap-0">
+                    {row.map((day, j) => {
+                      const dateStr = format(day, dateFormat);
+                      const dayData = calendarData[dateStr];
+                      const isCurrentMonth = isSameMonth(day, monthStart);
+                      const isToday = isSameDay(day, new Date());
+
+                      const hasTasks = dayData?.tasks && dayData.tasks.length > 0;
+                      const flexWeight = hasTasks ? 3 : 1;
+
+                      const allChecked = hasTasks && dayData.tasks.every(t => t.isChecked);
+                      const bgClass = allChecked
+                        ? (darkMode ? 'bg-gray-900/30 opacity-70' : 'bg-gray-50 opacity-70')
+                        : dayData?.isPracticeTest
+                          ? (darkMode ? 'bg-purple-900/10' : 'bg-purple-50/50')
+                          : (darkMode ? 'hover:bg-gray-900/20' : 'hover:bg-gray-50');
+
+                      return (
+                        <div
+                          key={j}
+                          id={`day-${i}-${j}`}
+                          style={{ '--flex-weight': flexWeight } as React.CSSProperties}
+                          className={`min-h-[120px] md:min-h-[100px] p-2.5 md:p-2 border border-gray-100 dark:border-gray-850 md:border-0 md:border-r last:border-r-0 md:last:border-r-0 relative transition-all duration-300 w-auto flex-1 min-w-0 md:flex-[var(--flex-weight)] rounded-xl md:rounded-none shadow-sm md:shadow-none ${!isCurrentMonth ? 'opacity-40 bg-gray-50/50 dark:bg-gray-900/10' : bgClass}`}
+                          onClick={() => openAddModal(dateStr)}
+                        >
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-1.5">
+                              <span className={`uppercase font-bold tracking-wider transition-all ${
+                                hasTasks 
+                                  ? 'text-[11px] text-purple-500/80 dark:text-purple-400/80 font-black' 
+                                  : 'text-[10px] text-gray-400'
+                              }`}>
+                                {format(day, "EEE")}
+                              </span>
+                              <span className={`flex items-center justify-center rounded-full transition-all ${
+                                isToday 
+                                  ? 'bg-purple-500 text-white w-7 h-7 text-[13px] font-semibold' 
+                                  : hasTasks 
+                                    ? 'text-[15px] font-bold text-purple-600 dark:text-purple-400 w-7 h-7' 
+                                    : 'text-[12px] font-medium text-gray-700 dark:text-gray-300 w-6 h-6'
+                              }`}>
+                                {format(day, "d")}
+                              </span>
+                            </div>
+                            {dayData?.isPracticeTest && <Sparkles size={12} className="text-purple-500" />}
+                          </div>
+
+                          <div className="space-y-1 pb-6">
+                            {dayData?.tasks.map(task => renderTask(dateStr, task))}
+                          </div>
+
+                          <button
+                            onClick={(e) => { e.stopPropagation(); openAddModal(dateStr); }}
+                            className="absolute bottom-1 right-1 p-1 rounded opacity-0 hover:opacity-100 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 transition-all"
+                          >
+                            <Plus size={12} />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Add Task Modal */}

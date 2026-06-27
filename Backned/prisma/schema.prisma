@@ -44,6 +44,7 @@ model User {
   friendOf              UserFriend[]       @relation("FriendOf")
   friends               UserFriend[]       @relation("UserFriends")
   publicKey             UserPublicKey?
+  calendarTasks         CalendarTask[]
 }
 
 /// Stores the user's ECDH P-256 public key for E2EE room key distribution.
@@ -369,4 +370,19 @@ enum CommunityRole {
   creator
   moderator
   member
+}
+
+model CalendarTask {
+  id             String   @id @default(uuid())
+  userId         String
+  date           String   // YYYY-MM-DD
+  text           String
+  difficulty     String   @default("None") // "Easy", "Medium", "Hard", "None"
+  isChecked      Boolean  @default(false)
+  isPracticeTest Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, date])
 }

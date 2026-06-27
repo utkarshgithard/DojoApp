@@ -195,11 +195,11 @@ Your goal is to politely answer questions about these features, act as a helpful
   };
 
   return (
-    <div className="fixed bottom-6 right-6 z-[9999] flex flex-col items-end">
+    <div className="fixed bottom-6 left-6 md:left-auto md:right-6 z-[9999] flex flex-col items-start md:items-end">
       {/* Chat Popover */}
       {isOpen && (
         <div 
-          className={`mb-4 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 shadow-2xl rounded-2xl overflow-hidden flex flex-col transition-all duration-300 origin-bottom-right ${
+          className={`mb-4 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 shadow-2xl rounded-2xl overflow-hidden flex flex-col transition-all duration-300 origin-bottom-left md:origin-bottom-right ${
             isExpanded ? 'w-[90vw] md:w-[600px] h-[80vh]' : 'w-[350px] h-[500px] max-w-[calc(100vw-3rem)] max-h-[calc(100vh-8rem)]'
           }`}
         >
