@@ -408,6 +408,16 @@ const Navbar = () => {
           md:hidden px-5 py-4 space-y-3.5 backdrop-blur-lg transition-all duration-200`}
         >
           <Link
+            href="/community"
+            onClick={closeMenu}
+            className={`flex items-center gap-2.5 text-[14px] font-medium py-1 ${
+              pathname === '/community' ? textActive : textMuted
+            }`}
+          >
+            <Hash size={15} />
+            <span>Community</span>
+          </Link>
+          <Link
             href="/dashboard"
             onClick={closeMenu}
             className={`flex items-center gap-2.5 text-[14px] font-medium py-1 ${
@@ -433,6 +443,16 @@ const Navbar = () => {
             )}
           </Link>
           <Link
+            href="/exam-prep"
+            onClick={closeMenu}
+            className={`flex items-center gap-2.5 text-[14px] font-medium py-1 ${
+              pathname === '/exam-prep' ? textActive : textMuted
+            }`}
+          >
+            <BookOpen size={15} />
+            <span>Exam Prep</span>
+          </Link>
+          <Link
             href="/friends"
             onClick={closeMenu}
             className={`flex items-center gap-2.5 text-[14px] font-medium py-1 ${
@@ -443,14 +463,14 @@ const Navbar = () => {
             <span>Friends</span>
           </Link>
           <Link
-            href="/community"
+            href="/calendar"
             onClick={closeMenu}
             className={`flex items-center gap-2.5 text-[14px] font-medium py-1 ${
-              pathname === '/community' ? textActive : textMuted
+              pathname === '/calendar' ? textActive : textMuted
             }`}
           >
-            <Hash size={15} />
-            <span>Community</span>
+            <Calendar size={15} />
+            <span>Your Class</span>
           </Link>
           <Link
             href="/notifications"
@@ -468,26 +488,6 @@ const Navbar = () => {
             )}
           </Link>
           <Link
-            href="/calendar"
-            onClick={closeMenu}
-            className={`flex items-center gap-2.5 text-[14px] font-medium py-1 ${
-              pathname === '/calendar' ? textActive : textMuted
-            }`}
-          >
-            <Calendar size={15} />
-            <span>Calendar</span>
-          </Link>
-          <Link
-            href="/exam-prep"
-            onClick={closeMenu}
-            className={`flex items-center gap-2.5 text-[14px] font-medium py-1 ${
-              pathname === '/exam-prep' ? textActive : textMuted
-            }`}
-          >
-            <BookOpen size={15} />
-            <span>Exam Prep</span>
-          </Link>
-          <Link
             href="/settings"
             onClick={closeMenu}
             className={`flex items-center gap-2.5 text-[14px] font-medium py-1 ${
@@ -495,7 +495,7 @@ const Navbar = () => {
             }`}
           >
             <Settings size={15} />
-            <span>Settings</span>
+            <span>Profile</span>
           </Link>
 
           <button

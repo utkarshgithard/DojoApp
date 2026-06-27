@@ -301,10 +301,10 @@ Your goal is to politely answer questions about these features, act as a helpful
         className={`w-14 h-14 flex items-center justify-center rounded-full shadow-lg transition-transform hover:scale-105 active:scale-95 ${
           isOpen 
             ? 'bg-zinc-200 text-black dark:bg-zinc-800 dark:text-white' 
-            : 'bg-black text-white dark:bg-white dark:text-black'
+            : 'bg-gradient-to-tr from-indigo-600 to-violet-600 text-white font-bold text-[16px] tracking-wider'
         }`}
       >
-        {isOpen ? <X size={24} /> : <MessageSquare size={24} />}
+        {isOpen ? <X size={22} /> : <span className="select-none font-black">AI</span>}
       </button>
     </div>
   );
