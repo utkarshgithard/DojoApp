@@ -20,9 +20,38 @@ const AuthProvider = (props: { children: React.ReactNode }) => {
   const [userId, setUserId] = useState<string | null>(null);
   const [emailVerified, setEmailVerified] = useState<boolean>(true); // default true to avoid flicker before firebase resolves
   const [loading, setLoading] = useState(true);
-  const [userName, setUserName] = useState('');
-  const [profileLoading, setProfileLoading] = useState(true);
-  const [userDetails, setUserDetails] = useState<User | null>(null);
+  // ─── Stale-While-Revalidate ────────────────────────────────────────────────
+  // Read cached profile from localStorage immediately so the UI paints
+  // with real data before any network request finishes (same trick Instagram uses).
+  const [userDetails, setUserDetails] = useState<User | null>(() => {
+    try {
+      const cached = localStorage.getItem('userDetails');
+      return cached ? (JSON.parse(cached) as User) : null;
+    } catch {
+      return null;
+    }
+  });
+
+  const [userName, setUserName] = useState<string>(() => {
+    try {
+      const cached = localStorage.getItem('userDetails');
+      if (cached) {
+        const parsed = JSON.parse(cached) as User;
+        return parsed.name ?? '';
+      }
+    } catch { /* ignore */ }
+    return '';
+  });
+
+  // If we already have cached data, don't show a loading spinner at all.
+  // profileLoading will be set back to false immediately after the background fetch.
+  const [profileLoading, setProfileLoading] = useState<boolean>(() => {
+    try {
+      return !localStorage.getItem('userDetails');
+    } catch {
+      return true;
+    }
+  });
 
   useEffect(() => {
     const unsubscribe = onIdTokenChanged(auth, async (user) => {
@@ -60,7 +89,10 @@ const AuthProvider = (props: { children: React.ReactNode }) => {
       return;
     }
 
-    setProfileLoading(true);
+    // Only show loading spinner if there is no cached data yet
+    const hasCachedData = !!localStorage.getItem('userDetails');
+    if (!hasCachedData) setProfileLoading(true);
+
     API.get('/auth/userDetails')
       .then(res => {
         if (res.data.user) {
@@ -68,10 +100,15 @@ const AuthProvider = (props: { children: React.ReactNode }) => {
           if (res.data.user.name) {
             setUserName(res.data.user.name);
           }
+          // ✅ Persist fresh data so next load is instant
+          try {
+            localStorage.setItem('userDetails', JSON.stringify(res.data.user));
+          } catch { /* storage quota exceeded — not critical */ }
         }
       })
       .catch(err => {
         console.error('Error fetching user details:', err);
+        // On error, keep showing cached data — don't wipe it out
       })
       .finally(() => {
         setProfileLoading(false);
@@ -98,6 +135,8 @@ const AuthProvider = (props: { children: React.ReactNode }) => {
     setUserDetails(null);
     setEmailVerified(false);
     localStorage.removeItem('token');
+    // ✅ Clear profile cache so a different user won't see stale data
+    localStorage.removeItem('userDetails');
   }, []);
 
   const isAuthenticated = !!token;
