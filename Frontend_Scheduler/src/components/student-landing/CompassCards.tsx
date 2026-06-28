@@ -312,7 +312,7 @@ export function AnalyticsCard({ isActive, index = 1, isLeftSide = false }: CardP
   );
 }
 
-import { getStudentAvatar } from "../landing/StudentAvatar";
+import { getStudentAvatar } from "../ui/StudentAvatar";
 
 // 3. Session Rooms Card
 export function SessionRoomsCard({ isActive, index = 2, isLeftSide = false }: CardProps) {
@@ -350,7 +350,7 @@ export function CommunityCard({ isActive, index = 3, isLeftSide = false }: CardP
   const tags = darkMode
     ? [{ label: "Calculus", color: "rgba(168,85,247,0.95)" }, { label: "Physics", color: "rgba(96,165,250,0.95)" }, { label: "CS Algo", color: "rgba(52,211,153,0.95)" }]
     : [{ label: "Calculus", color: "rgba(107,33,168,0.9)" }, { label: "Physics", color: "rgba(30,64,175,0.9)" }, { label: "CS Algo", color: "rgba(6,95,70,0.9)" }];
-    
+
   return (
     <NeumorphicCard isActive={isActive} index={index} isLeftSide={isLeftSide}>
       <Eyebrow direction="S" label="Community" isActive={isActive} />

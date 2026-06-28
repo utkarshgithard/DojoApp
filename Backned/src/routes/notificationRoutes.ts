@@ -24,6 +24,12 @@ notificationRouter.get('/', verifyToken, async (req: AuthenticatedRequest, res: 
           select: {
             id: true,
             content: true,
+            media: {
+              select: {
+                url: true,
+                type: true,
+              },
+            },
           },
         },
       },

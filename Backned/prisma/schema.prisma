@@ -45,6 +45,9 @@ model User {
   friends               UserFriend[]       @relation("UserFriends")
   publicKey             UserPublicKey?
   calendarTasks         CalendarTask[]
+  examDeadlines         ExamDeadline[]
+  coursePlans           CoursePlan[]
+  resourceLinks         ResourceLink[]
 }
 
 /// Stores the user's ECDH P-256 public key for E2EE room key distribution.
@@ -385,4 +388,39 @@ model CalendarTask {
   user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, date])
+}
+
+model ExamDeadline {
+  id        String   @id @default(uuid())
+  userId    String
+  name      String
+  date      String   // YYYY-MM-DD
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model CoursePlan {
+  id                String   @id @default(uuid())
+  userId            String
+  name              String
+  totalLectures     Int      @default(0)
+  completedLectures Int      @default(0)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model ResourceLink {
+  id        String   @id @default(uuid())
+  userId    String
+  title     String
+  url       String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }

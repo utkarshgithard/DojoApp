@@ -6,6 +6,7 @@ import { useAuth } from './authContext';
 import { useSocket } from './SocketContext';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
+import { subscribeToPush } from '@/lib/webPush';
 
 export interface Notification {
   id: string;
@@ -24,6 +25,10 @@ export interface Notification {
   post?: {
     id: string;
     content: string;
+    media?: {
+      url: string;
+      type: string;
+    }[];
   } | null;
 }
 
@@ -39,7 +44,7 @@ interface NotificationContextType {
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
 
 export const NotificationProvider = ({ children }: { children: React.ReactNode }) => {
-  const { isAuthenticated, loading: authLoading } = useAuth();
+  const { isAuthenticated, loading: authLoading, token } = useAuth();
   const socketContext = useSocket();
   const router = useRouter();
 
@@ -97,6 +102,28 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
       setUnreadCount(0);
     }
   }, [isAuthenticated, authLoading, fetchNotifications]);
+
+  // Auto-subscribe to push notifications upon login if permission is default or granted
+  useEffect(() => {
+    if (isAuthenticated && !authLoading && token) {
+      const autoRequestPush = async () => {
+        if (typeof window !== 'undefined' && 'Notification' in window) {
+          const permission = window.Notification.permission;
+          if (permission === 'default' || permission === 'granted') {
+            try {
+              await subscribeToPush(token);
+            } catch (err) {
+              console.error('Error during auto push subscription:', err);
+            }
+          }
+        }
+      };
+      
+      // Delay slightly to let the page load completely before prompting
+      const timer = setTimeout(autoRequestPush, 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [isAuthenticated, authLoading, token]);
 
   // Real-time socket event listener
   useEffect(() => {

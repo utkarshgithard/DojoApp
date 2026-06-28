@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { Play, Pause, Volume2, VolumeX, Maximize } from 'lucide-react';
 
 interface VideoPlayerProps {
@@ -18,7 +18,12 @@ export default function CommunityVideoPlayer({ src, thumbnailUrl, className = ''
   const togglePlay = () => {
     const v = videoRef.current;
     if (!v) return;
-    if (v.paused) { v.play(); setPlaying(true); }
+    if (v.paused) { 
+      v.play(); 
+      v.muted = false; // Auto-unmute when playing
+      setMuted(false);
+      setPlaying(true); 
+    }
     else { v.pause(); setPlaying(false); }
   };
 
@@ -40,6 +45,29 @@ export default function CommunityVideoPlayer({ src, thumbnailUrl, className = ''
     if (!v || !v.duration) return;
     setProgress((v.currentTime / v.duration) * 100);
   };
+
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (!entry.isIntersecting && !v.paused) {
+            v.pause();
+            setPlaying(false);
+          }
+        });
+      },
+      { threshold: 0.1 } // Pause when less than 10% of the video is visible
+    );
+
+    observer.observe(v);
+
+    return () => {
+      observer.unobserve(v);
+    };
+  }, []);
 
   return (
     <div

@@ -99,9 +99,16 @@ export default function Login() {
 
       // Upsert the user in our PostgreSQL database
       await API.post('/auth/sync',
-        { name: storedName || result.user.displayName, email: emailToUse },
+        { 
+          name: storedName || result.user.displayName, 
+          email: emailToUse,
+          inviteCode: typeof window !== 'undefined' ? localStorage.getItem('dojo_invite_code') : null
+        },
         { headers: { Authorization: `Bearer ${token}` } }
       );
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('dojo_invite_code');
+      }
 
       // Clean up localStorage
       window.localStorage.removeItem('emailForSignIn');
@@ -121,6 +128,17 @@ export default function Login() {
       router.push('/community');
     }
   }, [isAuthenticated, authLoading, router, isVerifying]);
+
+  // Capture invite/referral code from URL and store in localStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const refCode = params.get('ref') || params.get('invite');
+      if (refCode) {
+        localStorage.setItem('dojo_invite_code', refCode);
+      }
+    }
+  }, []);
 
   // Store the original URL for promptEmail case
   const [authUrl, setAuthUrl] = useState('');
@@ -162,9 +180,16 @@ export default function Login() {
       // Sync with backend
       await API.post(
         '/auth/sync',
-        { name: user.displayName, email: user.email },
+        { 
+          name: user.displayName, 
+          email: user.email,
+          inviteCode: typeof window !== 'undefined' ? localStorage.getItem('dojo_invite_code') : null
+        },
         { headers: { Authorization: `Bearer ${token}` } }
       );
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('dojo_invite_code');
+      }
 
       login(token);
       router.push('/community');
@@ -208,9 +233,16 @@ export default function Login() {
       const token = await user.getIdToken();
       await API.post(
         '/auth/sync',
-        { name: user.displayName, email: user.email },
+        { 
+          name: user.displayName, 
+          email: user.email,
+          inviteCode: typeof window !== 'undefined' ? localStorage.getItem('dojo_invite_code') : null
+        },
         { headers: { Authorization: `Bearer ${token}` } }
       );
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('dojo_invite_code');
+      }
       login(token);
       router.push('/community');
     } catch (err: any) {

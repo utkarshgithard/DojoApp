@@ -6,6 +6,7 @@ import generate6CharCode from '../utils/generateCode.js';
 import { cacheGet, cacheSet, cacheDel } from '../lib/redis.js';
 import { checkAndSyncAvatar } from '../utils/avatarSync.js';
 import { calculateDailyPerformanceScore } from '../utils/performanceIndex.js';
+import { createNotification } from '../utils/notificationHelper.js';
 
 const userRouter = express.Router();
 
@@ -85,9 +86,48 @@ userRouter.get('/users/:id', optionalVerifyToken, async (req: AuthenticatedReque
   }
 });
 
+// Helper to process referral/invite friendship
+async function establishReferralFriendship(currentUserId: string, currentUserName: string, inviteCode: string, io: any) {
+  try {
+    const referrer = await prisma.user.findUnique({ where: { friendCode: inviteCode } });
+    if (referrer && referrer.id !== currentUserId) {
+      // Create mutual friendship and follow in both directions
+      await Promise.all([
+        prisma.userFriend.createMany({
+          data: [
+            { userId: currentUserId, friendId: referrer.id },
+            { userId: referrer.id, friendId: currentUserId },
+          ],
+          skipDuplicates: true,
+        }),
+        prisma.userFollow.createMany({
+          data: [
+            { followerId: currentUserId, followingId: referrer.id },
+            { followerId: referrer.id, followingId: currentUserId },
+          ],
+          skipDuplicates: true,
+        }),
+      ]);
+
+      // Trigger notification for the referrer
+      await createNotification(
+        referrer.id,
+        currentUserId,
+        'friendship_mutual',
+        undefined,
+        undefined,
+        io
+      );
+      console.log(`🔗 Referral: Connected ${currentUserName} (${currentUserId}) and ${referrer.name} (${referrer.id}) as friends.`);
+    }
+  } catch (err) {
+    console.error('❌ Error establishing referral friendship:', err);
+  }
+}
+
 // POST /api/auth/sync
 userRouter.post('/sync', async (req: Request, res: Response): Promise<void> => {
-  const { name, email } = req.body;
+  const { name, email, inviteCode } = req.body;
   const authHeader = req.headers.authorization;
 
   if (!authHeader) {
@@ -111,6 +151,12 @@ userRouter.post('/sync', async (req: Request, res: Response): Promise<void> => {
           data: { avatarUrl: decodedToken.picture },
         });
         await cacheDel(`profile:${existing.id}`);
+      }
+
+      // Process referral if inviteCode is provided
+      if (inviteCode) {
+        const io = req.app.get('io');
+        await establishReferralFriendship(existing.id, existing.name, inviteCode, io);
       }
       
       res.status(200).json({
@@ -140,6 +186,12 @@ userRouter.post('/sync', async (req: Request, res: Response): Promise<void> => {
         avatarUrl: decodedToken.picture || null, // Sync photo URL from Google
       },
     });
+
+    // Process referral for new user
+    if (inviteCode) {
+      const io = req.app.get('io');
+      await establishReferralFriendship(user.id, user.name, inviteCode, io);
+    }
 
     res.status(201).json({
       message: 'User registered successfully.',

@@ -11,6 +11,7 @@ import { NetworkProvider } from "@/context/NetworkContext";
 import { NotificationProvider } from "@/context/NotificationContext";
 import { TimerProvider } from "@/context/TimerContext";
 import { CalendarProvider } from "@/context/CalendarContext";
+import { ExamPrepProvider } from "@/context/ExamPrepContext";
 import React, { useState, useEffect } from "react";
 import { usePathname } from "next/navigation";
 import Sidebar from "./Sidebar";
@@ -82,9 +83,11 @@ export default function ClientProviders({ children }: { children: React.ReactNod
                     <DarkModeProvider>
                       <TimerProvider>
                         <CalendarProvider>
-                          <ClientProvidersInner>
-                            {children}
-                          </ClientProvidersInner>
+                          <ExamPrepProvider>
+                            <ClientProvidersInner>
+                              {children}
+                            </ClientProvidersInner>
+                          </ExamPrepProvider>
                         </CalendarProvider>
                       </TimerProvider>
                     </DarkModeProvider>

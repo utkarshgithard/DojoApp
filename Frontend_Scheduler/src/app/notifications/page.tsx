@@ -1,29 +1,48 @@
 "use client";
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNotifications, Notification } from '@/context/NotificationContext';
 import { useDarkMode } from '@/context/DarkModeContext';
+import { useNetwork } from '@/context/NetworkContext';
 import { useRouter } from 'next/navigation';
-import { Bell, Heart, MessageSquare, Check, ArrowLeft, RefreshCw, User, UserPlus } from 'lucide-react';
+import { Bell, Heart, MessageSquare, Check, ArrowLeft, RefreshCw, User, UserPlus, Play, Film } from 'lucide-react';
 import moment from 'moment';
 
 export default function NotificationsPage() {
   const { notifications, unreadCount, loading, markAsRead, markAllAsRead, fetchNotifications } = useNotifications();
   const { darkMode } = useDarkMode() as any;
+  const { followStates, toggleFollow, fetchNetwork, hasData } = useNetwork();
+  const [loadingFollows, setLoadingFollows] = useState<Record<string, boolean>>({});
   const router = useRouter();
 
   const dark = darkMode;
+
+  useEffect(() => {
+    if (!hasData) {
+      fetchNetwork();
+    }
+  }, [hasData, fetchNetwork]);
   const border = dark ? 'border-zinc-800' : 'border-zinc-200';
   const textMuted = dark ? 'text-zinc-400' : 'text-zinc-500';
 
+  const [clickingId, setClickingId] = useState<string | null>(null);
+
   const handleNotificationClick = async (n: Notification) => {
-    if (!n.read) {
-      await markAsRead(n.id);
-    }
-    if (n.type === 'follow_request' || n.type === 'friendship_mutual') {
-      router.push('/friends');
-    } else if (n.postId) {
-      router.push(`/community/post/${n.postId}`);
+    setClickingId(n.id);
+    try {
+      if (!n.read) {
+        await markAsRead(n.id);
+      }
+      if (n.type === 'follow_request' || n.type === 'friendship_mutual') {
+        router.push('/friends');
+      } else if (n.postId) {
+        router.push(`/community/post/${n.postId}`);
+      } else {
+        setClickingId(null);
+      }
+    } catch (err) {
+      console.error(err);
+      setClickingId(null);
     }
   };
 
@@ -77,7 +96,7 @@ export default function NotificationsPage() {
           </div>
         </div>
 
-        {/* Notifications List */}
+        {/* Notifications List — only show skeleton on first load (no cached data) */}
         {loading && notifications.length === 0 ? (
           <div className="space-y-3">
             {[1, 2, 3, 4].map((i) => (
@@ -105,22 +124,34 @@ export default function NotificationsPage() {
             {notifications.map((n) => {
               const relativeTime = moment(n.createdAt).fromNow();
 
-              let badgeBg = 'bg-indigo-650 text-white border-indigo-500';
+              let badgeBg = 'bg-indigo-600 text-white border-indigo-500';
               let badgeIcon = <MessageSquare size={9} fill="white" />;
               let bodyText = 'commented on your post.';
 
               if (n.type === 'like') {
-                badgeBg = 'bg-rose-500 text-white border-rose-450';
+                badgeBg = 'bg-rose-500 text-white border-rose-400';
                 badgeIcon = <Heart size={9} fill="white" />;
                 bodyText = 'liked your post.';
               } else if (n.type === 'follow_request') {
-                badgeBg = 'bg-blue-500 text-white border-blue-450';
+                badgeBg = 'bg-blue-500 text-white border-blue-400';
                 badgeIcon = <UserPlus size={9} />;
-                bodyText = 'started following you. Follow back to become friends!';
+                bodyText = 'started following you.';
               } else if (n.type === 'friendship_mutual') {
-                badgeBg = 'bg-emerald-500 text-white border-emerald-450';
+                badgeBg = 'bg-emerald-500 text-white border-emerald-400';
                 badgeIcon = <User size={9} />;
-                bodyText = 'and you followed each other and are now friends! 🤝';
+                bodyText = 'and you are now friends! 🤝';
+              }
+
+              if (clickingId === n.id) {
+                return (
+                  <div key={n.id} className={`p-4 flex items-center gap-3.5 animate-pulse ${dark ? 'bg-zinc-900/40' : 'bg-zinc-50/50'}`}>
+                    <div className={`w-10 h-10 rounded-full ${dark ? 'bg-zinc-800' : 'bg-zinc-200'}`} />
+                    <div className="flex-1 space-y-2">
+                      <div className={`h-3.5 w-1/4 rounded-lg ${dark ? 'bg-zinc-800' : 'bg-zinc-200'}`} />
+                      <div className={`h-3 w-1/2 rounded-lg ${dark ? 'bg-zinc-850' : 'bg-zinc-250'}`} />
+                    </div>
+                  </div>
+                );
               }
 
               return (
@@ -160,8 +191,8 @@ export default function NotificationsPage() {
                       {bodyText}
                     </p>
 
-                    {/* Post Content Snippet Preview */}
-                    {n.post && (
+                    {/* Post Content Snippet — only show if no image/video attached */}
+                    {n.post && !n.post.media?.length && (
                       <p className={`text-[12.5px] italic border-l-2 pl-2 truncate max-w-lg ${dark ? 'border-zinc-700 text-zinc-400' : 'border-zinc-200 text-zinc-500'}`}>
                         &ldquo;{n.post.content}&rdquo;
                       </p>
@@ -176,7 +207,73 @@ export default function NotificationsPage() {
                         </>
                       )}
                     </div>
+
+                    {n.type === 'follow_request' && (
+                      <div className="pt-2" onClick={(e) => e.stopPropagation()}>
+                        {followStates[n.senderId] ? (
+                          <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-semibold border ${
+                            dark 
+                              ? 'bg-zinc-900 border-zinc-800 text-zinc-450' 
+                              : 'bg-zinc-100 border-zinc-200 text-zinc-600'
+                          }`}>
+                            <Check size={12} className="text-emerald-500" />
+                            <span>Following Back</span>
+                          </span>
+                        ) : (
+                          <button
+                            disabled={loadingFollows[n.senderId]}
+                            onClick={async () => {
+                              setLoadingFollows(prev => ({ ...prev, [n.senderId]: true }));
+                              try {
+                                await toggleFollow(n.senderId);
+                                if (!n.read) {
+                                  await markAsRead(n.id);
+                                }
+                              } catch (err) {
+                                console.error(err);
+                              } finally {
+                                setLoadingFollows(prev => ({ ...prev, [n.senderId]: false }));
+                              }
+                            }}
+                            className={`inline-flex items-center justify-center min-w-[100px] h-7 px-3 rounded-lg text-xs font-semibold border transition-all ${
+                              dark
+                                ? 'border-indigo-500/30 bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500/20'
+                                : 'border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100'
+                            }`}
+                          >
+                            {loadingFollows[n.senderId] ? (
+                              <div className="flex items-center gap-1">
+                                <span className="w-1.5 h-1.5 rounded-full bg-current animate-pulse" />
+                                <span className="w-1.5 h-1.5 rounded-full bg-current animate-pulse [animation-delay:0.2s]" />
+                                <span className="w-1.5 h-1.5 rounded-full bg-current animate-pulse [animation-delay:0.4s]" />
+                              </div>
+                            ) : (
+                              <span className="flex items-center gap-1">
+                                <UserPlus size={12} />
+                                Follow Back
+                              </span>
+                            )}
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </div>
+
+                  {/* Post Image/Video Thumbnail (Right side) */}
+                  {n.post?.media?.[0]?.url && (
+                    <div className="relative w-11 h-11 rounded-lg overflow-hidden border border-zinc-200 dark:border-zinc-800 shrink-0 select-none">
+                      {n.post.media[0].type === 'video' ? (
+                        <div className="w-full h-full bg-zinc-100 dark:bg-zinc-900 flex items-center justify-center">
+                          <Film size={16} className="text-zinc-500" />
+                          <div className="absolute inset-0 bg-black/25 flex items-center justify-center">
+                            <Play size={10} className="text-white fill-white" />
+                          </div>
+                        </div>
+                      ) : (
+                        <img src={n.post.media[0].url} alt="Post preview" className="w-full h-full object-cover" />
+                      )}
+                    </div>
+                  )}
                 </div>
               );
             })}

@@ -1,33 +1,15 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/context/authContext";
 import { useDarkMode } from "@/context/DarkModeContext";
 import { useRouter } from "next/navigation";
-import { BookOpen, Calendar, Clock, Link as LinkIcon, Plus, Trash2, Play, Square, Pause, Sparkles, AlertCircle } from "lucide-react";
+import { BookOpen, Calendar, Clock, Link as LinkIcon, Plus, Trash2, Play, Square, Pause, Sparkles, AlertCircle, RefreshCw } from "lucide-react";
 import { useTimer } from "@/context/TimerContext";
 import { useCalendarContext } from "@/context/CalendarContext";
 import MasterCalendar from "@/components/MasterCalendar";
 import { toast } from "sonner";
-
-interface Exam {
-  id: string;
-  name: string;
-  date: string; // YYYY-MM-DD
-}
-
-interface Course {
-  id: string;
-  name: string;
-  totalLectures: number;
-  completedLectures: number;
-}
-
-interface Resource {
-  id: string;
-  title: string;
-  url: string;
-}
+import { useExamPrep } from "@/context/ExamPrepContext";
 
 export default function ExamPrepPage() {
   const router = useRouter();
@@ -36,10 +18,7 @@ export default function ExamPrepPage() {
 
   const [mounted, setMounted] = useState(false);
 
-  // Data states
-  const [exams, setExams] = useState<Exam[]>([]);
-  const [courses, setCourses] = useState<Course[]>([]);
-  const [resources, setResources] = useState<Resource[]>([]);
+  const { exams, courses, resources, syncLoading, addExam, deleteExam, addCourse, updateCourseProgress, deleteCourse, addResource, deleteResource } = useExamPrep();
   const [notes, setNotes] = useState("");
 
   // Revision Planner states
@@ -62,49 +41,38 @@ export default function ExamPrepPage() {
     isFloating, setIsFloating, stopTimer
   } = useTimer();
 
-  // Load from local storage
+  // ── Server-sync is now handled by ExamPrepContext ─────────────────────────
+
+  // ── Ephemeral local state (planner / AI — not synced) ────────────────────
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      const storedExams = localStorage.getItem("examPrep_exams");
-      if (storedExams) setExams(JSON.parse(storedExams));
-
-      const storedCourses = localStorage.getItem("examPrep_courses");
-      if (storedCourses) setCourses(JSON.parse(storedCourses));
-
-      const storedResources = localStorage.getItem("examPrep_resources");
-      if (storedResources) setResources(JSON.parse(storedResources));
-
-      const storedNotes = localStorage.getItem("examPrep_notes");
+    if (typeof window !== 'undefined') {
+      const storedNotes = localStorage.getItem('examPrep_notes');
       if (storedNotes) setNotes(storedNotes);
 
-      const storedPlannerTopics = localStorage.getItem("examPrep_plannerTopics");
+      const storedPlannerTopics = localStorage.getItem('examPrep_plannerTopics');
       if (storedPlannerTopics) {
         const parsed = JSON.parse(storedPlannerTopics);
         setPlannerTopics(parsed.map((t: any) => ({ ...t, difficulty: t.difficulty === 'Okay' ? 'Medium' : t.difficulty })));
       }
 
-      const storedExamType = localStorage.getItem("examPrep_examType");
+      const storedExamType = localStorage.getItem('examPrep_examType');
       if (storedExamType) setExamType(storedExamType);
 
-      const storedDaysToComplete = localStorage.getItem("examPrep_daysToComplete");
+      const storedDaysToComplete = localStorage.getItem('examPrep_daysToComplete');
       if (storedDaysToComplete) setDaysToComplete(parseInt(storedDaysToComplete) || 30);
 
       setMounted(true);
     }
   }, []);
 
-  // Save to local storage
   useEffect(() => {
     if (mounted) {
-      localStorage.setItem("examPrep_exams", JSON.stringify(exams));
-      localStorage.setItem("examPrep_courses", JSON.stringify(courses));
-      localStorage.setItem("examPrep_resources", JSON.stringify(resources));
-      localStorage.setItem("examPrep_notes", notes);
-      localStorage.setItem("examPrep_plannerTopics", JSON.stringify(plannerTopics));
-      localStorage.setItem("examPrep_examType", examType);
-      localStorage.setItem("examPrep_daysToComplete", daysToComplete.toString());
+      localStorage.setItem('examPrep_notes', notes);
+      localStorage.setItem('examPrep_plannerTopics', JSON.stringify(plannerTopics));
+      localStorage.setItem('examPrep_examType', examType);
+      localStorage.setItem('examPrep_daysToComplete', daysToComplete.toString());
     }
-  }, [exams, courses, resources, notes, plannerTopics, mounted]);
+  }, [notes, plannerTopics, examType, daysToComplete, mounted]);
 
   // Auth check
   useEffect(() => {
@@ -137,37 +105,35 @@ export default function ExamPrepPage() {
   }`;
 
   // --- Handlers ---
-  const handleAddExam = (e: React.FormEvent<HTMLFormElement>) => {
+  // --- Handlers ---
+  const handleAddExam = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
-    const name = formData.get("name") as string;
-    const date = formData.get("date") as string;
-    if (name && date) {
-      setExams([...exams, { id: Date.now().toString(), name, date }]);
-      e.currentTarget.reset();
-    }
+    const name = formData.get('name') as string;
+    const date = formData.get('date') as string;
+    if (!name || !date) return;
+    await addExam(name, date);
+    e.currentTarget.reset();
   };
 
-  const handleAddCourse = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleAddCourse = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
-    const name = formData.get("name") as string;
-    const total = parseInt(formData.get("total") as string, 10);
-    if (name && total > 0) {
-      setCourses([...courses, { id: Date.now().toString(), name, totalLectures: total, completedLectures: 0 }]);
-      e.currentTarget.reset();
-    }
+    const name = formData.get('name') as string;
+    const total = parseInt(formData.get('total') as string, 10);
+    if (!name || total <= 0) return;
+    await addCourse(name, total);
+    e.currentTarget.reset();
   };
 
-  const handleAddResource = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleAddResource = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
-    const title = formData.get("title") as string;
-    const url = formData.get("url") as string;
-    if (title && url) {
-      setResources([...resources, { id: Date.now().toString(), title, url }]);
-      e.currentTarget.reset();
-    }
+    const title = formData.get('title') as string;
+    const url = formData.get('url') as string;
+    if (!title || !url) return;
+    await addResource(title, url);
+    e.currentTarget.reset();
   };
 
   const calculateDaysRemaining = (dateString: string) => {
@@ -232,7 +198,7 @@ export default function ExamPrepPage() {
             <span>Preparation</span>
           </p>
           <h1 className="text-[22px] font-medium tracking-tight">Exam Preparation</h1>
-          <p className={`text-[13px] ${muted} mt-0.5`}>Track deadlines, course progress, focus time, and essential resources. Data is saved locally to your device.</p>
+          <p className={`text-[13px] ${muted} mt-0.5`}>Track deadlines, course progress, focus time, and essential resources. Synced across all your devices.</p>
         </div>
 
         <div className="flex flex-col gap-6">
@@ -345,7 +311,7 @@ export default function ExamPrepPage() {
                             </span>
                             {days >= 0 && <p className={`text-[10px] uppercase tracking-wider ${muted}`}>Days Left</p>}
                           </div>
-                          <button onClick={() => setExams(exams.filter(e => e.id !== exam.id))} className="text-red-500 hover:bg-red-500/10 p-1.5 rounded-md transition-colors">
+                          <button onClick={() => deleteExam(exam.id)} className="text-red-500 hover:bg-red-500/10 p-1.5 rounded-md transition-colors">
                             <Trash2 size={14} />
                           </button>
                         </div>
@@ -379,7 +345,7 @@ export default function ExamPrepPage() {
                       <div key={course.id} className={`p-3 rounded-lg border ${border} space-y-2`}>
                         <div className="flex items-center justify-between">
                           <p className="font-medium text-[14px]">{course.name}</p>
-                          <button onClick={() => setCourses(courses.filter(c => c.id !== course.id))} className="text-red-500 hover:bg-red-500/10 p-1 rounded-md transition-colors">
+                          <button onClick={() => deleteCourse(course.id)} className="text-red-500 hover:bg-red-500/10 p-1 rounded-md transition-colors">
                             <Trash2 size={13} />
                           </button>
                         </div>
@@ -394,9 +360,8 @@ export default function ExamPrepPage() {
                             <div 
                               key={i} 
                               onClick={() => {
-                                setCourses(courses.map(c => 
-                                  c.id === course.id ? { ...c, completedLectures: i === c.completedLectures - 1 ? i : i + 1 } : c
-                                ))
+                                const newCompleted = i < course.completedLectures ? i : i + 1;
+                                updateCourseProgress(course.id, newCompleted);
                               }}
                               className={`w-8 h-8 rounded-md border flex items-center justify-center text-[11.5px] font-bold cursor-pointer transition-all duration-200 hover:scale-105 shrink-0 ${
                                 i < course.completedLectures 
@@ -412,13 +377,19 @@ export default function ExamPrepPage() {
                         
                         <div className="flex items-center gap-2 pt-1">
                           <button 
-                            onClick={() => setCourses(courses.map(c => c.id === course.id ? { ...c, completedLectures: Math.max(0, c.completedLectures - 1) } : c))}
+                            onClick={() => {
+                              const newCompleted = Math.max(0, course.completedLectures - 1);
+                              updateCourseProgress(course.id, newCompleted);
+                            }}
                             className={`px-2 py-1 rounded text-[11px] font-medium border ${border} ${dark ? 'hover:bg-gray-800' : 'hover:bg-gray-100'}`}
                           >
                             -1
                           </button>
                           <button 
-                            onClick={() => setCourses(courses.map(c => c.id === course.id ? { ...c, completedLectures: Math.min(c.totalLectures, c.completedLectures + 1) } : c))}
+                            onClick={() => {
+                              const newCompleted = Math.min(course.totalLectures, course.completedLectures + 1);
+                              updateCourseProgress(course.id, newCompleted);
+                            }}
                             className={`px-2 py-1 rounded text-[11px] font-medium border ${border} ${dark ? 'hover:bg-gray-800' : 'hover:bg-gray-100'}`}
                           >
                             +1
@@ -581,7 +552,7 @@ export default function ExamPrepPage() {
                           <a href={resource.url} target="_blank" rel="noopener noreferrer" className="text-[13.5px] text-blue-500 hover:underline truncate mr-4">
                             {resource.title}
                           </a>
-                          <button onClick={() => setResources(resources.filter(r => r.id !== resource.id))} className="text-red-500 hover:bg-red-500/10 p-1.5 rounded-md transition-colors shrink-0">
+                          <button onClick={() => deleteResource(resource.id)} className="text-red-500 hover:bg-red-500/10 p-1.5 rounded-md transition-colors shrink-0">
                             <Trash2 size={13} />
                           </button>
                         </div>

@@ -3,7 +3,7 @@
 import { motion, useInView } from "framer-motion";
 import { useRef, useState, useEffect } from "react";
 import { useDarkMode } from "@/context/DarkModeContext";
-import { getStudentAvatar } from "../landing/StudentAvatar";
+import { getStudentAvatar } from "../ui/StudentAvatar";
 
 export function TestimonialsSection() {
   const { darkMode } = useDarkMode();

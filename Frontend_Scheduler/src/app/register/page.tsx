@@ -78,6 +78,17 @@ export default function Register() {
     if (!authLoading && isAuthenticated) router.push('/community');
   }, [isAuthenticated, authLoading, router]);
 
+  // Capture invite/referral code from URL and store in localStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const refCode = params.get('ref') || params.get('invite');
+      if (refCode) {
+        localStorage.setItem('dojo_invite_code', refCode);
+      }
+    }
+  }, []);
+
   const validateEmail = (value: string) => {
     if (value && !isValidEmail(value)) {
       setEmailError('Please enter a valid email address.');
@@ -116,9 +127,16 @@ export default function Register() {
       // Sync with backend
       await API.post(
         '/auth/sync',
-        { name: form.name, email: form.email },
+        { 
+          name: form.name, 
+          email: form.email,
+          inviteCode: typeof window !== 'undefined' ? localStorage.getItem('dojo_invite_code') : null
+        },
         { headers: { Authorization: `Bearer ${token}` } }
       );
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('dojo_invite_code');
+      }
       
       login(token);
       setVerificationSent(true);
@@ -169,9 +187,16 @@ export default function Register() {
       const token = await user.getIdToken();
       await API.post(
         '/auth/sync',
-        { name: user.displayName, email: user.email },
+        { 
+          name: user.displayName, 
+          email: user.email,
+          inviteCode: typeof window !== 'undefined' ? localStorage.getItem('dojo_invite_code') : null
+        },
         { headers: { Authorization: `Bearer ${token}` } }
       );
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('dojo_invite_code');
+      }
       login(token);
       router.push('/community');
     } catch (err: any) {
