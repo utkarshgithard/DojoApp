@@ -104,6 +104,7 @@ export default function CommunityPostCard({
 
   const router = useRouter();
   const isOwnPost = post.author.id === currentUserId;
+  const isAdmin = userDetails?.role === 'admin';
 
   const handleUserClick = () => {
     if (onUserClick) {
@@ -286,8 +287,8 @@ export default function CommunityPostCard({
             </p>
           </div>
 
-          {/* Options menu (delete) — own posts or moderator */}
-          {(isOwnPost || isModerator) && (
+          {/* Options menu — own posts, moderator, or site admin */}
+          {(isOwnPost || isModerator || isAdmin) && (
             <div className="relative">
               <button
                 onClick={() => setMenuOpen((v) => !v)}

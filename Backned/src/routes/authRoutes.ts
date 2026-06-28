@@ -18,10 +18,25 @@ userRouter.get('/userDetails', verifyToken, async (req: AuthenticatedRequest, re
 
     // Try reading from cache first
     const cachedProfile = await cacheGet(cacheKey);
-    if (cachedProfile) {
-      const user = JSON.parse(cachedProfile);
-      res.json({ user, success: true, message: 'User Found (cached)' });
-      return;
+    const forceRefresh = req.query.refresh === 'true';
+
+    if (cachedProfile && !forceRefresh) {
+      try {
+        const user = JSON.parse(cachedProfile);
+        // If the cached profile was created before we added the 'role' field,
+        // bypass the cache and fetch fresh from the DB.
+        if (user && typeof user === 'object' && 'role' in user) {
+          res.json({ user, success: true, message: 'User Found (cached)' });
+          return;
+        }
+      } catch {
+        // If JSON parsing fails, clear the corrupted cache
+        await cacheDel(cacheKey).catch(() => {});
+      }
+    }
+
+    if (forceRefresh) {
+      await cacheDel(cacheKey).catch(() => {});
     }
 
     const user = await prisma.user.findUnique({
@@ -35,6 +50,7 @@ userRouter.get('/userDetails', verifyToken, async (req: AuthenticatedRequest, re
         createdAt: true,
         bio: true,
         avatarUrl: true,
+        role: true,
       },
     });
 
@@ -144,8 +160,8 @@ userRouter.post('/sync', async (req: Request, res: Response): Promise<void> => {
     const existing = await prisma.user.findUnique({ where: { email } });
     
     if (existing) {
-      // If user has no avatar in DB but has a picture in Firebase, sync it
-      if (!existing.avatarUrl && decodedToken.picture) {
+      // Sync avatar if it is missing or has changed in Firebase
+      if (decodedToken.picture && existing.avatarUrl !== decodedToken.picture) {
         await prisma.user.update({
           where: { id: existing.id },
           data: { avatarUrl: decodedToken.picture },
@@ -329,17 +345,21 @@ userRouter.put('/profile', verifyToken, async (req: AuthenticatedRequest, res: R
   }
 });
 
-// PUT /api/auth/public-key — store/update caller's ECDH public key (E2EE)
+// PUT /api/auth/public-key — store/update caller's ECDH public key (E2EE) for a specific device
 userRouter.put('/public-key', verifyToken, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
-    const { publicKey } = req.body;
+    const { publicKey, deviceId } = req.body;
     if (!publicKey || typeof publicKey !== 'string') {
       res.status(400).json({ error: 'publicKey (string) is required' });
       return;
     }
+    if (!deviceId || typeof deviceId !== 'string') {
+      res.status(400).json({ error: 'deviceId (string) is required' });
+      return;
+    }
     await prisma.userPublicKey.upsert({
-      where: { userId: req.userId! },
-      create: { userId: req.userId!, publicKey },
+      where: { userId_deviceId: { userId: req.userId!, deviceId } },
+      create: { userId: req.userId!, deviceId, publicKey },
       update: { publicKey },
     });
     res.json({ success: true });
@@ -359,8 +379,18 @@ userRouter.get('/public-keys', verifyToken, async (req: AuthenticatedRequest, re
     }
     const ids = raw.split(',').map((id) => id.trim()).filter(Boolean).slice(0, 50); // cap at 50
     const rows = await prisma.userPublicKey.findMany({ where: { userId: { in: ids } } });
-    const keys: Record<string, string> = {};
-    for (const row of rows) keys[row.userId] = row.publicKey;
+    
+    // Group public keys by userId
+    const keys: Record<string, { deviceId: string; publicKey: string }[]> = {};
+    for (const row of rows) {
+      if (!keys[row.userId]) {
+        keys[row.userId] = [];
+      }
+      keys[row.userId].push({
+        deviceId: row.deviceId,
+        publicKey: row.publicKey,
+      });
+    }
     res.json({ keys });
   } catch (error) {
     console.error(error);

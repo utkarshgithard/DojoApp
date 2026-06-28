@@ -327,7 +327,8 @@ export const deletePost = async (req: AuthenticatedRequest, res: Response): Prom
       return;
     }
 
-    const canDelete = post.userId === userId;
+    const isAdmin = req.user?.role === 'admin';
+    const canDelete = post.userId === userId || isAdmin;
 
     if (!canDelete) {
       res.status(403).json({ error: 'Not authorised to delete this post' });

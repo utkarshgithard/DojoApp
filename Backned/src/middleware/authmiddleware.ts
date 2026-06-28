@@ -13,6 +13,7 @@ export interface AuthenticatedRequest extends Request {
     verified: boolean;
     friendCode: string;
     createdAt: Date;
+    role: string;
   };
 }
 
@@ -66,6 +67,7 @@ export const verifyToken = async (
         verified: true,
         friendCode: true,
         createdAt: true,
+        role: true,
       },
     });
 
@@ -121,6 +123,7 @@ export const optionalVerifyToken = async (
         verified: true,
         friendCode: true,
         createdAt: true,
+        role: true,
       },
     });
 

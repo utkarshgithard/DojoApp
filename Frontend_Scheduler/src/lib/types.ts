@@ -11,6 +11,7 @@ export interface User {
   createdAt: string;
   bio?: string;
   avatarUrl?: string;
+  role?: 'student' | 'instructor' | 'admin';
 }
 
 export interface Friend {

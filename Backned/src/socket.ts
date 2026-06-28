@@ -1056,28 +1056,31 @@ function registerE2EEHandlers(io: Server, socket: Socket, user: UserPayload) {
    * A client announces their ECDH public key when joining a session.
    * Server relays to all existing members so they can distribute the room key.
    */
-  socket.on('e2ee:announce', ({ sessionId, publicKey }: { sessionId: string; publicKey: string }) => {
-    if (!sessionId || !publicKey) return;
+  socket.on('e2ee:announce', ({ sessionId, publicKey, deviceId }: { sessionId: string; publicKey: string; deviceId: string }) => {
+    if (!sessionId || !publicKey || !deviceId) return;
     socket.to(`session_${sessionId}`).emit('e2ee:memberJoined', {
       userId: user.id,
       publicKey,
       sessionId,
+      deviceId,
     });
   });
 
   /**
-   * An existing member sends a wrapped room key to a specific new joiner.
+   * An existing member sends a wrapped room key to a specific new joiner's device.
    * Server relays directly to the target user's personal socket room (user.id).
    * The server never decrypts the encryptedRoomKey blob.
    */
-  socket.on('e2ee:keyPackage', ({ sessionId, toUserId, encryptedRoomKey }: {
+  socket.on('e2ee:keyPackage', ({ sessionId, toUserId, toDeviceId, encryptedRoomKey }: {
     sessionId: string;
     toUserId: string;
+    toDeviceId: string;
     encryptedRoomKey: string;
   }) => {
-    if (!toUserId || !encryptedRoomKey) return;
+    if (!toUserId || !toDeviceId || !encryptedRoomKey) return;
     io.to(toUserId).emit('e2ee:keyPackage', {
       fromUserId: user.id,
+      toDeviceId,
       encryptedRoomKey,
     });
   });

@@ -2,8 +2,9 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
 import API from '@/lib/axios';
-import { X, Send, Search, CheckCircle2, Loader2 } from 'lucide-react';
+import { X, Send, Search, CheckCircle2, Loader2, Link2, MessageCircle } from 'lucide-react';
 import { useNetwork } from '@/context/NetworkContext';
+import { toast } from 'sonner';
 
 interface ShareModalProps {
   postId: string;
@@ -20,6 +21,24 @@ export default function ShareModal({ postId, dark, onClose }: ShareModalProps) {
   const [query, setQuery] = useState('');
   const [sharing, setSharing] = useState(false);
   const [done, setDone] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const postUrl = `https://dojoclass.space/community/post/${postId}`;
+
+  const handleCopyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(postUrl);
+      setCopied(true);
+      toast.success('Link copied!');
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      toast.error('Could not copy link');
+    }
+  };
+
+  const handleWhatsApp = () => {
+    window.open(`https://wa.me/?text=${encodeURIComponent(postUrl)}`, '_blank');
+  };
 
   useEffect(() => {
     if (!hasData) {
@@ -79,7 +98,7 @@ export default function ShareModal({ postId, dark, onClose }: ShareModalProps) {
         {/* Header */}
         <div className={`flex items-center justify-between px-4 py-3 border-b ${dark ? 'border-zinc-800' : 'border-zinc-100'}`}>
           <h2 className={`text-[15px] font-semibold ${dark ? 'text-white' : 'text-zinc-900'}`}>
-            Share with friends
+            Share post
           </h2>
           <button
             onClick={onClose}
@@ -87,6 +106,51 @@ export default function ShareModal({ postId, dark, onClose }: ShareModalProps) {
           >
             <X size={16} />
           </button>
+        </div>
+
+        {/* ── Copy Link / WhatsApp ─────────────────────────────── */}
+        <div className={`px-4 py-3 border-b ${dark ? 'border-zinc-800' : 'border-zinc-100'}`}>
+          <p className={`text-[11px] font-semibold uppercase tracking-wider mb-2.5 ${dark ? 'text-zinc-500' : 'text-zinc-400'}`}>
+            Share link
+          </p>
+          {/* Link preview bar */}
+          <div className={`flex items-center gap-2 px-3 py-2 rounded-lg text-[12px] mb-2.5 truncate border ${
+            dark ? 'bg-zinc-800/60 border-zinc-700 text-zinc-400' : 'bg-zinc-50 border-zinc-200 text-zinc-500'
+          }`}>
+            <Link2 size={12} className="shrink-0 opacity-60" />
+            <span className="truncate">{postUrl}</span>
+          </div>
+          <div className="flex gap-2">
+            {/* Copy Link */}
+            <button
+              onClick={handleCopyLink}
+              className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-[13px] font-semibold transition-all active:scale-[0.98] ${
+                copied
+                  ? 'bg-emerald-500 text-white'
+                  : dark
+                    ? 'bg-zinc-800 hover:bg-zinc-700 text-zinc-200'
+                    : 'bg-zinc-100 hover:bg-zinc-200 text-zinc-700'
+              }`}
+            >
+              {copied ? <CheckCircle2 size={14} /> : <Link2 size={14} />}
+              {copied ? 'Copied!' : 'Copy link'}
+            </button>
+            {/* WhatsApp */}
+            <button
+              onClick={handleWhatsApp}
+              className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-[13px] font-semibold bg-[#25D366] hover:bg-[#20c45b] text-white transition-all active:scale-[0.98]"
+            >
+              <MessageCircle size={14} />
+              WhatsApp
+            </button>
+          </div>
+        </div>
+
+        {/* ── Share with friends (in-app) ──────────────────────── */}
+        <div className={`px-4 pt-3 pb-1 ${dark ? 'text-zinc-500' : 'text-zinc-400'}`}>
+          <p className="text-[11px] font-semibold uppercase tracking-wider">
+            Send to friends
+          </p>
         </div>
 
         {/* Search */}
