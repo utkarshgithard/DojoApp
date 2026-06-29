@@ -31,9 +31,13 @@ export async function cacheGet(key: string): Promise<string | null> {
   if (!redis) return null;
   try {
     const value = await redis.get(key);
+    
+    // If cache miss, return null immediately
+    if (value === null || value === undefined) return null;
+    
     // Upstash automatically parses JSON if it can, but our old code expected a string.
     // So we ensure it returns a string representation if it's an object.
-    return typeof value === 'object' ? JSON.stringify(value) : (value as string);
+    return typeof value === 'object' ? JSON.stringify(value) : String(value);
   } catch (err) {
     console.error(`Redis GET error for key ${key}:`, err);
     return null;
