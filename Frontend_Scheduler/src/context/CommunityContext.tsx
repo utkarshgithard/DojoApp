@@ -116,6 +116,10 @@ export const CommunityProvider = ({ children }: { children: React.ReactNode }) =
 
   React.useEffect(() => {
     postsRef.current = posts;
+    // Keep local storage cache perfectly in sync with the live feed (first page only)
+    if (typeof window !== 'undefined' && posts.length > 0) {
+      localStorage.setItem('dojo_community_posts_cache', JSON.stringify(posts.slice(0, 20)));
+    }
   }, [posts]);
 
   const setScrollPosition = useCallback((pos: number) => {
@@ -153,9 +157,6 @@ export const CommunityProvider = ({ children }: { children: React.ReactNode }) =
           setPosts(data.posts);
           setHasNewPosts(false);
           setPendingPosts([]);
-          if (typeof window !== 'undefined') {
-            localStorage.setItem('dojo_community_posts_cache', JSON.stringify(data.posts));
-          }
         }
       }
       setNextCursor(data.nextCursor);
