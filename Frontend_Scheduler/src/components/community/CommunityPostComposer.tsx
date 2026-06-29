@@ -109,7 +109,7 @@ export default function CommunityPostComposer({ currentUser, dark, onPostCreated
     }
     return (
       <div className={`w-9 h-9 rounded-full flex items-center justify-center text-[13px] font-bold shrink-0 ${dark ? 'bg-zinc-700 text-zinc-200' : 'bg-zinc-200 text-zinc-700'}`}>
-        {currentUser.name.charAt(0).toUpperCase()}
+        {(currentUser?.name || 'U').charAt(0).toUpperCase()}
       </div>
     );
   };

@@ -212,12 +212,13 @@ export default function CommunityPostCard({
       'from-amber-400 to-orange-500',
       'from-blue-400 to-cyan-500',
     ];
-    const colorIdx = author.name.charCodeAt(0) % colors.length;
+    const safeName = author?.name || 'User';
+    const colorIdx = (safeName.charCodeAt(0) || 0) % colors.length;
     return (
       <div
         className={`w-10 h-10 rounded-full flex items-center justify-center text-[14px] font-bold text-white bg-gradient-to-br ${colors[colorIdx]} shrink-0`}
       >
-        {author.name.charAt(0).toUpperCase()}
+        {safeName.charAt(0).toUpperCase()}
       </div>
     );
   };
@@ -245,7 +246,7 @@ export default function CommunityPostCard({
                   dark ? 'text-white' : 'text-zinc-900'
                 }`}
               >
-                {post.author.name}
+                {post.author?.name || 'User'}
               </button>
 
               {post.community && (
@@ -283,7 +284,7 @@ export default function CommunityPostCard({
               )}
             </div>
             <p className={`text-[11.5px] mt-0.5 ${dark ? 'text-zinc-500' : 'text-zinc-400'}`}>
-              {formatDistanceToNowStrict(new Date(post.createdAt), { addSuffix: true })}
+              {post.createdAt ? formatDistanceToNowStrict(new Date(post.createdAt), { addSuffix: true }) : 'just now'}
             </p>
           </div>
 
