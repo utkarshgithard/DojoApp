@@ -76,10 +76,10 @@ export default function CommunityPostCard({
       likedByMe: post.likedByMe,
       commentCount: post.commentCount,
     });
-    if (post.followedByMe !== undefined && currentUserId && post.author.id !== currentUserId) {
-      syncFollowState(post.author.id, post.followedByMe);
+    if (post.followedByMe !== undefined && currentUserId && post.author?.id !== currentUserId) {
+      syncFollowState(post.author?.id, post.followedByMe);
     }
-  }, [post.id, post.likeCount, post.likedByMe, post.commentCount, post.followedByMe, post.author.id, currentUserId, syncPostState, syncFollowState]);
+  }, [post.id, post.likeCount, post.likedByMe, post.commentCount, post.followedByMe, post.author?.id, currentUserId, syncPostState, syncFollowState]);
 
   const currentState = postStates[post.id] || {
     likeCount: post.likeCount,
@@ -87,7 +87,7 @@ export default function CommunityPostCard({
     commentCount: post.commentCount,
   };
 
-  const following = followStates[post.author.id] || false;
+  const following = followStates[post.author?.id] || false;
   const liked = currentState.likedByMe;
   const likeCount = currentState.likeCount;
   const commentCount = currentState.commentCount;
@@ -103,14 +103,14 @@ export default function CommunityPostCard({
   const [currentPostContent, setCurrentPostContent] = useState(post.content);
 
   const router = useRouter();
-  const isOwnPost = post.author.id === currentUserId;
+  const isOwnPost = post.author?.id === currentUserId;
   const isAdmin = userDetails?.role === 'admin';
 
   const handleUserClick = () => {
     if (onUserClick) {
-      onUserClick(post.author.id);
+      onUserClick(post.author?.id);
     } else {
-      router.push(`/user/${post.author.id}`);
+      router.push(`/user/${post.author?.id}`);
     }
   };
 
@@ -146,7 +146,7 @@ export default function CommunityPostCard({
     if (followLoading) return;
     setFollowLoading(true);
     try {
-      await toggleFollow(post.author.id);
+      await toggleFollow(post.author?.id);
     } catch {
       toast.error('Failed to follow user');
       // Errors are handled inside toggleFollow (optimistic revert)
