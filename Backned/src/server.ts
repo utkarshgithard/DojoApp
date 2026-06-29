@@ -19,6 +19,7 @@ import communityGroupRouter from './routes/communityGroupRoutes.js';
 import notificationRouter from './routes/notificationRoutes.js';
 import calendarRouter from './routes/calendarRoutes.js';
 import examPrepRouter from './routes/examPrepRoutes.js';
+import adminRouter from './routes/adminRoutes.js';
 import prisma from './lib/prisma.js';
 import { setupSocketHandlers, setDbReady } from './socket.js';
 import { calculateHotScore } from './controllers/communityController.js';
@@ -67,6 +68,7 @@ app.use('/api/groups', communityGroupRouter);
 app.use('/api/notifications', notificationRouter);
 app.use('/api/calendar', calendarRouter);
 app.use('/api/exam-prep', examPrepRouter);
+app.use('/api/admin', adminRouter);
 
 app.get('/', (_req, res) => {
   res.send('Api Working.');

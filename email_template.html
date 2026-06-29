@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DojoClass — Share Something on the Main Feed</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap');
+
+    :root {
+      --orange: #F4761C;
+      --black: #181818;
+      --cream: #F4F1ED;
+      --white: #FFFFFF;
+      --text-muted: #6B6B6B;
+      --navy: #1B1B2E;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      padding: 0;
+      background: #E8E8E8;
+      font-family: 'Inter', -apple-system, sans-serif;
+    }
+
+    .email-container {
+      max-width: 620px;
+      margin: 0 auto;
+      background: #FFFFFF;
+    }
+
+    a {
+      text-decoration: none;
+    }
+
+    /* ---------- PREHEADER / HEADER ---------- */
+    .preheader {
+      display: none;
+      max-height: 0;
+      overflow: hidden;
+      opacity: 0;
+    }
+
+    .header {
+      background: #FFFFFF;
+      padding: 28px 0;
+      text-align: center;
+    }
+
+    .logo-box {
+      display: inline-block;
+      border: 2px solid #181818;
+      padding: 9px 22px;
+      font-family: 'Poppins', sans-serif;
+      font-weight: 700;
+      font-size: 14px;
+      letter-spacing: 1px;
+      color: #181818;
+    }
+
+    /* ---------- HERO ---------- */
+    .hero {
+      display: flex;
+      align-items: stretch;
+    }
+
+    .hero-copy {
+      background: #F4761C;
+      width: 54%;
+      padding: 34px 28px;
+      vertical-align: middle;
+    }
+
+    .hero-greeting {
+      font-family: 'Inter', sans-serif;
+      font-weight: 600;
+      font-size: 13px;
+      letter-spacing: 0.5px;
+      color: rgba(255, 255, 255, 0.85);
+      margin: 0 0 14px 0;
+      text-transform: uppercase;
+    }
+
+    .hero-headline {
+      font-family: 'Poppins', sans-serif;
+      font-weight: 800;
+      font-size: 34px;
+      line-height: 1.05;
+      color: #FFFFFF;
+      margin: 0 0 16px 0;
+      letter-spacing: -0.5px;
+    }
+
+    .hero-headline div {
+      display: block;
+    }
+
+    .hero-sub {
+      font-family: 'Poppins', sans-serif;
+      font-weight: 700;
+      font-size: 14px;
+      letter-spacing: 1px;
+      color: #1B1B2E;
+      margin: 0 0 22px 0;
+    }
+
+    .btn {
+      display: inline-block;
+      background: #181818;
+      color: #FFFFFF !important;
+      font-family: 'Poppins', sans-serif;
+      font-weight: 700;
+      font-size: 13px;
+      letter-spacing: 1px;
+      padding: 14px 28px;
+      border-radius: 4px;
+      width: fit-content;
+    }
+
+    .hero-image {
+      width: 46%;
+    }
+
+    .hero-image img {
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    /* ---------- SECTION TITLE ---------- */
+    .section-title {
+      text-align: center;
+      background: #F4F1ED;
+      padding: 38px 24px 28px 24px;
+      font-family: 'Poppins', sans-serif;
+      font-weight: 700;
+      font-size: 21px;
+      color: #181818;
+    }
+
+    /* ---------- TESTIMONIALS ---------- */
+    .testimonials {
+      background: #F4F1ED;
+      padding: 0 10px 40px 10px;
+      display: flex;
+      justify-content: center;
+      text-align: center;
+    }
+
+    .testi-card {
+      background: #FFFFFF;
+      width: calc(33.33% - 14px);
+      min-width: 160px;
+      margin: 0 7px;
+      text-align: left;
+    }
+
+    .testi-image {
+      width: 100%;
+      aspect-ratio: 6/5;
+      display: block;
+      object-fit: cover;
+    }
+
+    .testi-body {
+      padding: 16px;
+    }
+
+    .testi-quote-mark {
+      margin-bottom: 8px;
+    }
+
+    .testi-text {
+      font-family: 'Inter', sans-serif;
+      font-size: 13.5px;
+      line-height: 1.5;
+      color: #181818;
+      margin: 0 0 16px 0;
+    }
+
+    .testi-name {
+      font-family: 'Inter', sans-serif;
+      font-weight: 700;
+      font-size: 13px;
+      color: #F4761C;
+      margin: 0;
+    }
+
+    /* ---------- BOTTOM CTA ---------- */
+    .bottom-cta {
+      display: flex;
+      align-items: center;
+    }
+
+    .bottom-image {
+      width: 46%;
+    }
+
+    .bottom-image img {
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .bottom-copy {
+      width: 54%;
+      padding: 30px 28px;
+    }
+
+    .bottom-icon {
+      width: 46px;
+      height: 46px;
+      border-radius: 50%;
+      background: #F4761C;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 16px;
+    }
+
+    .bottom-copy h3 {
+      font-family: 'Poppins', sans-serif;
+      font-weight: 700;
+      font-size: 21px;
+      line-height: 1.25;
+      color: #181818;
+      margin: 0 0 12px 0;
+    }
+
+    .bottom-copy p {
+      font-family: 'Inter', sans-serif;
+      font-size: 13.5px;
+      line-height: 1.6;
+      color: #6B6B6B;
+      margin: 0 0 20px 0;
+    }
+
+    /* ---------- FOOTER ---------- */
+    .footer {
+      text-align: center;
+      padding: 36px 24px 32px 24px;
+    }
+
+    .footer-title {
+      font-family: 'Poppins', sans-serif;
+      font-weight: 700;
+      font-size: 14px;
+      letter-spacing: 1px;
+      color: #181818;
+      margin: 0 0 18px 0;
+    }
+
+    .social-row {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+
+    .social-dot {
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      background: #181818;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .footer-url {
+      font-family: 'Inter', sans-serif;
+      font-weight: 600;
+      font-size: 12px;
+      letter-spacing: 0.5px;
+      color: #6B6B6B;
+      margin: 0;
+    }
+
+    @media (max-width:560px) {
+
+      .hero,
+      .bottom-cta,
+      .testimonials {
+        display: block !important;
+      }
+
+      .hero-copy,
+      .hero-image {
+        display: block !important;
+        width: 100% !important;
+      }
+
+      .hero-image {
+        height: auto !important;
+        min-height: 200px;
+      }
+
+      .hero-headline {
+        font-size: 28px !important;
+      }
+
+      .testi-card {
+        display: block !important;
+        width: 100% !important;
+        margin-bottom: 20px;
+      }
+
+      .bottom-image,
+      .bottom-copy {
+        display: block !important;
+        width: 100% !important;
+      }
+
+      .bottom-image {
+        height: auto !important;
+        min-height: 200px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <div class="preheader">Your feed is waiting — share something with the DojoClass community.</div>
+
+  <div class="email-container">
+
+    <!-- HEADER -->
+    <div class="header">
+      <img src="https://dojoclass.space/favicon.png" alt="Logo"
+        style="height: 36px; width: auto; display: inline-block; vertical-align: middle; margin-right: 14px;" />
+      <div class="logo-box" style="vertical-align: middle;">DOJOCLASS</div>
+    </div>
+
+    <!-- HERO -->
+    <div class="hero">
+      <div class="hero-copy">
+        <p class="hero-greeting">Hey [name] 👋</p>
+        <div class="hero-headline">
+          <div>SHARE</div>
+          <div>SOMETHING</div>
+          <div>ON THE</div>
+          <div>MAIN FEED</div>
+        </div>
+        <p class="hero-sub">ON DOJOCLASS</p>
+        <a href="https://dojoclass.space/community" class="btn">SHARE NOW</a>
+      </div>
+      <div class="hero-image">
+        <!-- TOP GROUP PHOTO HERE -->
+        <img
+          src="https://rwirupxwbrnmhxxhfzat.supabase.co/storage/v1/object/public/community-media/K5mvq1aj1lQb5wjZnRfcm2gn0oU2/posts/b57abde2-694c-4431-8343-56eb1af55772.jpg"
+          alt="Email Image" style="display: block; width: 100%; height: 100%; object-fit: cover;" />
+      </div>
+    </div>
+
+    <!-- SECTION TITLE -->
+    <div class="section-title">Your story. Your campus. Your impact.</div>
+
+    <!-- TESTIMONIALS -->
+    <div class="testimonials">
+
+      <div class="testi-card">
+        <!-- STUDENT 1 PHOTO HERE -->
+        <img
+          src="https://rwirupxwbrnmhxxhfzat.supabase.co/storage/v1/object/public/community-media/K5mvq1aj1lQb5wjZnRfcm2gn0oU2/posts/27736c93-3020-45e1-a743-1a8291dcfcc2.png"
+          alt="Email Image"
+          style="display: block; width: 100%; height: 180px; object-fit: cover; border-radius: 8px 8px 0 0;" />
+        <div class="testi-body">
+          <div class="testi-quote-mark" style="font-size: 32px; color: #F4761C; line-height: 1; font-family: Georgia, serif; font-weight: bold;">
+            “
+          </div>
+          <p class="testi-text">Posted my first update on the feed and got replies within minutes.</p>
+          <p class="testi-name">— Arjun, 2nd Year</p>
+        </div>
+      </div>
+
+      <div class="testi-card">
+        <!-- STUDENT 2 PHOTO HERE -->
+        <img
+          src="https://rwirupxwbrnmhxxhfzat.supabase.co/storage/v1/object/public/community-media/K5mvq1aj1lQb5wjZnRfcm2gn0oU2/posts/624dd8c2-108c-451c-b585-e3da89bb82cc.jpg"
+          alt="Email Image"
+          style="display: block; width: 100%; height: 180px; object-fit: cover; border-radius: 8px 8px 0 0;" />
+        <div class="testi-body">
+          <div class="testi-quote-mark" style="font-size: 32px; color: #F4761C; line-height: 1; font-family: Georgia, serif; font-weight: bold;">
+            “
+          </div>
+          <p class="testi-text">I shared my project on the feed and ended up finding a study partner.</p>
+          <p class="testi-name">— Neha, 3rd Year</p>
+        </div>
+      </div>
+
+      <div class="testi-card">
+        <!-- STUDENT 3 PHOTO HERE -->
+        <img
+          src="https://rwirupxwbrnmhxxhfzat.supabase.co/storage/v1/object/public/community-media/K5mvq1aj1lQb5wjZnRfcm2gn0oU2/posts/9edca74f-406a-41c3-87e6-520200ad5051.avif"
+          alt="Email Image"
+          style="display: block; width: 100%; height: 180px; object-fit: cover; object-position: top; border-radius: 8px 8px 0 0;" />
+
+        <div class="testi-body">
+          <div class="testi-quote-mark" style="font-size: 32px; color: #F4761C; line-height: 1; font-family: Georgia, serif; font-weight: bold;">
+            “
+          </div>
+          <p class="testi-text">From events to internships, the feed is where I show up now.</p>
+          <p class="testi-name">— Rohan, 4th Year</p>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- BOTTOM CTA -->
+    <div class="bottom-cta">
+      <div class="bottom-image">
+        <!-- BOTTOM GROUP PHOTO HERE -->
+        <img
+          src="https://rwirupxwbrnmhxxhfzat.supabase.co/storage/v1/object/public/community-media/K5mvq1aj1lQb5wjZnRfcm2gn0oU2/posts/ab94b663-5e7f-4a8e-aeb3-f10c7a801bf6.png"
+          alt="Email Image" style="display: block; width: 100%; height: 100%; object-fit: cover;" />
+      </div>
+      <div class="bottom-copy">
+        <div class="bottom-icon" style="font-size: 24px; color: #FFFFFF; font-weight: bold; line-height: 1;">
+          ➔
+        </div>
+        <h3>Your story can help someone else.</h3>
+        <p>Share moments, tips, college life, academics, placements — anything that matters to you, right on the main
+          feed.</p>
+        <a href="https://dojoclass.space/community" class="btn">SHARE ON THE FEED</a>
+      </div>
+    </div>
+
+    <!-- FOOTER -->
+    <div class="footer">
+      <p class="footer-title">BE PART OF THE DOJOCLASS COMMUNITY</p>
+      <div class="social-row" style="font-family: 'Inter', sans-serif; font-size: 13px; font-weight: 600;">
+        <a href="#" style="color: #181818; text-decoration: none;">Instagram</a> &nbsp;&bull;&nbsp;
+        <a href="#" style="color: #181818; text-decoration: none;">Facebook</a> &nbsp;&bull;&nbsp;
+        <a href="#" style="color: #181818; text-decoration: none;">Twitter</a> &nbsp;&bull;&nbsp;
+        <a href="#" style="color: #181818; text-decoration: none;">LinkedIn</a>
+      </div>
+      <p class="footer-url">www.dojoclass.space</p>
+    </div>
+
+  </div>
+
+</body>
+
+</html>
