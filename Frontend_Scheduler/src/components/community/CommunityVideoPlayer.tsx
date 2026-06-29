@@ -19,7 +19,13 @@ export default function CommunityVideoPlayer({ src, thumbnailUrl, className = ''
     const v = videoRef.current;
     if (!v) return;
     if (v.paused) { 
-      v.play(); 
+      const playPromise = v.play();
+      if (playPromise !== undefined) {
+        playPromise.catch((err) => {
+          console.warn("Video play interrupted:", err);
+          setPlaying(false);
+        });
+      }
       v.muted = false; // Auto-unmute when playing
       setMuted(false);
       setPlaying(true); 

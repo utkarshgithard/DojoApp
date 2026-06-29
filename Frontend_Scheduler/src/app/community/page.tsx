@@ -156,8 +156,7 @@ export default function CommunityPage() {
     }, 0);
   };
 
-  if (loading) return null;
-
+  // Do not block rendering on 'loading' so cached posts can appear instantly.
   return (
     <div
       className={`group min-h-screen pt-[50px] md:pt-0 transition-colors duration-300 ${dark ? 'bg-[#0a0a0a] text-white' : 'bg-[#f5f5f5] text-zinc-900'

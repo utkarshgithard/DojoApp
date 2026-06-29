@@ -96,6 +96,24 @@ export const CommunityProvider = ({ children }: { children: React.ReactNode }) =
   const postsRef = React.useRef<Post[]>([]);
   const fetchingRef = React.useRef(false);
 
+  // Load from cache after mount to prevent hydration errors
+  React.useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const cached = localStorage.getItem('dojo_community_posts_cache');
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached);
+          if (parsed && parsed.length > 0) {
+            setPosts(parsed);
+            setInitialLoading(false);
+          }
+        } catch (e) {
+          // Ignore parse errors
+        }
+      }
+    }
+  }, []);
+
   React.useEffect(() => {
     postsRef.current = posts;
   }, [posts]);
@@ -135,6 +153,9 @@ export const CommunityProvider = ({ children }: { children: React.ReactNode }) =
           setPosts(data.posts);
           setHasNewPosts(false);
           setPendingPosts([]);
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('dojo_community_posts_cache', JSON.stringify(data.posts));
+          }
         }
       }
       setNextCursor(data.nextCursor);
