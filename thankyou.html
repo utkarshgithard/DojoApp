@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Thank You for Sharing on DojoClass</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap');
+
+        :root {
+            --orange: #F4761C;
+            --black: #181818;
+            --cream: #F4F1ED;
+            --white: #FFFFFF;
+            --text-muted: #6B6B6B;
+            --navy: #1B1B2E;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background: #E8E8E8;
+            font-family: 'Inter', -apple-system, sans-serif;
+        }
+
+        .email-container {
+            max-width: 620px;
+            margin: 0 auto;
+            background: #FFFFFF;
+        }
+
+        a {
+            text-decoration: none;
+        }
+
+        /* ---------- HEADER ---------- */
+        .header {
+            background: #FFFFFF;
+            padding: 28px 0;
+            text-align: center;
+        }
+
+        .logo-box {
+            display: inline-block;
+            border: 2px solid #181818;
+            padding: 9px 22px;
+            font-family: 'Poppins', sans-serif;
+            font-weight: 700;
+            font-size: 14px;
+            letter-spacing: 1px;
+            color: #181818;
+        }
+
+        /* ---------- HERO ---------- */
+        .hero {
+            display: flex;
+            align-items: stretch;
+        }
+
+        .hero-copy {
+            background: #F4761C;
+            width: 54%;
+            padding: 34px 28px;
+            vertical-align: middle;
+        }
+
+        .hero-greeting {
+            font-family: 'Inter', sans-serif;
+            font-weight: 600;
+            font-size: 13px;
+            letter-spacing: 0.5px;
+            color: rgba(255, 255, 255, 0.85);
+            margin: 0 0 14px 0;
+            text-transform: uppercase;
+        }
+
+        .hero-headline {
+            font-family: 'Poppins', sans-serif;
+            font-weight: 800;
+            font-size: 34px;
+            line-height: 1.05;
+            color: #FFFFFF;
+            margin: 0 0 16px 0;
+            letter-spacing: -0.5px;
+        }
+
+        .hero-headline div {
+            display: block;
+        }
+
+        .hero-sub {
+            font-family: 'Poppins', sans-serif;
+            font-weight: 700;
+            font-size: 14px;
+            letter-spacing: 1px;
+            color: #1B1B2E;
+            margin: 0 0 22px 0;
+        }
+
+        .btn {
+            display: inline-block;
+            background: #181818;
+            color: #FFFFFF !important;
+            font-family: 'Poppins', sans-serif;
+            font-weight: 700;
+            font-size: 13px;
+            letter-spacing: 1px;
+            padding: 14px 28px;
+            border-radius: 4px;
+            width: fit-content;
+        }
+
+        .hero-image {
+            width: 46%;
+        }
+
+        .hero-image img {
+            display: block;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        /* ---------- MESSAGE SECTION ---------- */
+        .message-section {
+            background: #F4F1ED;
+            padding: 46px 36px;
+            text-align: center;
+        }
+
+        .message-title {
+            font-family: 'Poppins', sans-serif;
+            font-weight: 700;
+            font-size: 21px;
+            line-height: 1.3;
+            color: #181818;
+            margin: 0 0 16px 0;
+        }
+
+        .message-text {
+            font-family: 'Inter', sans-serif;
+            font-size: 14.5px;
+            line-height: 1.7;
+            color: #6B6B6B;
+            margin: 0 0 16px 0;
+        }
+
+        .message-signature {
+            font-family: 'Inter', sans-serif;
+            font-weight: 600;
+            font-size: 14px;
+            color: #F4761C;
+            margin: 32px 0 0 0;
+            line-height: 1.6;
+        }
+
+        /* ---------- FOOTER ---------- */
+        .footer {
+            text-align: center;
+            padding: 36px 24px 32px 24px;
+        }
+
+        .footer-title {
+            font-family: 'Poppins', sans-serif;
+            font-weight: 700;
+            font-size: 14px;
+            letter-spacing: 1px;
+            color: #181818;
+            margin: 0 0 18px 0;
+        }
+
+        .social-row {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 16px;
+        }
+
+        .footer-url {
+            font-family: 'Inter', sans-serif;
+            font-weight: 600;
+            font-size: 12px;
+            letter-spacing: 0.5px;
+            color: #6B6B6B;
+            margin: 0;
+        }
+
+        @media (max-width:560px) {
+            .hero {
+                display: block !important;
+            }
+
+            .hero-copy,
+            .hero-image {
+                display: block !important;
+                width: 100% !important;
+            }
+
+            .hero-image {
+                height: auto !important;
+                min-height: 200px;
+            }
+
+            .hero-headline {
+                font-size: 28px !important;
+            }
+
+            .message-section {
+                padding: 36px 24px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="email-container">
+
+        <!-- HEADER -->
+        <div class="header">
+            <img src="https://dojoclass.space/favicon.png" alt="Logo"
+                style="height: 36px; width: auto; display: inline-block; vertical-align: middle; margin-right: 14px;" />
+            <div class="logo-box" style="vertical-align: middle;">DOJOCLASS</div>
+        </div>
+
+        <!-- HERO -->
+        <div class="hero">
+            <div class="hero-copy">
+                <p class="hero-greeting">Welcome [name] 👋</p>
+                <div class="hero-headline">
+                    <div>CRUSH YOUR</div>
+                    <div>EXAMS</div>
+                </div>
+                <p class="hero-sub">TOGETHER ON DOJOCLASS</p>
+                <a href="https://dojoclass.space/community" class="btn">GO TO MAIN FEED 🚀</a>
+            </div>
+            <div class="hero-image">
+                <!-- BRAND IMAGE -->
+                <img src="https://rwirupxwbrnmhxxhfzat.supabase.co/storage/v1/object/public/community-media/K5mvq1aj1lQb5wjZnRfcm2gn0oU2/posts/27736c93-3020-45e1-a743-1a8291dcfcc2.png"
+                    alt="DojoClass Community" style="display: block; width: 100%; height: 100%; object-fit: cover;" />
+            </div>
+        </div>
+
+        <!-- MESSAGE SECTION -->
+        <div class="message-section">
+            <h3 class="message-title">Exams are easier when we study together.</h3>
+            <p class="message-text">
+                DojoClass is your ultimate campus study hub. Whether you're looking for last-minute notes, need help solving a tough question, or want to share your own study guides, the main feed is the place to be.
+            </p>
+            <p class="message-text">
+                Don't study in isolation! Jump onto the main feed right now to ask your first question, upload your handwritten notes, or find a study partner for your upcoming exams.
+            </p>
+
+            <div style="margin: 32px 0 10px 0;">
+                <a href="https://dojoclass.space/community" class="btn"
+                    style="background:#F4761C; color:#FFFFFF!important; padding:12px 24px;">POST YOUR STUDY NOTES</a>
+            </div>
+
+            <p class="message-signature">
+                Good luck with your prep 📚<br>
+                With ❤️, Team DojoClass
+            </p>
+        </div>
+
+        <!-- FOOTER -->
+        <div class="footer">
+            <p class="footer-title">BE PART OF THE DOJOCLASS COMMUNITY</p>
+            <div class="social-row" style="font-family: 'Inter', sans-serif; font-size: 13px; font-weight: 600;">
+                <a href="#" style="color: #181818; text-decoration: none;">Instagram</a> &nbsp;&bull;&nbsp;
+                <a href="#" style="color: #181818; text-decoration: none;">Facebook</a> &nbsp;&bull;&nbsp;
+                <a href="#" style="color: #181818; text-decoration: none;">Twitter</a> &nbsp;&bull;&nbsp;
+                <a href="#" style="color: #181818; text-decoration: none;">LinkedIn</a>
+            </div>
+            <p class="footer-url">www.dojoclass.space</p>
+        </div>
+
+    </div>
+
+</body>
+
+</html>

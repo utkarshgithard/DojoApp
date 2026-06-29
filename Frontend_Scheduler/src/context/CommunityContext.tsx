@@ -152,6 +152,13 @@ export const CommunityProvider = ({ children }: { children: React.ReactNode }) =
           if (newFirstId && newFirstId !== currentFirstId) {
             setPendingPosts(data.posts);
             setHasNewPosts(true);
+          } else {
+            // No new posts at the top, but update existing posts with fresh data (likes, comments)
+            setPosts((prev) => {
+              const freshMap = new Map<string, Post>();
+              data.posts.forEach((p: Post) => freshMap.set(p.id, p));
+              return prev.map((p) => (freshMap.has(p.id) ? freshMap.get(p.id)! : p));
+            });
           }
         } else {
           setPosts(data.posts);
