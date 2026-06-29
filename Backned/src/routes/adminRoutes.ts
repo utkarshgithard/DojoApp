@@ -59,7 +59,6 @@ adminRouter.post('/broadcast', verifyToken, async (req: AuthenticatedRequest, re
     }
 
     const emailsToSend = allUsers.map(user => {
-      // Support {{name}} or [name] or [ name ] personalization
       const personalizedSubject = subject
         .replace(/\{\{name\}\}/gi, user.name)
         .replace(/\[\s*name\s*\]/gi, user.name);
@@ -76,58 +75,50 @@ adminRouter.post('/broadcast', verifyToken, async (req: AuthenticatedRequest, re
       };
     });
 
-    let successful = 0;
-    let failed = 0;
-    const errors: string[] = [];
-    const BATCH_SIZE = 100;
-
-    for (let i = 0; i < emailsToSend.length; i += BATCH_SIZE) {
-      const batch = emailsToSend.slice(i, i + BATCH_SIZE);
-      try {
-        if (resend.batch && resend.batch.send) {
-          const result = await resend.batch.send(batch);
-          if (result.error) {
-            failed += batch.length;
-            errors.push(result.error.message);
-            console.error('Resend delivery error:', result.error);
-          } else {
-            successful += batch.length;
-          }
-        } else {
-          // Fallback if batch.send is missing in older SDKs (1 email per second)
-          for (const email of batch) {
-            const result = await resend.emails.send(email);
-            if (result.error) {
-              failed++;
-              errors.push(result.error.message);
-            } else {
-              successful++;
-            }
-            await new Promise(resolve => setTimeout(resolve, 600)); // Sleep 600ms to respect 2 req/s
-          }
-        }
-      } catch (err: any) {
-        failed += batch.length;
-        errors.push(err.message);
-      }
-    }
-
-    if (failed > 0 && successful === 0) {
-      // If ALL failed, return an error so the frontend toast shows it
-      res.status(400).json({ error: `Failed to send emails: ${errors[0]}` });
-      return;
-    }
-
+    // Respond immediately to the frontend to prevent browser/Axios timeout
     res.status(200).json({
       success: true,
-      message: `Broadcast complete. Sent: ${successful}, Failed: ${failed}`,
-      totalUsers: emailList.length,
-      errors: failed > 0 ? errors : undefined
+      message: `Broadcast started! 🚀 Sending to ${emailsToSend.length} users in the background to respect email rate limits. You can safely navigate away.`,
+      totalUsers: emailsToSend.length
     });
+
+    // Run the sending process in the background
+    (async () => {
+      let successful = 0;
+      let failed = 0;
+      
+      console.log(`[Broadcast] Starting background send to ${emailsToSend.length} users...`);
+      
+      for (let i = 0; i < emailsToSend.length; i++) {
+        try {
+          const email = emailsToSend[i];
+          const result = await resend.emails.send(email);
+          
+          if (result.error) {
+            failed++;
+            console.error(`[Broadcast] Failed to send to ${email.to}:`, result.error.message);
+          } else {
+            successful++;
+          }
+        } catch (err: any) {
+          failed++;
+          console.error(`[Broadcast] Exception sending to ${emailsToSend[i].to}:`, err.message);
+        }
+        
+        // Strictly wait 1 second between emails to safely bypass the 2 requests/sec free tier limit
+        if (i < emailsToSend.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      }
+      
+      console.log(`[Broadcast] Complete! Sent: ${successful}, Failed: ${failed}`);
+    })();
 
   } catch (error: any) {
     console.error('Broadcast email error:', error);
-    res.status(500).json({ error: error.message || 'Internal server error' });
+    if (!res.headersSent) {
+      res.status(500).json({ error: error.message || 'Internal server error' });
+    }
   }
 });
 

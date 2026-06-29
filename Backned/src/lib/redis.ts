@@ -1,42 +1,39 @@
-import { createClient } from 'redis';
+import { Redis } from '@upstash/redis';
 
-const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
+let redis: Redis | null = null;
 
-const client = createClient({
-  url: redisUrl
-});
-
-let isRedisConnected = false;
-
-client.on('error', (err) => {
-  if (err.name === 'SocketClosedUnexpectedlyError' || err.message?.includes('Socket closed unexpectedly')) {
-    console.warn('⚠️ Redis Socket closed unexpectedly. Reconnecting...');
-  } else if (err.code === 'ECONNREFUSED') {
-    console.warn('⚠️ Redis connection refused. Retrying...');
+try {
+  const url = process.env.UPSTASH_REDIS_REST_URL || process.env.REDIS_URL;
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+  
+  if (url && token) {
+    redis = new Redis({ url, token });
+    
+    // Test the connection
+    redis.ping().then(() => {
+      console.log('✅ Successfully connected to Upstash Redis!');
+    }).catch((err) => {
+      console.error('❌ Failed to connect to Upstash Redis. Please verify your UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN in the .env file.', err.message);
+      redis = null; // Disable caching if connection fails
+    });
   } else {
-    console.error('Redis Client Error:', err.message || err);
+    console.warn('⚠️ Upstash Redis credentials missing. Caching is disabled.');
   }
-  isRedisConnected = false;
-});
-
-client.on('connect', () => {
-  console.log('✅ Redis Client Connected');
-  isRedisConnected = true;
-});
-
-client.connect().catch((err) => {
-  console.error('❌ Failed to connect to Redis on startup:', err);
-  isRedisConnected = false;
-});
+} catch (err) {
+  console.warn('⚠️ Failed to initialize Upstash Redis:', err);
+}
 
 /**
  * Gets a value from the Redis cache.
- * Gracefully returns null if Redis is disconnected or queries fail.
+ * Gracefully returns null if queries fail.
  */
 export async function cacheGet(key: string): Promise<string | null> {
-  if (!isRedisConnected) return null;
+  if (!redis) return null;
   try {
-    return await client.get(key);
+    const value = await redis.get(key);
+    // Upstash automatically parses JSON if it can, but our old code expected a string.
+    // So we ensure it returns a string representation if it's an object.
+    return typeof value === 'object' ? JSON.stringify(value) : (value as string);
   } catch (err) {
     console.error(`Redis GET error for key ${key}:`, err);
     return null;
@@ -45,15 +42,15 @@ export async function cacheGet(key: string): Promise<string | null> {
 
 /**
  * Sets a value in the Redis cache with an optional TTL (in seconds).
- * Gracefully fails silently if Redis is disconnected.
+ * Gracefully fails silently if queries fail.
  */
 export async function cacheSet(key: string, value: string, ttlSeconds?: number): Promise<void> {
-  if (!isRedisConnected) return;
+  if (!redis) return;
   try {
     if (ttlSeconds) {
-      await client.set(key, value, { EX: ttlSeconds });
+      await redis.set(key, value, { ex: ttlSeconds });
     } else {
-      await client.set(key, value);
+      await redis.set(key, value);
     }
   } catch (err) {
     console.error(`Redis SET error for key ${key}:`, err);
@@ -62,12 +59,12 @@ export async function cacheSet(key: string, value: string, ttlSeconds?: number):
 
 /**
  * Deletes a value from the Redis cache (invalidation).
- * Gracefully fails silently if Redis is disconnected.
+ * Gracefully fails silently if queries fail.
  */
 export async function cacheDel(key: string): Promise<void> {
-  if (!isRedisConnected) return;
+  if (!redis) return;
   try {
-    await client.del(key);
+    await redis.del(key);
   } catch (err) {
     console.error(`Redis DEL error for key ${key}:`, err);
   }
@@ -76,19 +73,18 @@ export async function cacheDel(key: string): Promise<void> {
 /**
  * Appends a serialised message to the session's Redis list.
  * Also applies a safety TTL so orphaned lists don't eat storage forever.
- * Falls back silently if Redis is unavailable.
  */
 export async function chatMessagePush(
   sessionId: string,
   message: any,
   ttlSeconds = 86400, // 24-hour safety TTL
 ): Promise<void> {
-  if (!isRedisConnected) return;
+  if (!redis) return;
   const key = `chat:messages:${sessionId}`;
   try {
-    await client.rPush(key, JSON.stringify(message));
+    await redis.rpush(key, JSON.stringify(message));
     // Re-apply TTL on each push so active sessions stay alive
-    await client.expire(key, ttlSeconds);
+    await redis.expire(key, ttlSeconds);
   } catch (err) {
     console.error(`Redis RPUSH error for key ${key}:`, err);
   }
@@ -96,14 +92,15 @@ export async function chatMessagePush(
 
 /**
  * Retrieves all messages for a session from Redis.
- * Returns an empty array if Redis is unavailable or the key doesn't exist.
+ * Returns an empty array if queries fail.
  */
 export async function chatMessageGetAll(sessionId: string): Promise<any[]> {
-  if (!isRedisConnected) return [];
+  if (!redis) return [];
   const key = `chat:messages:${sessionId}`;
   try {
-    const items = await client.lRange(key, 0, -1);
-    return items.map((item) => JSON.parse(item));
+    const items = await redis.lrange(key, 0, -1);
+    // Upstash might automatically parse JSON for lrange items.
+    return items.map((item: any) => typeof item === 'string' ? JSON.parse(item) : item);
   } catch (err) {
     console.error(`Redis LRANGE error for key ${key}:`, err);
     return [];
@@ -112,13 +109,13 @@ export async function chatMessageGetAll(sessionId: string): Promise<any[]> {
 
 /**
  * Returns the number of messages stored in Redis for a session.
- * Returns -1 if Redis is unavailable.
+ * Returns -1 if queries fail.
  */
 export async function chatMessageCount(sessionId: string): Promise<number> {
-  if (!isRedisConnected) return -1;
+  if (!redis) return -1;
   const key = `chat:messages:${sessionId}`;
   try {
-    return await client.lLen(key);
+    return await redis.llen(key);
   } catch (err) {
     return -1;
   }
@@ -126,17 +123,16 @@ export async function chatMessageCount(sessionId: string): Promise<number> {
 
 /**
  * Deletes all cached messages for a session.
- * Call this when a session ends to free Redis memory.
  */
 export async function chatMessagesDel(sessionId: string): Promise<void> {
-  if (!isRedisConnected) return;
+  if (!redis) return;
   const key = `chat:messages:${sessionId}`;
   try {
-    await client.del(key);
+    await redis.del(key);
     console.log(`🗑️  Redis: cleared chat messages for session ${sessionId}`);
   } catch (err) {
     console.error(`Redis DEL error for key ${key}:`, err);
   }
 }
 
-export default client;
+export default redis;
