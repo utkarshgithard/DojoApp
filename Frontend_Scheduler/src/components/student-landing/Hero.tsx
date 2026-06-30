@@ -2,11 +2,10 @@ import { motion } from "framer-motion";
 import { ScrollScene } from "./ScrollScene.tsx";
 import { useDarkMode } from "@/context/DarkModeContext";
 import { Sun, Moon } from "lucide-react";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
 
 export function Hero() {
   const { darkMode, toggleDarkMode } = useDarkMode();
-  const router = useRouter();
 
   return (
     <main className="relative min-h-screen overflow-hidden bg-[var(--neo-bg)] text-[var(--neo-text-primary)] transition-colors duration-500">
@@ -57,21 +56,21 @@ export function Hero() {
           {darkMode ? <Sun size={15} className="sm:w-[18px] sm:h-[18px]" /> : <Moon size={15} className="sm:w-[18px] sm:h-[18px]" />}
         </button>
 
-        <button
-          onClick={() => router.push('/login')}
-          className="rounded-full bg-[var(--neo-bg)] px-3 py-1.5 sm:px-4 sm:py-2 text-[11px] sm:text-sm font-medium text-[var(--neo-text-secondary)] transition-all hover:scale-[1.02]"
+        <Link
+          href="/login"
+          className="rounded-full bg-[var(--neo-bg)] px-3 py-1.5 sm:px-4 sm:py-2 text-[11px] sm:text-sm font-medium text-[var(--neo-text-secondary)] transition-all hover:scale-[1.02] flex items-center justify-center"
           style={{ boxShadow: "4px 4px 8px var(--neo-shadow-dark), -4px -4px 8px var(--neo-shadow-light)" }}
         >
           Login
-        </button>
+        </Link>
 
-        <button
-          onClick={() => router.push('/register')}
-          className="rounded-full bg-[var(--neo-bg)] px-3.5 py-1.5 sm:px-5 sm:py-2 text-[11px] sm:text-sm font-semibold text-[var(--neo-text-primary)] transition-all hover:scale-[1.03]"
+        <Link
+          href="/register"
+          className="rounded-full bg-[var(--neo-bg)] px-3.5 py-1.5 sm:px-5 sm:py-2 text-[11px] sm:text-sm font-semibold text-[var(--neo-text-primary)] transition-all hover:scale-[1.03] flex items-center justify-center"
           style={{ boxShadow: "6px 6px 12px var(--neo-shadow-dark), -6px -6px 12px var(--neo-shadow-light)" }}
         >
           Sign Up
-        </button>
+        </Link>
       </motion.nav>
 
       {/* Main scroll scene */}

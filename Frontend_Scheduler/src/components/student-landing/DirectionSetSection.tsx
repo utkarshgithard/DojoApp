@@ -3,12 +3,11 @@
 import { motion, useInView } from "framer-motion";
 import { useRef } from "react";
 import { useDarkMode } from "@/context/DarkModeContext";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { CalendarCheck, Clock, Users, Sparkles, Compass, ArrowRight } from "lucide-react";
 
 export function DirectionSetSection() {
   const { darkMode } = useDarkMode();
-  const router = useRouter();
   const sectionRef = useRef<HTMLDivElement>(null);
   const isInView = useInView(sectionRef, { once: false, amount: 0.3 });
 
@@ -81,16 +80,16 @@ export function DirectionSetSection() {
           </p>
 
           <div className="mt-4 flex flex-wrap gap-4">
-            <button
-              onClick={() => router.push("/register")}
-              className="neo-button flex items-center gap-2 rounded-full px-8 py-3.5 text-sm font-semibold transition-all duration-200 hover:scale-[1.03]"
+            <Link
+              href="/register"
+              className="neo-button flex items-center gap-2 rounded-full px-8 py-3.5 text-sm font-semibold transition-all duration-200 hover:scale-[1.03] text-white"
               style={{
                 fontFamily: "Inter, sans-serif",
                 background: `linear-gradient(135deg, ${accent}, ${darkMode ? "#34d399" : "#34d399"})`,
               }}
             >
               Get Started Free <ArrowRight size={16} />
-            </button>
+            </Link>
             <button
               onClick={() => {
                 const el = document.getElementById("how-it-works");

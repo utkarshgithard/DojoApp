@@ -37,6 +37,65 @@ export default function JsonLd() {
     },
   };
 
+  const webSiteSchema = {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    name: "DojoClass",
+    url: "https://dojoclass.space",
+    potentialAction: {
+      "@type": "SearchAction",
+      target: {
+        "@type": "EntryPoint",
+        urlTemplate: "https://dojoclass.space/community?q={search_term_string}"
+      },
+      "query-input": "required name=search_term_string"
+    }
+  };
+
+  const siteNavigationSchema = {
+    "@context": "https://schema.org",
+    "@type": "ItemList",
+    name: "DojoClass Navigation",
+    itemListElement: [
+      {
+        "@type": "SiteNavigationElement",
+        position: 1,
+        name: "Community Feed",
+        url: "https://dojoclass.space/community"
+      },
+      {
+        "@type": "SiteNavigationElement",
+        position: 2,
+        name: "Exam Prep",
+        url: "https://dojoclass.space/exam-prep"
+      },
+      {
+        "@type": "SiteNavigationElement",
+        position: 3,
+        name: "Log In",
+        url: "https://dojoclass.space/login"
+      },
+      {
+        "@type": "SiteNavigationElement",
+        position: 4,
+        name: "Sign Up",
+        url: "https://dojoclass.space/register"
+      },
+      {
+        "@type": "SiteNavigationElement",
+        position: 5,
+        name: "About Us",
+        url: "https://dojoclass.space/about"
+      },
+      {
+        "@type": "SiteNavigationElement",
+        position: 6,
+        name: "Contact Us",
+        url: "https://dojoclass.space/contact"
+      }
+    ]
+  };
+
   const faqSchema = {
     "@context": "https://schema.org",
     "@type": "FAQPage",
@@ -88,6 +147,18 @@ export default function JsonLd() {
         type="application/ld+json"
         dangerouslySetInnerHTML={{
           __html: JSON.stringify(organizationSchema),
+        }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(webSiteSchema),
+        }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(siteNavigationSchema),
         }}
       />
       <script

@@ -3,12 +3,11 @@
 import { motion, useInView } from "framer-motion";
 import { useRef } from "react";
 import { useDarkMode } from "@/context/DarkModeContext";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { ArrowUpRight } from "lucide-react";
 
 export function FooterSection() {
   const { darkMode } = useDarkMode();
-  const router = useRouter();
   const sectionRef = useRef<HTMLDivElement>(null);
   const isInView = useInView(sectionRef, { once: false, amount: 0.15 });
 
@@ -63,19 +62,19 @@ export function FooterSection() {
           </p>
 
           <div className="flex flex-wrap justify-center gap-4">
-            <button
-              onClick={() => router.push("/register")}
-              className="neo-button flex items-center gap-2 rounded-full px-8 py-3.5 text-sm font-semibold transition-all duration-200 hover:scale-[1.03]"
+            <Link
+              href="/register"
+              className="neo-button flex items-center gap-2 rounded-full px-8 py-3.5 text-sm font-semibold transition-all duration-200 hover:scale-[1.03] text-white"
               style={{
                 fontFamily: "Inter, sans-serif",
                 background: `linear-gradient(135deg, ${accent}, ${darkMode ? "#34d399" : "#34d399"})`,
               }}
             >
               Get Started Now <ArrowUpRight size={16} />
-            </button>
-            <button
-              onClick={() => router.push("/login")}
-              className="rounded-full px-6 py-3.5 text-sm font-semibold transition-all duration-200 hover:scale-[1.03]"
+            </Link>
+            <Link
+              href="/login"
+              className="rounded-full px-6 py-3.5 text-sm font-semibold transition-all duration-200 hover:scale-[1.03] flex items-center justify-center"
               style={{
                 fontFamily: "Inter, sans-serif",
                 color: textPrimary,
@@ -83,7 +82,7 @@ export function FooterSection() {
               }}
             >
               Log In
-            </button>
+            </Link>
           </div>
         </motion.div>
 
@@ -113,10 +112,10 @@ export function FooterSection() {
               { label: "Terms", path: "/terms" },
               { label: "Contact", path: "/contact" },
             ].map((link, i) => (
-              <button
+              <Link
                 key={i}
-                onClick={() => router.push(link.path)}
-                className="rounded-full px-4.5 py-2 text-xs font-semibold transition-all duration-200 hover:scale-[1.03]"
+                href={link.path}
+                className="rounded-full px-4.5 py-2 text-xs font-semibold transition-all duration-200 hover:scale-[1.03] flex items-center justify-center"
                 style={{
                   fontFamily: "Inter, sans-serif",
                   color: textSecondary,
@@ -125,7 +124,7 @@ export function FooterSection() {
                 }}
               >
                 {link.label}
-              </button>
+              </Link>
             ))}
           </div>
 
