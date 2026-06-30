@@ -205,7 +205,7 @@ export const TimerProvider = ({ children }: { children: React.ReactNode }) => {
           onDoubleClick={() => setIsFloating(false)}
           onMouseDown={handleMouseDown}
           onTouchStart={handleMouseDown}
-          className={`fixed z-50 p-6 rounded-3xl shadow-2xl cursor-move flex flex-col items-center select-none ${dark ? 'bg-gray-900 border border-gray-800' : 'bg-white border border-gray-200'}`}
+          className={`fixed z-40 p-6 rounded-3xl shadow-2xl cursor-move flex flex-col items-center select-none ${dark ? 'bg-gray-900 border border-gray-800' : 'bg-white border border-gray-200'}`}
           style={{ left: `${pos.x}px`, top: `${pos.y}px`, margin: 0 }}
         >
           <div className={`absolute top-2 right-4 ${muted} text-[10px] flex items-center gap-1 cursor-pointer hover:text-red-500 transition-colors`} onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()} onDoubleClick={(e) => e.stopPropagation()} onClick={() => setIsFloating(false)}>

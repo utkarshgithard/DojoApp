@@ -7,43 +7,91 @@ import { useAttendance } from "@/context/AttendanceContext";
 import { useDarkMode } from "@/context/DarkModeContext";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { X, Calendar, Clock, Plus, Trash2 } from "lucide-react";
+import { Calendar, Clock, Plus, Trash2, ChevronRight } from "lucide-react";
+import { TimePicker } from "@/components/ui/time-picker";
 
 const weekdays = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
-const daysOfWeek = weekdays;
-const hours = Array.from({ length: 12 }, (_, i) => i + 1); // 1–12
-const minutes = ['00', '15', '30', '45'];
-const meridiems = ['AM', 'PM'];
 
-function capitalize(word: string) {
-  return word.charAt(0).toUpperCase() + word.slice(1);
+// Title Case helper to normalize subject casing
+function toTitleCase(str: string) {
+  return str
+    .toLowerCase()
+    .split(' ')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
 }
+
+// Consistent color tagging based on subject name hashing
+const getSubjectColor = (name: string) => {
+  const colors = [
+    { bg: 'bg-indigo-50 dark:bg-indigo-950/30', text: 'text-indigo-600 dark:text-indigo-400', border: 'border-indigo-200 dark:border-indigo-900/50', dot: 'bg-indigo-500' },
+    { bg: 'bg-emerald-50 dark:bg-emerald-950/30', text: 'text-emerald-600 dark:text-emerald-400', border: 'border-emerald-200 dark:border-emerald-900/50', dot: 'bg-emerald-500' },
+    { bg: 'bg-amber-50 dark:bg-amber-950/30', text: 'text-amber-600 dark:text-amber-400', border: 'border-amber-200 dark:border-amber-900/50', dot: 'bg-amber-500' },
+    { bg: 'bg-rose-50 dark:bg-rose-950/30', text: 'text-rose-600 dark:text-rose-400', border: 'border-rose-200 dark:border-rose-900/50', dot: 'bg-rose-500' },
+    { bg: 'bg-sky-50 dark:bg-sky-950/30', text: 'text-sky-600 dark:text-sky-400', border: 'border-sky-200 dark:border-sky-900/50', dot: 'bg-sky-500' },
+    { bg: 'bg-violet-50 dark:bg-violet-950/30', text: 'text-violet-600 dark:text-violet-400', border: 'border-violet-200 dark:border-violet-900/50', dot: 'bg-violet-500' },
+  ];
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const index = Math.abs(hash) % colors.length;
+  return colors[index];
+};
+
+// Helper to convert 24h string ("09:00") to 12h AM/PM ("09:00 AM")
+const formatTo12Hour = (time24: string) => {
+  if (!time24) return "";
+  const [hourStr, minStr] = time24.split(":");
+  let hour = parseInt(hourStr, 10);
+  const ampm = hour >= 12 ? "PM" : "AM";
+  hour = hour % 12;
+  hour = hour ? hour : 12; // '0' should be '12'
+  return `${hour.toString().padStart(2, '0')}:${minStr} ${ampm}`;
+};
+
+// Helper to convert 12h AM/PM ("09:00 AM") to 24h string ("09:00")
+const parseTo24Hour = (time12: string) => {
+  if (!time12) return "";
+  const match = time12.match(/(\d+):(\d+)\s*(AM|PM)/i);
+  if (!match) return "";
+  let [_, hourStr, minStr, ampm] = match;
+  let hour = parseInt(hourStr, 10);
+  if (ampm.toUpperCase() === "PM" && hour < 12) hour += 12;
+  if (ampm.toUpperCase() === "AM" && hour === 12) hour = 0;
+  return `${hour.toString().padStart(2, '0')}:${minStr}`;
+};
 
 export default function CalendarPage() {
   const router = useRouter();
   const { isAuthenticated, loading: authLoading } = useAuth() as any;
   const { calendarData, setCalendarData, fetchCalendarData, fetchSummary } = useAttendance() as any;
   const { darkMode } = useDarkMode() as any;
-  
+
   const [activeTab, setActiveTab] = useState<'view' | 'setup'>('view');
-  
+  const [activeSetupDay, setActiveSetupDay] = useState<string>("monday");
   const [deleteConfirm, setDeleteConfirm] = useState<{ subjectId: string; subjectName: string; day: string } | null>(null);
 
-  // Setup schedule state
+  // Dynamic positioning state for the day selection liquid glass capsule
+  const [dayCapsuleStyle, setDayCapsuleStyle] = useState({ left: 0, width: 0 });
+  
+  // Track open state of Start Time pickers to dynamically hide End Time fields
+  const [openStartPickers, setOpenStartPickers] = useState<{ [key: number]: boolean }>({});
+
+  // Setup schedule state (using native time strings)
   const [setupSchedule, setSetupSchedule] = useState<any>(
     weekdays.reduce((acc: any, day) => {
       acc[day] = [{
         subject: '',
-        startHour: '9',
-        startMinute: '00',
-        startMeridiem: 'AM',
-        endHour: '10',
-        endMinute: '00',
-        endMeridiem: 'AM'
+        startTime: '',
+        endTime: ''
       }];
       return acc;
     }, {})
   );
+  
+  // Track original schedule to disable/dim the Save button if no changes exist
+  const [originalSchedule, setOriginalSchedule] = useState<string>("");
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -51,6 +99,55 @@ export default function CalendarPage() {
       router.push('/');
     }
   }, [isAuthenticated, authLoading, router]);
+
+  // Dynamically measure the active day button to position the liquid glass capsule
+  useEffect(() => {
+    if (activeTab === 'setup') {
+      // Small timeout to ensure DOM has updated
+      const timer = setTimeout(() => {
+        const activeBtn = document.getElementById(`day-btn-${activeSetupDay}`);
+        if (activeBtn) {
+          setDayCapsuleStyle({
+            left: activeBtn.offsetLeft,
+            width: activeBtn.clientWidth,
+          });
+        }
+      }, 50);
+      return () => clearTimeout(timer);
+    }
+  }, [activeSetupDay, activeTab]);
+
+  // Pre-fill forms with existing data from DB
+  useEffect(() => {
+    if (calendarData) {
+      const initialSetup = weekdays.reduce((acc: any, day) => {
+        const dayClasses = calendarData[day] || [];
+        if (dayClasses.length > 0) {
+          acc[day] = dayClasses.map((cls: any) => {
+            let startTime = "";
+            let endTime = "";
+            if (cls.time) {
+              const parts = cls.time.split(" - ");
+              if (parts.length === 2) {
+                startTime = parseTo24Hour(parts[0]) || "";
+                endTime = parseTo24Hour(parts[1]) || "";
+              }
+            }
+            return {
+              subject: cls.name || cls.subjectName || cls.subject || "",
+              startTime,
+              endTime
+            };
+          });
+        } else {
+          acc[day] = [{ subject: "", startTime: "", endTime: "" }];
+        }
+        return acc;
+      }, {});
+      setSetupSchedule(initialSetup);
+      setOriginalSchedule(JSON.stringify(initialSetup));
+    }
+  }, [calendarData]);
 
   // View Calendar Handlers
   const handleDeleteSubject = async (subjectId: string, day: string) => {
@@ -85,12 +182,8 @@ export default function CalendarPage() {
         ...setupSchedule[day],
         {
           subject: '',
-          startHour: '9',
-          startMinute: '00',
-          startMeridiem: 'AM',
-          endHour: '10',
-          endMinute: '00',
-          endMeridiem: 'AM',
+          startTime: '',
+          endTime: ''
         }
       ]
     });
@@ -109,10 +202,10 @@ export default function CalendarPage() {
     const formattedSchedule: any = {};
     for (const day of weekdays) {
       const validClasses = setupSchedule[day]
-        .filter((cls: any) => cls.subject.trim() !== '')
+        .filter((cls: any) => cls.subject.trim() !== '' && cls.startTime !== '' && cls.endTime !== '')
         .map((cls: any) => ({
-          subjectName: cls.subject.trim(),
-          time: `${cls.startHour.toString().padStart(2, '0')}:${cls.startMinute} ${cls.startMeridiem} - ${cls.endHour.toString().padStart(2, '0')}:${cls.endMinute} ${cls.endMeridiem}`
+          subjectName: toTitleCase(cls.subject.trim()),
+          time: `${formatTo12Hour(cls.startTime)} - ${formatTo12Hour(cls.endTime)}`
         }));
 
       if (validClasses.length > 0) {
@@ -138,77 +231,112 @@ export default function CalendarPage() {
   };
 
   const dark = darkMode;
-  const border = dark ? 'border-gray-800' : 'border-gray-200';
-  const muted = dark ? 'text-gray-400' : 'text-gray-500';
-  const cardClass = `border rounded-xl p-5 ${border} ${dark ? 'bg-black' : 'bg-white'}`;
-  
-  const primaryBtn = `px-3.5 py-1.5 rounded-lg text-[13px] font-medium transition-opacity hover:opacity-80 active:scale-95
-    ${dark ? 'bg-white text-black' : 'bg-black text-white'}
-    disabled:opacity-40`;
+  const border = dark ? 'border-zinc-800' : 'border-zinc-200';
+  const muted = dark ? 'text-zinc-400' : 'text-zinc-500';
+  const cardClass = `border rounded-lg md:p-5 sm:p-2.5 p-1.5 ${border} ${dark ? 'bg-zinc-950/30' : 'bg-white'} shadow-sm`;
 
-  const secondaryBtn = `px-3.5 py-1.5 rounded-lg text-[13px] font-medium border transition-colors
-    ${dark
-      ? 'border-gray-800 text-gray-200 hover:bg-gray-900'
-      : 'border-gray-200 text-gray-700 hover:bg-gray-50'
-    } disabled:opacity-40`;
-
-  const inputClass = `w-full px-3.5 py-2 text-sm rounded-lg border outline-none transition-colors
-    ${dark
-      ? 'bg-black border-gray-800 text-white placeholder-gray-700 focus:border-gray-600'
-      : 'bg-white border-gray-200 text-gray-900 placeholder-gray-400 focus:border-gray-400'
+  const primaryBtn = `px-5 py-2.5 rounded-xl text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600 transition-all active:scale-[0.98] flex items-center justify-center gap-2 shrink-0 disabled:opacity-40 disabled:cursor-not-allowed`;
+  const secondaryBtn = `px-5 py-2.5 rounded-xl text-sm font-semibold text-zinc-700 dark:text-zinc-200 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-900 dark:hover:bg-zinc-800 border ${border} transition-all active:scale-[0.98] flex items-center justify-center gap-2 shrink-0 disabled:opacity-50 disabled:cursor-not-allowed`;
+  const inputClass = `w-full px-3.5 py-2 text-sm rounded-xl border outline-none transition-all duration-205 ${dark
+    ? 'bg-zinc-950 border-zinc-800 text-white placeholder-zinc-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/20'
+    : 'bg-white border-zinc-200 text-zinc-900 placeholder-zinc-455 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/20'
     }`;
 
-  const selectClass = `px-2 py-2 text-sm rounded-lg border outline-none transition-colors cursor-pointer
-    ${dark
-      ? 'bg-black border-gray-800 text-white focus:border-gray-600'
-      : 'bg-white border-gray-200 text-gray-900 focus:border-gray-400'
-    }`;
+  const hasUnsavedChanges = JSON.stringify(setupSchedule) !== originalSchedule;
 
   if (authLoading || (activeTab === 'view' && !calendarData)) {
     return (
-      <div className={`min-h-screen flex justify-center items-center transition-colors duration-300 ${dark ? 'bg-black text-white' : 'bg-white text-gray-900'}`}>
+      <div className={`min-h-screen flex justify-center items-center transition-colors duration-300 ${dark ? 'bg-black text-white' : 'bg-white text-zinc-900'}`}>
         <span className="inline-block w-6 h-6 rounded-full border-[2px] border-current border-t-transparent animate-spin" />
       </div>
     );
   }
 
   return (
-    <div className={`min-h-screen transition-colors duration-300 pt-[96px] md:pt-[24px] pb-32 ${dark ? 'bg-black text-white' : 'bg-white text-gray-900'}`}>
-      <div className={`max-w-[${activeTab === 'view' ? '1100px' : '750px'}] w-full mx-auto px-5 transition-all duration-300`}>
-        
+    <div className={`min-h-screen transition-colors duration-300 pt-[55px] md:pt-[24px] pb-32 ${dark ? 'bg-black text-white' : 'bg-white text-zinc-900'}`}>
+      <div className="max-w-[1100px] w-full mx-auto px-5">
+
         {/* Page Header with Tabs */}
-        <div className={`sticky top-[76px] md:top-0 z-30 mb-8 border-b pb-4 pt-2 border-gray-100 dark:border-gray-900 -mx-5 px-5 ${dark ? 'bg-black/90' : 'bg-white/90'} backdrop-blur-md flex flex-col sm:flex-row sm:items-center justify-between gap-4`}>
+        <div className="mb-4 border-b pb-4 pt-2 border-zinc-100 dark:border-zinc-900 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <p className={`text-[11px] uppercase tracking-widest ${muted} mb-1 flex items-center gap-1.5`}>
               <Calendar size={12} />
               <span>Time planner</span>
             </p>
-            <h1 className="text-[22px] font-medium tracking-tight">Study Calendar</h1>
-            <p className={`text-[13px] ${muted} mt-0.5`}>
-              {activeTab === 'view' 
-                ? 'Overview of your weekly classes. Click any card to remove it.' 
-                : 'Configure classes for each day of the week to automatically track daily attendance metrics.'}
-            </p>
+            <h1 className="text-[22px] font-semibold tracking-tight">Class Schedule</h1>
+
           </div>
-          
-          <div className={`flex p-1 rounded-xl border ${border} ${dark ? 'bg-gray-900/50' : 'bg-gray-50/50'} self-start sm:self-auto`}>
+
+          <div
+            className={`relative flex p-1 rounded-2xl border self-start sm:self-auto select-none overflow-hidden ${dark
+              ? 'bg-zinc-900/40 border-white/[0.08]'
+              : 'bg-white/40 border-white/60'
+              }`}
+            style={{
+              width: '244px',
+              backdropFilter: 'blur(20px) saturate(180%)',
+              WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+              boxShadow: dark
+                ? 'inset 0 1px 1px rgba(255,255,255,0.06), inset 0 -1px 1px rgba(0,0,0,0.3), 0 4px 16px rgba(0,0,0,0.25)'
+                : 'inset 0 1px 1px rgba(255,255,255,0.9), inset 0 -1px 1px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.06)',
+            }}
+          >
+            {/* Glass sheen overlay */}
+            <div
+              className="absolute inset-0 pointer-events-none rounded-2xl"
+              style={{
+                background: dark
+                  ? 'linear-gradient(135deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0) 40%)'
+                  : 'linear-gradient(135deg, rgba(255,255,255,0.8) 0%, rgba(255,255,255,0) 40%)',
+              }}
+            />
+
+            {/* Liquid Glass Sliding Capsule */}
+            <div
+              className="absolute top-1 bottom-1 rounded-xl border"
+              style={{
+                left: activeTab === 'view' ? '4px' : '122px',
+                width: '116px',
+                transition: 'left 0.5s cubic-bezier(0.34, 1.56, 0.64, 1), width 0.5s cubic-bezier(0.34, 1.56, 0.64, 1)',
+                background: dark
+                  ? 'linear-gradient(180deg, rgba(60,60,65,0.95) 0%, rgba(40,40,45,0.95) 100%)'
+                  : 'linear-gradient(180deg, rgba(255,255,255,0.95) 0%, rgba(245,245,247,0.9) 100%)',
+                borderColor: dark ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.8)',
+                backdropFilter: 'blur(8px)',
+                WebkitBackdropFilter: 'blur(8px)',
+                boxShadow: dark
+                  ? '0 2px 8px rgba(0,0,0,0.4), 0 1px 2px rgba(0,0,0,0.3), inset 0 1px 0.5px rgba(255,255,255,0.15), inset 0 -1px 1px rgba(0,0,0,0.2)'
+                  : '0 2px 8px rgba(0,0,0,0.1), 0 1px 2px rgba(0,0,0,0.06), inset 0 1px 0.5px rgba(255,255,255,1), inset 0 -1px 1px rgba(0,0,0,0.03)',
+              }}
+            >
+              {/* Capsule top sheen */}
+              <div
+                className="absolute inset-x-0 top-0 h-1/2 rounded-t-xl pointer-events-none"
+                style={{
+                  background: dark
+                    ? 'linear-gradient(180deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0) 100%)'
+                    : 'linear-gradient(180deg, rgba(255,255,255,0.6) 0%, rgba(255,255,255,0) 100%)',
+                }}
+              />
+            </div>
+
             <button
               onClick={() => setActiveTab('view')}
-              className={`px-4 py-2 rounded-lg text-[13px] font-medium transition-all ${
-                activeTab === 'view'
-                  ? (dark ? 'bg-gray-800 text-white shadow-sm' : 'bg-white text-black shadow-sm border border-gray-200/50')
-                  : (dark ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-900')
-              }`}
+              className={`relative z-10 py-1.5 rounded-xl text-[13px] font-medium w-[120px] text-center ${activeTab === 'view'
+                ? (dark ? 'text-white' : 'text-zinc-900')
+                : (dark ? 'text-zinc-400 hover:text-zinc-200' : 'text-zinc-500 hover:text-zinc-900')
+                }`}
+              style={{ transition: 'color 0.3s ease' }}
             >
               View Calendar
             </button>
             <button
               onClick={() => setActiveTab('setup')}
-              className={`px-4 py-2 rounded-lg text-[13px] font-medium transition-all ${
-                activeTab === 'setup'
-                  ? (dark ? 'bg-gray-800 text-white shadow-sm' : 'bg-white text-black shadow-sm border border-gray-200/50')
-                  : (dark ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-900')
-              }`}
+              className={`relative z-10 py-1.5 rounded-xl text-[13px] font-medium w-[120px] text-center ${activeTab === 'setup'
+                ? (dark ? 'text-white' : 'text-zinc-900')
+                : (dark ? 'text-zinc-400 hover:text-zinc-200' : 'text-zinc-500 hover:text-zinc-900')
+                }`}
+              style={{ transition: 'color 0.3s ease' }}
             >
               Add Classes
             </button>
@@ -218,14 +346,14 @@ export default function CalendarPage() {
         {activeTab === 'view' ? (
           /* Calendar Weekly Grid */
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in duration-300">
-            {daysOfWeek.map((day) => {
+            {weekdays.map((day) => {
               const subjects = calendarData?.[day] || [];
-              
+
               return (
                 <section key={day} className={cardClass}>
-                  <h2 className="text-[14px] font-medium tracking-tight mb-4 flex justify-between items-center border-b pb-2.5 border-gray-50 dark:border-gray-900">
+                  <h2 className="text-[14px] font-semibold tracking-tight mb-4 flex justify-between items-center border-b pb-2.5 border-zinc-100 dark:border-zinc-900">
                     <span className="capitalize">{day}</span>
-                    <span className={`text-[11px] px-2 py-0.5 rounded border ${border} ${muted}`}>
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${border} ${muted}`}>
                       {subjects.length} {subjects.length === 1 ? 'class' : 'classes'}
                     </span>
                   </h2>
@@ -235,150 +363,254 @@ export default function CalendarPage() {
                       {subjects.map((subject: any, idx: number) => {
                         const subjectId = subject.id || subject._id;
                         const name = subject.name || subject.subjectName || subject.subject;
-                        
+                        const colors = getSubjectColor(name);
+
                         return (
                           <div
                             key={`${subjectId}-${idx}`}
-                            onClick={() => {
-                              if (subjectId) {
-                                setDeleteConfirm({ subjectId, subjectName: name, day });
-                              }
-                            }}
-                            className={`group w-full text-left flex justify-between items-center gap-2 border ${border} rounded-lg p-3 bg-transparent hover:border-red-500/50 hover:text-red-500 hover:bg-red-500/5 transition-all duration-200 cursor-pointer`}
-                            title="Click to remove from schedule"
+                            className={`group w-full flex justify-between items-center gap-2 border ${colors.border} rounded-xl p-3 ${colors.bg} transition-all duration-200`}
                           >
-                            <div className="truncate">
-                              <p className="font-medium text-[13.5px] truncate">{name}</p>
-                              {subject.time && (
-                                <p className={`text-[11px] mt-0.5 group-hover:text-red-400 ${muted}`}>{subject.time}</p>
-                              )}
+                            <div className="truncate flex items-start gap-2.5">
+                              <span className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${colors.dot}`} />
+                              <div className="truncate">
+                                <p className={`font-semibold text-[13.5px] truncate ${colors.text}`}>{name}</p>
+                                {subject.time && (
+                                  <p className={`text-[11px] mt-0.5 ${dark ? 'text-zinc-450' : 'text-zinc-500'}`}>{subject.time}</p>
+                                )}
+                              </div>
                             </div>
-                            <span className="opacity-0 group-hover:opacity-100 p-1 rounded-full text-red-500 transition-opacity">
-                              <X size={13} />
-                            </span>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (subjectId) {
+                                  setDeleteConfirm({ subjectId, subjectName: name, day });
+                                }
+                              }}
+                              className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg hover:bg-rose-500/15 text-zinc-400 hover:text-rose-500 transition-all duration-200 shrink-0"
+                              title="Remove from schedule"
+                            >
+                              <Trash2 size={14} />
+                            </button>
                           </div>
                         );
                       })}
                     </div>
                   ) : (
-                    <p className={`text-[12.5px] ${muted} italic py-2`}>No classes scheduled.</p>
+                    /* Compact Empty State */
+                    <div className="flex flex-col items-center justify-center py-5 px-4 border border-dashed rounded-xl border-zinc-200 dark:border-zinc-800 text-center">
+                      <p className={`text-xs ${muted} mb-2`}>No classes scheduled</p>
+                      <button
+                        onClick={() => {
+                          setActiveSetupDay(day);
+                          setActiveTab('setup');
+                        }}
+                        className="text-xs font-bold text-indigo-650 dark:text-indigo-400 hover:underline flex items-center gap-1"
+                      >
+                        <Plus size={12} /> Add Class
+                      </button>
+                    </div>
                   )}
                 </section>
               );
             })}
           </div>
         ) : (
-          /* Setup Schedule Form */
-          <form onSubmit={handleSetupSubmit} className="space-y-6 animate-in fade-in duration-300">
-            {weekdays.map((day) => (
-              <div key={day} className={`${cardClass} mb-6`}>
-                <h3 className="capitalize font-medium text-[14.5px] tracking-tight mb-4 flex justify-between items-center border-b pb-2.5 border-gray-50 dark:border-gray-900">
-                  <span>{day}</span>
-                  <span className={`text-[10px] uppercase tracking-wider px-2 py-0.5 rounded border ${border} ${muted}`}>
-                    {setupSchedule[day].length} {setupSchedule[day].length === 1 ? 'class' : 'slots'}
-                  </span>
-                </h3>
+          /* Setup Schedule Form - One Day at a Time Flow */
+          <form onSubmit={handleSetupSubmit} className=" animate-in fade-in duration-300">
 
-                <div className="space-y-4">
-                  {setupSchedule[day].map((item: any, idx: number) => (
-                    <div key={idx} className="flex flex-col sm:flex-row sm:items-center gap-3">
+            {/* Premium Sticky Day Navigation Tab Bar */}
+            <div className="sticky top-0 z-25 mb-6 -mx-5 px-5">
+              <style dangerouslySetInnerHTML={{
+                __html: `
+                .no-scrollbar::-webkit-scrollbar {
+                  display: none;
+                }
+              `}} />
+
+              {/* Left & Right Fade Indicators */}
+              <div className={`absolute left-5 top-1.5 bottom-1.5 w-8 bg-gradient-to-r ${dark ? 'from-black' : 'from-white'} to-transparent pointer-events-none z-30`} />
+              <div className={`absolute right-5 top-1.5 bottom-1.5 w-8 bg-gradient-to-l ${dark ? 'from-black' : 'from-white'} to-transparent pointer-events-none z-30`} />
+
+              <div
+                className={`relative flex gap-2 p-1.5 rounded-2xl border ${border} ${dark ? 'bg-zinc-950/40 border-white/[0.08]' : 'bg-white/40 border-white/60'
+                  } backdrop-blur-xl overflow-x-auto no-scrollbar snap-x snap-mandatory scroll-smooth`}
+                style={{
+                  scrollbarWidth: 'none',
+                  msOverflowStyle: 'none',
+                  backdropFilter: 'blur(20px) saturate(180%)',
+                  WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+                  boxShadow: dark
+                    ? 'inset 0 1px 1px rgba(255,255,255,0.06), inset 0 -1px 1px rgba(0,0,0,0.3), 0 4px 16px rgba(0,0,0,0.25)'
+                    : 'inset 0 1px 1px rgba(255,255,255,0.9), inset 0 -1px 1px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.06)'
+                }}
+              >
+                {/* Liquid Glass Sliding Capsule for Day Selection */}
+                {dayCapsuleStyle.width > 0 && (
+                  <div
+                    className="absolute top-1.5 bottom-1.5 rounded-xl border pointer-events-none"
+                    style={{
+                      left: `${dayCapsuleStyle.left}px`,
+                      width: `${dayCapsuleStyle.width}px`,
+                      transition: 'left 0.45s cubic-bezier(0.34, 1.56, 0.64, 1), width 0.45s cubic-bezier(0.34, 1.56, 0.64, 1)',
+                      background: dark
+                        ? 'linear-gradient(180deg, rgba(60,60,65,0.95) 0%, rgba(40,40,45,0.95) 100%)'
+                        : 'linear-gradient(180deg, rgba(255,255,255,0.95) 0%, rgba(245,245,247,0.9) 100%)',
+                      borderColor: dark ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.8)',
+                      backdropFilter: 'blur(8px)',
+                      WebkitBackdropFilter: 'blur(8px)',
+                      boxShadow: dark
+                        ? '0 2px 8px rgba(0,0,0,0.4), 0 1px 2px rgba(0,0,0,0.3), inset 0 1px 0.5px rgba(255,255,255,0.15), inset 0 -1px 1px rgba(0,0,0,0.2)'
+                        : '0 2px 8px rgba(0,0,0,0.1), 0 1px 2px rgba(0,0,0,0.06), inset 0 1px 0.5px rgba(255,255,255,1), inset 0 -1px 1px rgba(0,0,0,0.03)',
+                    }}
+                  >
+                    {/* Capsule top sheen */}
+                    <div
+                      className="absolute inset-x-0 top-0 h-1/2 rounded-t-xl pointer-events-none"
+                      style={{
+                        background: dark
+                          ? 'linear-gradient(180deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0) 100%)'
+                          : 'linear-gradient(180deg, rgba(255,255,255,0.6) 0%, rgba(255,255,255,0) 100%)',
+                      }}
+                    />
+                  </div>
+                )}
+
+                {weekdays.map((day) => {
+                  const count = setupSchedule[day].filter((cls: any) => cls.subject.trim() !== '').length;
+                  const isActive = activeSetupDay === day;
+                  return (
+                    <button
+                      key={day}
+                      id={`day-btn-${day}`}
+                      type="button"
+                      onClick={() => setActiveSetupDay(day)}
+                      className={`snap-center px-4 py-2 rounded-xl text-[12.5px] font-semibold capitalize transition-all duration-300 whitespace-nowrap flex items-center gap-2 select-none shrink-0 relative z-10 ${isActive
+                        ? (dark ? 'text-white' : 'text-zinc-900')
+                        : dark
+                          ? 'text-zinc-400 hover:text-zinc-200'
+                          : 'text-zinc-600 hover:text-zinc-900'
+                        }`}
+                    >
+                      <span>{day}</span>
+                      {count > 0 && (
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold transition-all ${isActive
+                          ? (dark ? 'bg-zinc-800 text-white border border-zinc-700/50' : 'bg-zinc-200 text-zinc-800 border border-zinc-300')
+                          : 'bg-indigo-55/10 dark:bg-indigo-950/40 text-indigo-650 dark:text-indigo-400'
+                          }`}>
+                          {count}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Active Day Card */}
+            <div className={cardClass}>
+              <h3 className="capitalize font-semibold text-[15px] tracking-tight mb-5 flex justify-between items-center border-b pb-2.5 border-zinc-100 dark:border-zinc-900">
+                <span>  {activeSetupDay}</span>
+                <span className={`text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-lg border ${border} ${muted}`}>
+                  {setupSchedule[activeSetupDay].filter((cls: any) => cls.subject.trim() !== '').length} Active Classes
+                </span>
+              </h3>
+
+              <div className="space-y-4">
+                {setupSchedule[activeSetupDay].map((item: any, idx: number) => {
+                  const isSubjectFilled = item.subject.trim() !== "";
+                  const isStartFilled = item.startTime.trim() !== "";
+                  const isStartOpen = !!openStartPickers[idx];
+
+                  return (
+                    <div key={idx} className="flex flex-col gap-3.5 p-3.5 rounded-xl border border-zinc-100 dark:border-zinc-900 bg-zinc-50/20 dark:bg-zinc-950/10 transition-all duration-305">
                       
-                      <div className="flex-1">
+                      {/* Step 1: Subject Input */}
+                      <div className="w-full">
                         <input
                           type="text"
-                          placeholder="Subject name"
+                          placeholder="Enter subject name..."
                           value={item.subject}
-                          onChange={(e) => handleSetupChange(day, idx, 'subject', e.target.value)}
+                          onChange={(e) => handleSetupChange(activeSetupDay, idx, 'subject', e.target.value)}
                           className={inputClass}
                         />
                       </div>
 
-                      <div className="flex items-center gap-1.5">
-                        <span className={`text-[11px] uppercase tracking-wider min-w-[34px] ${muted}`}>Start:</span>
-                        <select
-                          value={item.startHour}
-                          onChange={(e) => handleSetupChange(day, idx, 'startHour', e.target.value)}
-                          className={selectClass}
-                        >
-                          {hours.map(h => <option key={h} value={h}>{h}</option>)}
-                        </select>
-                        <select
-                          value={item.startMinute}
-                          onChange={(e) => handleSetupChange(day, idx, 'startMinute', e.target.value)}
-                          className={selectClass}
-                        >
-                          {minutes.map(m => <option key={m} value={m}>{m}</option>)}
-                        </select>
-                        <select
-                          value={item.startMeridiem}
-                          onChange={(e) => handleSetupChange(day, idx, 'startMeridiem', e.target.value)}
-                          className={selectClass}
-                        >
-                          {meridiems.map(m => <option key={m} value={m}>{m}</option>)}
-                        </select>
+                      {/* Step 2: Start Time (Progressive Reveal) */}
+                      <div 
+                        className={`flex flex-col gap-1.5 w-full transition-all duration-300 origin-top ${
+                          isSubjectFilled
+                            ? "max-h-24 opacity-100 scale-y-100 translate-y-0"
+                            : "max-h-0 opacity-0 scale-y-95 -translate-y-2 overflow-hidden pointer-events-none"
+                        }`}
+                      >
+                        <span className={`text-[9px] font-bold uppercase tracking-wider ${muted}`}>Start Time</span>
+                        <TimePicker
+                          value={item.startTime}
+                          onChange={(val) => handleSetupChange(activeSetupDay, idx, 'startTime', val)}
+                          onOpenChange={(open) => setOpenStartPickers(prev => ({ ...prev, [idx]: open }))}
+                        />
                       </div>
 
-                      <div className="flex items-center gap-1.5">
-                        <span className={`text-[11px] uppercase tracking-wider min-w-[30px] ${muted}`}>End:</span>
-                        <select
-                          value={item.endHour}
-                          onChange={(e) => handleSetupChange(day, idx, 'endHour', e.target.value)}
-                          className={selectClass}
-                        >
-                          {hours.map(h => <option key={h} value={h}>{h}</option>)}
-                        </select>
-                        <select
-                          value={item.endMinute}
-                          onChange={(e) => handleSetupChange(day, idx, 'endMinute', e.target.value)}
-                          className={selectClass}
-                        >
-                          {minutes.map(m => <option key={m} value={m}>{m}</option>)}
-                        </select>
-                        <select
-                          value={item.endMeridiem}
-                          onChange={(e) => handleSetupChange(day, idx, 'endMeridiem', e.target.value)}
-                          className={selectClass}
-                        >
-                          {meridiems.map(m => <option key={m} value={m}>{m}</option>)}
-                        </select>
-                      </div>
+                      {/* Step 3: End Time & Delete Button (Progressive Reveal - hides when Start Time is being edited) */}
+                      <div 
+                        className={`flex items-end gap-3 w-full transition-all duration-300 origin-top ${
+                          isSubjectFilled && isStartFilled && !isStartOpen
+                            ? "max-h-24 opacity-100 scale-y-100 translate-y-0"
+                            : "max-h-0 opacity-0 scale-y-95 -translate-y-2 overflow-hidden pointer-events-none"
+                        }`}
+                      >
+                        <div className="flex-1 flex flex-col gap-1.5">
+                          <span className={`text-[9px] font-bold uppercase tracking-wider ${muted}`}>End Time</span>
+                          <TimePicker
+                            value={item.endTime}
+                            onChange={(val) => handleSetupChange(activeSetupDay, idx, 'endTime', val)}
+                          />
+                        </div>
 
-                      {setupSchedule[day].length > 1 && (
-                        <button
-                          type="button"
-                          onClick={() => removeClass(day, idx)}
-                          className="p-2 rounded-lg border border-red-500/20 text-red-500 hover:bg-red-500/10 transition-colors self-end sm:self-auto flex items-center justify-center"
-                          aria-label="Remove slot"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      )}
+                        {setupSchedule[activeSetupDay].length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => removeClass(activeSetupDay, idx)}
+                            className="p-2 rounded-xl border border-rose-500/25 text-rose-500 hover:bg-rose-500/10 transition-colors flex items-center justify-center w-10 h-10 shrink-0 mb-[1px]"
+                            aria-label="Remove slot"
+                          >
+                            <Trash2 size={15} />
+                          </button>
+                        )}
+                      </div>
                     </div>
-                  ))}
-                </div>
-
-                <div className="mt-4 pt-3 border-t border-gray-50 dark:border-gray-900 flex justify-end">
-                  <button
-                    type="button"
-                    onClick={() => addClass(day)}
-                    className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-[12px] font-medium border border-dashed transition-colors ${
-                      dark ? 'border-gray-800 text-gray-300 hover:bg-gray-950' : 'border-gray-200 text-gray-600 hover:bg-gray-50'
-                    }`}
-                  >
-                    <Plus size={13} />
-                    <span>Add Class</span>
-                  </button>
-                </div>
+                  );
+                })}
               </div>
-            ))}
+
+              <div className="mt-5 pt-4 border-t border-zinc-100 dark:border-zinc-900 flex justify-between items-center">
+                <p className={`text-xs ${muted}`}>Add as many slots as you need for {activeSetupDay}.</p>
+                <button
+                  type="button"
+                  onClick={() => addClass(activeSetupDay)}
+                  className={`flex items-center gap-1 px-4 py-2 rounded-xl text-xs font-bold border border-dashed transition-all ${dark ? 'border-zinc-800 text-zinc-300 hover:bg-zinc-900' : 'border-zinc-200 text-zinc-600 hover:bg-zinc-50'
+                    }`}
+                >
+                  <Plus size={14} />
+                  <span>Add Slot</span>
+                </button>
+              </div>
+            </div>
 
             {/* Fixed Bottom Save Bar */}
-            <div className={`fixed bottom-0 left-0 md:left-64 right-0 z-40 border-t ${border} ${dark ? 'bg-black/90' : 'bg-white/90'} backdrop-blur-md p-2.5 shadow-[0_-10px_40px_rgba(0,0,0,0.05)]`}>
-              <div className="max-w-[750px] w-full mx-auto flex justify-center">
+            <div className={`fixed bottom-0 left-0 md:left-64 right-0 z-40 border-t ${border} ${dark ? 'bg-black/90' : 'bg-white/90'} backdrop-blur-md p-3.5 shadow-[0_-10px_40px_rgba(0,0,0,0.05)]`}>
+              <div className="max-w-[700px] w-full mx-auto flex flex-col sm:flex-row justify-between items-center gap-3">
+                <span className={`text-xs font-semibold ${muted} hidden sm:inline`}>
+                  {hasUnsavedChanges ? "⚠️ You have unsaved changes in your schedule" : "✓ Schedule is up to date"}
+                </span>
+
                 <button
                   type="submit"
-                  disabled={submitting}
-                  className={`w-full sm:w-auto px-12 py-2.5 rounded-xl text-[14.5px] font-semibold transition-all hover:opacity-85 active:scale-95 shadow-md ${dark ? 'bg-white text-black' : 'bg-black text-white'} disabled:opacity-40`}
+                  disabled={submitting || !hasUnsavedChanges}
+                  className={`w-full sm:w-auto px-12 py-2.5 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2 shadow-md ${dark
+                    ? 'bg-white text-black hover:opacity-90 disabled:bg-zinc-800 disabled:text-zinc-500'
+                    : 'bg-black text-white hover:opacity-85 disabled:bg-zinc-100 disabled:text-zinc-400'
+                    } disabled:opacity-50 disabled:cursor-not-allowed`}
                 >
                   {submitting ? 'Saving...' : 'Save Schedule'}
                 </button>
@@ -390,17 +622,16 @@ export default function CalendarPage() {
 
       {/* Delete Confirmation Modal */}
       {deleteConfirm && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm transition-all duration-300">
-          <div className={`rounded-xl border p-6 max-w-md w-full mx-4 shadow-2xl animate-in fade-in zoom-in-95 duration-200 ${
-            dark ? 'bg-black border-gray-800 text-white' : 'bg-white border-gray-200 text-gray-900'
-          }`}>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm transition-all duration-350 animate-in fade-in duration-250">
+          <div className={`rounded-2xl border p-6 max-w-md w-full mx-4 shadow-2xl animate-in fade-in zoom-in-95 duration-200 ${dark ? 'bg-zinc-950 border-zinc-800 text-white' : 'bg-white border-zinc-250 text-zinc-900'
+            }`}>
             <div className="mb-4">
-              <h3 className="text-[16px] font-medium tracking-tight text-red-500">Remove Class from Calendar?</h3>
-              <p className={`mt-2 text-sm leading-relaxed ${muted}`}>
+              <h3 className="text-[16px] font-bold tracking-tight text-rose-500">Remove Class from Calendar?</h3>
+              <p className={`mt-2.5 text-sm leading-relaxed ${muted}`}>
                 Are you sure you want to remove <span className="font-semibold text-current">{deleteConfirm.subjectName}</span> from <span className="font-semibold text-current capitalize">{deleteConfirm.day}</span>? This will modify your weekly recurring schedule.
               </p>
             </div>
-            <div className="flex justify-end gap-2.5 mt-6 pt-3 border-t border-gray-100 dark:border-gray-900">
+            <div className="flex justify-end gap-2.5 mt-6 pt-4 border-t border-zinc-100 dark:border-zinc-900">
               <button
                 type="button"
                 onClick={() => setDeleteConfirm(null)}
@@ -416,6 +647,7 @@ export default function CalendarPage() {
                   await handleDeleteSubject(subjectId, day);
                 }}
                 className={primaryBtn}
+                style={{ backgroundColor: '#e11d48' }} // Rose-600
               >
                 Yes, Remove
               </button>
