@@ -11,7 +11,7 @@ import userRouter from './routes/authRoutes.js';
 import subjectRouter from './routes/subjectRoutes.js';
 import scheduleRouter from './routes/scheduleRoutes.js';
 import attendanceRouter from './routes/attendanceRoutes.js';
-import studySessionRouter from './routes/studySessionRoutes.js';
+
 import pushRouter from './routes/pushRoutes.js';
 import iceServersRouter from './routes/iceServersRoute.js';
 import communityRouter from './routes/communityRoutes.js';
@@ -61,7 +61,7 @@ app.use('/api/auth', userRouter);
 app.use('/api/subject', subjectRouter);
 app.use('/api/schedule', scheduleRouter);
 app.use('/api/attendance', attendanceRouter);
-app.use('/api/study-session', studySessionRouter);
+
 app.use('/api/push', pushRouter);
 app.use('/api/community', communityRouter);
 app.use('/api/groups', communityGroupRouter);

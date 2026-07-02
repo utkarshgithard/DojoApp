@@ -3,7 +3,7 @@
 import React, { useState, useContext, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
-import { Moon, Sun, Menu, X, LogOut, LayoutDashboard, Calendar, Clock, Settings, User, Users, UserPlus, Bell, Coffee, Hash, BookOpen } from 'lucide-react';
+import { Moon, Sun, Menu, X, LogOut, LayoutDashboard, Calendar, Clock, Settings, User, Users, UserPlus, Bell, Coffee, Hash, BookOpen, MessageSquare } from 'lucide-react';
 import { useDarkMode } from '@/context/DarkModeContext';
 import { AuthContext } from '@/context/authContext';
 import { useAttendance } from '@/context/AttendanceContext';
@@ -16,18 +16,7 @@ const Navbar = () => {
   const router = useRouter();
   const pathname = usePathname();
 
-  const attendance = useAttendance();
   const { unreadCount } = useNotifications();
-  const invites = attendance?.invites || [];
-  const activeInvitesCount = invites.filter((invite: any) => {
-    if (!invite.invitedAt) return true;
-    const age = Date.now() - new Date(invite.invitedAt).getTime();
-    return age <= 15 * 60 * 1000;
-  }).length;
-
-  const prevInviteCountRef = useRef(invites.length);
-  const [toastInvite, setToastInvite] = useState<any>(null);
-  const toastTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const [isOpen, setIsOpen] = useState(false);
   const [showNavbar, setShowNavbar] = useState(true);
@@ -38,18 +27,7 @@ const Navbar = () => {
   const [showCoffeeModal, setShowCoffeeModal] = useState(false);
   const [qrBlurred, setQrBlurred] = useState(true);
 
-  // Detect new incoming invites and show floating toast
-  useEffect(() => {
-    const prevCount = prevInviteCountRef.current;
-    const currentCount = invites.length;
-    if (currentCount > prevCount && currentCount > 0) {
-      const newest = invites[invites.length - 1];
-      setToastInvite(newest);
-      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
-      toastTimerRef.current = setTimeout(() => setToastInvite(null), 6000);
-    }
-    prevInviteCountRef.current = currentCount;
-  }, [invites]);
+
 
   useEffect(() => {
     setIsMounted(true);
@@ -117,40 +95,7 @@ const Navbar = () => {
         backdrop-blur-md border-b ${border}
       `}
     >
-      {/* ── Floating Invite Toast ── */}
-      {toastInvite && (
-        <div
-          className={`fixed top-[72px] left-1/2 -translate-x-1/2 z-[99999] w-[calc(100%-2rem)] max-w-sm
-            rounded-2xl border shadow-2xl p-3.5 flex items-start gap-3 animate-slide-up
-            md:hidden
-            ${dark ? 'bg-zinc-900 border-zinc-800 text-white' : 'bg-white border-zinc-200 text-zinc-900'}`}
-        >
-          <div className="w-8 h-8 rounded-full bg-indigo-500/10 text-indigo-500 flex items-center justify-center shrink-0 mt-0.5">
-            <Bell size={15} />
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-[12.5px] font-bold leading-tight">New Session Invite! 🎯</p>
-            <p className={`text-[11px] mt-0.5 leading-snug ${dark ? 'text-zinc-400' : 'text-zinc-500'}`}>
-              <span className="font-semibold">{toastInvite?.name || 'Someone'}</span> invited you —{' '}
-              <span className="italic">{toastInvite?.subject || 'join a session'}</span>
-            </p>
-          </div>
-          <div className="flex items-center gap-1.5 shrink-0">
-            <button
-              onClick={() => { router.push('/sessions'); setToastInvite(null); }}
-              className="px-2.5 py-1 text-[11px] font-bold bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg transition-colors"
-            >
-              View
-            </button>
-            <button
-              onClick={() => setToastInvite(null)}
-              className={`p-1 rounded-lg transition-colors ${dark ? 'hover:bg-zinc-800 text-zinc-400' : 'hover:bg-zinc-100 text-zinc-500'}`}
-            >
-              <X size={13} />
-            </button>
-          </div>
-        </div>
-      )}
+
       <div className="max-w-[1100px] mx-auto px-5 py-3 flex justify-between items-center">
         {/* Brand logo on the left */}
         <div className="flex items-center gap-3">
@@ -177,12 +122,12 @@ const Navbar = () => {
             Dashboard
           </Link>
           <Link
-            href="/sessions"
+            href="/chat"
             className={`text-[13px] font-medium transition-colors ${
-              pathname === '/sessions' ? textActive : textMuted
+              pathname === '/chat' ? textActive : textMuted
             }`}
           >
-            Sessions
+            Chat
           </Link>
           <Link
             href="/friends"
@@ -250,10 +195,10 @@ const Navbar = () => {
             >
               {isOpen ? <X size={16} /> : <Menu size={16} />}
             </button>
-            {(activeInvitesCount > 0 || unreadCount > 0) && !isOpen && (
+            {unreadCount > 0 && !isOpen && (
               <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-red-500 border border-white dark:border-black animate-ping" />
             )}
-            {(activeInvitesCount > 0 || unreadCount > 0) && !isOpen && (
+            {unreadCount > 0 && !isOpen && (
               <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-red-500 border border-white dark:border-black" />
             )}
           </div>
@@ -428,19 +373,24 @@ const Navbar = () => {
             <span>Dashboard</span>
           </Link>
           <Link
-            href="/sessions"
+            href="/chat"
             onClick={closeMenu}
             className={`flex items-center gap-2.5 text-[14px] font-medium py-1 w-full ${
-              pathname === '/sessions' ? textActive : textMuted
+              pathname === '/chat' ? textActive : textMuted
             }`}
           >
-            <Users size={15} />
-            <span>Sessions</span>
-            {activeInvitesCount > 0 && (
-              <span className="ml-auto inline-flex items-center justify-center w-5 h-5 text-[10px] font-bold text-white bg-red-500 rounded-full animate-pulse">
-                {activeInvitesCount}
-              </span>
-            )}
+            <MessageSquare size={15} />
+            <span>Chat</span>
+          </Link>
+          <Link
+            href="/friends"
+            onClick={closeMenu}
+            className={`flex items-center gap-2.5 text-[14px] font-medium py-1 w-full ${
+              pathname === '/friends' ? textActive : textMuted
+            }`}
+          >
+            <UserPlus size={15} />
+            <span>Friends</span>
           </Link>
           <Link
             href="/exam-prep"
@@ -451,16 +401,6 @@ const Navbar = () => {
           >
             <BookOpen size={15} />
             <span>Exam Prep</span>
-          </Link>
-          <Link
-            href="/friends"
-            onClick={closeMenu}
-            className={`flex items-center gap-2.5 text-[14px] font-medium py-1 ${
-              pathname === '/friends' ? textActive : textMuted
-            }`}
-          >
-            <UserPlus size={15} />
-            <span>Friends</span>
           </Link>
           <Link
             href="/calendar"

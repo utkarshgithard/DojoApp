@@ -68,9 +68,12 @@ export interface Participant {
 
 export interface Message {
   id: string;
-  sessionId: string;
+  sessionId?: string;
+  chatId?: string;
   userId: string;
   name: string;
+  clientId?: string;
+  status?: "sent" | "delivered" | "read";
   /** Plaintext message body. For E2EE messages this is populated after decryption. */
   text: string;
   ts: string | Date;
@@ -192,12 +195,6 @@ export interface Notification {
 
 export interface SocketContextType {
   socket: Socket | null;
-  joinedSessions: Set<string>;
-  setJoinedSessions: React.Dispatch<React.SetStateAction<Set<string>>>;
-  sessions: any[];
-  setSessions: React.Dispatch<React.SetStateAction<any[]>>;
-  sessionsLoaded: boolean;
-  setSessionsLoaded: React.Dispatch<React.SetStateAction<boolean>>;
   userNotifications: Notification[];
   clearNotification: (id: number) => void;
   clearAllNotifications: () => void;

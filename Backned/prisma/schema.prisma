@@ -28,7 +28,6 @@ model User {
   messages              Message[]
   notificationsSent     Notification[]     @relation("NotificationSender")
   notificationsReceived Notification[]     @relation("NotificationRecipient")
-  participantIn         Participant[]
   posts                 Post[]
   postComments          PostComment[]
   postLikes             PostLike[]
@@ -37,7 +36,6 @@ model User {
   pushSubscriptions     PushSubscription[]
   schedules             Schedule?
   studyLogs             StudyLog[]
-  createdSessions       StudySession[]     @relation("SessionCreator")
   subjects              Subject[]
   following             UserFollow[]       @relation("Followers")
   followers             UserFollow[]       @relation("Following")
@@ -117,39 +115,9 @@ model AttendanceEntry {
   record             AttendanceRecord @relation(fields: [attendanceRecordId], references: [id], onDelete: Cascade)
 }
 
-model StudySession {
-  id              String        @id @default(uuid())
-  creatorId       String
-  subject         String
-  startAt         DateTime
-  duration        Int
-  note            String        @default("")
-  visibility      Visibility    @default(private)
-  status          SessionStatus @default(pending)
-  actualStartTime DateTime?
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
-  messages        Message[]
-  participants    Participant[]
-  creator         User          @relation("SessionCreator", fields: [creatorId], references: [id])
-}
-
-model Participant {
-  id          String            @id @default(uuid())
-  sessionId   String
-  userId      String
-  status      ParticipantStatus @default(invited)
-  invitedAt   DateTime          @default(now())
-  respondedAt DateTime?
-  session     StudySession      @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  user        User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([sessionId, userId])
-}
-
 model Message {
   id            String       @id @default(uuid())
-  sessionId     String
+  chatId        String
   userId        String
   name          String
   /// Plaintext body (empty string for E2EE messages; kept for backward compat)
@@ -161,7 +129,6 @@ model Message {
   encryptedKeys String?
   /// base64 AES-GCM 12-byte IV used to encrypt ciphertext
   iv            String?
-  session       StudySession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   user          User         @relation(fields: [userId], references: [id])
 }
 
@@ -333,26 +300,6 @@ enum AttendanceStatus {
   attended
   missed
   cancelled
-}
-
-enum Visibility {
-  private
-  friends
-}
-
-enum SessionStatus {
-  pending
-  scheduled
-  in_progress
-  completed
-  cancelled
-}
-
-enum ParticipantStatus {
-  invited
-  accepted
-  declined
-  removed
 }
 
 enum MediaType {

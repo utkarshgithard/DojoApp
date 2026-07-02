@@ -20,7 +20,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Bell,
-  BookOpen
+  BookOpen,
+  MessageSquare
 } from 'lucide-react';
 import { useDarkMode } from '@/context/DarkModeContext';
 import { AuthContext } from '@/context/authContext';
@@ -43,30 +44,11 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed = false, toggleCollapse }) 
   const [showCoffeeModal, setShowCoffeeModal] = useState(false);
   const [qrBlurred, setQrBlurred] = useState(true);
 
-  const attendance = useAttendance();
   const { unreadCount } = useNotifications();
-  const invites = attendance?.invites || [];
-  const [lastSeenInviteId, setLastSeenInviteId] = useState<string | null>(null);
-  const [isDismissed, setIsDismissed] = useState(false);
-
-  const activeInvites = invites.filter((invite: any) => {
-    if (!invite.invitedAt) return true;
-    const age = Date.now() - new Date(invite.invitedAt).getTime();
-    return age <= 15 * 60 * 1000;
-  });
-
-  const latestInvite = activeInvites.length > 0 ? activeInvites[0] : null;
 
   useEffect(() => {
     setIsMounted(true);
   }, []);
-
-  useEffect(() => {
-    if (latestInvite && latestInvite.id !== lastSeenInviteId) {
-      setLastSeenInviteId(latestInvite.id);
-      setIsDismissed(false);
-    }
-  }, [latestInvite, lastSeenInviteId]);
 
   // Sync photo from Database or Firebase Auth fallback
   useEffect(() => {
@@ -100,7 +82,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed = false, toggleCollapse }) 
   const navItems = [
     { name: 'Community', href: '/community', icon: <Hash size={16} /> },
     { name: 'Dashboard', href: '/dashboard', icon: <LayoutDashboard size={16} /> },
-    { name: 'Sessions', href: '/sessions', icon: <Users size={16} /> },
+    { name: 'Chat', href: '/chat', icon: <MessageSquare size={16} /> },
     { name: 'Exam Prep', href: '/exam-prep', icon: <BookOpen size={16} /> },
     { name: 'Friends', href: '/friends', icon: <UserPlus size={16} /> },
     { name: 'Your Class', href: '/calendar', icon: <Calendar size={16} /> },
@@ -155,7 +137,6 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed = false, toggleCollapse }) 
       <nav className="flex-1 overflow-y-auto px-4 py-4 space-y-1">
         {navItems.map((item) => {
           const isActive = pathname === item.href;
-          const isSessions = item.name === 'Sessions';
           return (
             <div key={item.href} className="relative" id={`sidebar-item-${item.name.toLowerCase().replace(/\s+/g, '-')}`}>
               <Link
@@ -168,66 +149,12 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed = false, toggleCollapse }) 
               >
                 <span className="shrink-0">{item.icon}</span>
                 {!collapsed && <span>{item.name}</span>}
-                {isSessions && activeInvites.length > 0 && (
-                  <span className={`${collapsed ? 'absolute top-0 right-0' : 'ml-auto'} inline-flex items-center justify-center w-5 h-5 text-[10px] font-bold text-white bg-red-500 rounded-full animate-pulse shrink-0`}>
-                    {activeInvites.length}
-                  </span>
-                )}
                 {item.name === 'Notifications' && unreadCount > 0 && (
                   <span className={`${collapsed ? 'absolute top-0 right-0' : 'ml-auto'} inline-flex items-center justify-center w-5 h-5 text-[10px] font-bold text-white bg-red-500 rounded-full animate-pulse shrink-0`}>
                     {unreadCount}
                   </span>
                 )}
               </Link>
-
-              {/* Floating Cloud Popup (only for Sessions link) */}
-              {isSessions && latestInvite && !isDismissed && (
-                <div className="absolute left-full ml-3 top-1/2 -translate-y-1/2 z-50 pointer-events-auto">
-                  {/* Cloud bubble container with floating animation */}
-                  <div className="animate-float flex items-center relative">
-                    {/* Left pointing arrow (triangle) */}
-                    <div className="absolute right-full top-1/2 -translate-y-1/2 w-0 h-0 border-t-[6px] border-t-transparent border-b-[6px] border-b-transparent border-r-[8px] border-r-white dark:border-r-zinc-900 filter drop-shadow-[-1px_0_1px_rgba(0,0,0,0.1)]"></div>
-
-                    {/* The cloud speech bubble */}
-                    <div className="backdrop-blur-md bg-white/95 dark:bg-zinc-900/95 text-zinc-900 dark:text-zinc-100 border border-zinc-200/80 dark:border-zinc-800/80 shadow-2xl rounded-2xl p-3.5 pr-8 min-w-[200px] max-w-[250px] relative">
-                      {/* Dismiss close button */}
-                      <button
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          setIsDismissed(true);
-                        }}
-                        className="absolute top-2.5 right-2.5 text-zinc-400 hover:text-zinc-650 dark:hover:text-zinc-250 transition-colors"
-                        title="Dismiss"
-                      >
-                        <X size={13} />
-                      </button>
-
-                      <div className="flex flex-col gap-1.5">
-                        <div className="flex items-center gap-1.5 text-red-500 font-semibold text-[10px] uppercase tracking-wider">
-                          <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-ping"></span>
-                          <span>Study Invite</span>
-                        </div>
-                        <p className="text-[13px] font-semibold leading-snug truncate">
-                          {latestInvite.name} invited you!
-                        </p>
-                        <p className="text-[11px] text-zinc-500 dark:text-zinc-400 truncate">
-                          Subject: <span className="font-medium text-zinc-700 dark:text-zinc-300">{latestInvite.subject || 'No topic'}</span>
-                        </p>
-                        <div className="flex gap-2 mt-2">
-                          <Link
-                            href="/sessions"
-                            onClick={() => setIsDismissed(true)}
-                            className="flex-1 text-center py-1 rounded-lg text-[11px] font-semibold bg-black hover:bg-neutral-800 text-white dark:bg-white dark:hover:bg-neutral-100 dark:text-black transition-colors"
-                          >
-                            View Invite
-                          </Link>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
             </div>
           );
         })}

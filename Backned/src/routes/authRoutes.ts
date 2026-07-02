@@ -444,17 +444,8 @@ userRouter.get('/performance-index', verifyToken, async (req: AuthenticatedReque
       chartData.push({ date: formattedDate, dayName, rawDate: d });
     }
 
-    const [studyLogs, studySessions, attendanceRecords, posts, userSubjects] = await Promise.all([
+    const [studyLogs, attendanceRecords, posts, userSubjects] = await Promise.all([
       prisma.studyLog.findMany({ where: { userId, date: { in: dates } } }),
-      prisma.studySession.findMany({
-        where: {
-          startAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
-          OR: [
-            { creatorId: userId },
-            { participants: { some: { userId, status: 'accepted' } } },
-          ],
-        },
-      }),
       prisma.attendanceRecord.findMany({ where: { userId, date: { in: dates } }, include: { entries: true } }),
       prisma.post.findMany({ where: { userId, createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } } }),
       prisma.subject.findMany({ where: { userId } }),
@@ -462,15 +453,7 @@ userRouter.get('/performance-index', verifyToken, async (req: AuthenticatedReque
 
     const studyLogMap = new Map(studyLogs.map((entry: any) => [entry.date, entry.duration]));
     const attendanceMap = new Map(attendanceRecords.map((record: any) => [record.date, record.entries]));
-    const sessionMap = new Map<string, number>();
     const postDateSet = new Set<string>();
-
-    studySessions.forEach((session: any) => {
-      const dateKey = new Date(session.startAt).toISOString().split('T')[0];
-      if (dateKey) {
-        sessionMap.set(dateKey, (sessionMap.get(dateKey) ?? 0) + 1);
-      }
-    });
 
     posts.forEach((post: any) => {
       const dateKey = new Date(post.createdAt).toISOString().split('T')[0];
@@ -503,7 +486,6 @@ userRouter.get('/performance-index', verifyToken, async (req: AuthenticatedReque
       const scheduledSubjects = userSubjects.filter((subject) => subject.days.includes(dayName));
 
       const attendanceEntries = attendanceMap.get(dateStr) ?? [];
-      const sessionsCount = sessionMap.get(dateStr) ?? 0;
       const postedToday = postDateSet.has(dateStr);
       const studyDurationSeconds = studyLogMap.get(dateStr) ?? 0;
 
@@ -513,7 +495,6 @@ userRouter.get('/performance-index', verifyToken, async (req: AuthenticatedReque
         attendanceEntries: attendanceEntries.map((entry: any) => ({ subject: entry.subject, status: entry.status })),
         completedTasks: tasksCompleted,
         totalTasks: tasksTotal,
-        sessionsCount,
         postedToday,
       });
 
@@ -523,12 +504,10 @@ userRouter.get('/performance-index', verifyToken, async (req: AuthenticatedReque
         score: breakdown.score,
         tasksCompleted: breakdown.tasksCompleted,
         tasksTotal: breakdown.tasksTotal,
-        sessionsCount: breakdown.sessionsCount,
         studyHours: breakdown.studyHours,
         studyPoints: breakdown.studyPoints,
         lectureScore: breakdown.lectureScore,
         taskPoints: breakdown.taskPoints,
-        sessionPoints: breakdown.sessionPoints,
         communityPoints: breakdown.communityPoints,
         postedToday: breakdown.postedToday,
         lectureAwarded: breakdown.lectureAwarded,

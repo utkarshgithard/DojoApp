@@ -176,16 +176,7 @@ export const AttendanceProvider = ({ children }: { children: React.ReactNode }) 
     }
   }, [date, userId, getMarkedKey, getUnmarkedKey, fetchSubjects]);
 
-  const loadExistingInvites = useCallback(async (signal?: AbortSignal) => {
-    try {
-      const response = await API.get('/study-session/invites', { signal });
-      setInvites(response.data || []);
-    } catch (error: any) {
-      if (error.name !== 'CanceledError' && error.name !== 'AbortError') {
-        console.error('❌ Error loading invites:', error);
-      }
-    }
-  }, [setInvites]);
+
 
   const handleAttendance = useCallback(async (subject: Subject, status: string) => {
     const uid = userId || 'guest';
@@ -383,9 +374,8 @@ export const AttendanceProvider = ({ children }: { children: React.ReactNode }) 
       fetchSummary();
       fetchSubjectStats();
       fetchCalendarData();
-      loadExistingInvites();
     }
-  }, [fetchSummary, fetchSubjectStats, fetchCalendarData, loadExistingInvites, isAuthenticated, loading]);
+  }, [fetchSummary, fetchSubjectStats, fetchCalendarData, isAuthenticated, loading]);
 
   useEffect(() => {
     if (isAuthenticated && !loading) {
@@ -402,56 +392,7 @@ export const AttendanceProvider = ({ children }: { children: React.ReactNode }) 
     }
   }, [calendarData, attendanceLoading, unmarkedSubjects.length, markedSubjects.length, hasSavedSchedule]);
 
-  // Set up real-time invite socket listeners
-  useEffect(() => {
-    const socketInstance = socketContext?.socket;
-    if (!socketInstance || !isAuthenticated || loading) return;
 
-    const onReceiveInvite = (inviteData: any) => {
-      setInvites((prev) => {
-        const exists = prev.some((i) => i.id === inviteData.id);
-        if (exists) return prev;
-
-        // Show HTML5 Notification if permitted
-        if (typeof window !== 'undefined' && Notification?.permission === 'granted') {
-          new Notification(`Study invite from ${inviteData.name}`, {
-            body: inviteData.subject || 'Join a study session',
-          });
-        }
-
-        // Display an elegant toast message
-        toast.info(`Study invite from ${inviteData.name}`, {
-          description: `Subject: ${inviteData.subject || 'No topic'}`,
-          action: {
-            label: 'View',
-            onClick: () => {
-              router.push('/sessions');
-            }
-          }
-        });
-
-        return [inviteData, ...prev];
-      });
-    };
-
-    const onInviteDeclined = (data: any) => {
-      setInvites((prev) => prev.filter((inv) => inv.from !== data.by));
-    };
-
-    const onInviteExpired = (data: any) => {
-      setInvites((prev) => prev.filter((inv) => inv.id !== data.sessionId));
-    };
-
-    socketInstance.on('receiveInvite', onReceiveInvite);
-    socketInstance.on('inviteDeclined', onInviteDeclined);
-    socketInstance.on('inviteExpired', onInviteExpired);
-
-    return () => {
-      socketInstance.off('receiveInvite', onReceiveInvite);
-      socketInstance.off('inviteDeclined', onInviteDeclined);
-      socketInstance.off('inviteExpired', onInviteExpired);
-    };
-  }, [socketContext?.socket, isAuthenticated, loading]);
 
   return (
     <Ctx.Provider value={{
@@ -461,7 +402,7 @@ export const AttendanceProvider = ({ children }: { children: React.ReactNode }) 
       fetchSubjects, fetchFriends, friends, friendsLoading,
       fetchSummary, attendanceLoading, holidayLoading,
       handleAttendance, markHoliday, undoHoliday, sessions, setSessions, invites,
-      loadExistingInvites, setInvites,
+      loadExistingInvites: async () => {}, setInvites,
       subjectStats, setSubjectStats, fetchSubjectStats, deleteSubjectStats,
       calendarData, setCalendarData, fetchCalendarData
     }}>

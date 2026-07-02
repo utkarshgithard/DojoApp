@@ -11,6 +11,7 @@ import { NetworkProvider } from "@/context/NetworkContext";
 import { NotificationProvider } from "@/context/NotificationContext";
 import { TimerProvider } from "@/context/TimerContext";
 import { CalendarProvider } from "@/context/CalendarContext";
+import { ChatProvider } from "@/context/ChatContext";
 import { ExamPrepProvider } from "@/context/ExamPrepContext";
 import React, { useState, useEffect } from "react";
 import { usePathname } from "next/navigation";
@@ -29,7 +30,7 @@ function ClientProvidersInner({ children }: { children: React.ReactNode }) {
   const showNavbar = !noNavbarRoutes.some(route => pathname === route || pathname.startsWith('/verify-email/'))
     && !pathname.startsWith('/session/');
 
-  const sidebarRoutes = ['/dashboard', '/sessions', '/friends', '/community', '/setup-schedule', '/calendar', '/exam-prep', '/settings', '/notifications'];
+  const sidebarRoutes = ['/dashboard', '/friends', '/community', '/setup-schedule', '/calendar', '/exam-prep', '/settings', '/notifications', '/chat'];
   const showSidebar = isAuthenticated && sidebarRoutes.some(route => pathname === route || pathname.startsWith(route + '/'));
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -84,9 +85,11 @@ export default function ClientProviders({ children }: { children: React.ReactNod
                       <TimerProvider>
                         <CalendarProvider>
                           <ExamPrepProvider>
-                            <ClientProvidersInner>
-                              {children}
-                            </ClientProvidersInner>
+                            <ChatProvider>
+                              <ClientProvidersInner>
+                                {children}
+                              </ClientProvidersInner>
+                            </ChatProvider>
                           </ExamPrepProvider>
                         </CalendarProvider>
                       </TimerProvider>

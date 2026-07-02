@@ -8,7 +8,7 @@ import API from '@/lib/axios';
 import { useRouter } from 'next/navigation';
 import {
   Users, UserPlus, UserCheck, UserMinus, Copy, Check,
-  Search, Network, ChevronRight, Loader2, ArrowLeft
+  Search, Network, ChevronRight, Loader2, ArrowLeft, MessageCircle
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -277,6 +277,24 @@ export default function FriendsPage() {
                             >
                               {followStates[user.id] ? <UserMinus size={13} /> : <UserPlus size={13} />}
                               {followStates[user.id] ? 'Unfollow' : 'Follow'}
+                            </button>
+                          )}
+    
+                          {activeTab === 'friends' && (
+                            <button
+                              onClick={() => {
+                                const sortedIds = [userId, user.id].sort();
+                                const chatId = `friend_${sortedIds[0]}_${sortedIds[1]}`;
+                                router.push(`/chat/${chatId}`);
+                              }}
+                              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-[12.5px] font-semibold border transition-all ${
+                                dark
+                                  ? 'border-indigo-500/40 text-indigo-400 hover:bg-indigo-500/10 hover:border-indigo-500/60'
+                                  : 'border-indigo-200 text-indigo-650 bg-indigo-50 hover:bg-indigo-100 hover:border-indigo-300'
+                              }`}
+                            >
+                              <MessageCircle size={13} />
+                              Chat
                             </button>
                           )}
     

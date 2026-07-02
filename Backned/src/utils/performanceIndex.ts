@@ -6,8 +6,6 @@ export interface PerformanceScoreBreakdown {
   taskPoints: number;
   tasksCompleted: number;
   tasksTotal: number;
-  sessionPoints: number;
-  sessionsCount: number;
   communityPoints: number;
   postedToday: boolean;
   lectureAwarded: boolean;
@@ -20,7 +18,6 @@ interface DailyPerformanceParams {
   attendanceEntries: Array<{ subject: string; status: string }>;
   completedTasks: number;
   totalTasks: number;
-  sessionsCount: number;
   postedToday: boolean;
 }
 
@@ -30,7 +27,6 @@ export function calculateDailyPerformanceScore({
   attendanceEntries,
   completedTasks,
   totalTasks,
-  sessionsCount,
   postedToday,
 }: DailyPerformanceParams): PerformanceScoreBreakdown {
   const studyHours = studyDurationSeconds / 3600;
@@ -58,11 +54,10 @@ export function calculateDailyPerformanceScore({
   }
 
   const taskPoints = Math.min(completedTasks * 10, 20);
-  const sessionPoints = Math.min(sessionsCount * 5, 10);
   const communityPoints = postedToday ? 10 : 0;
 
   const score = Math.min(
-    studyPoints + lectureScore + taskPoints + sessionPoints + communityPoints,
+    studyPoints + lectureScore + taskPoints + communityPoints,
     100
   );
 
@@ -74,8 +69,6 @@ export function calculateDailyPerformanceScore({
     taskPoints,
     tasksCompleted: completedTasks,
     tasksTotal: totalTasks,
-    sessionPoints,
-    sessionsCount,
     communityPoints,
     postedToday,
     lectureAwarded,
