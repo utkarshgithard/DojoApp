@@ -7,7 +7,8 @@ import { useAttendance } from "@/context/AttendanceContext";
 import { useDarkMode } from "@/context/DarkModeContext";
 import { useSocket } from "@/context/SocketContext";
 import { useChat } from "@/context/ChatContext";
-import { MessageSquare, Search, Loader2 } from "lucide-react";
+import { MessageSquare, Search, Loader2, MoreVertical } from "lucide-react";
+import ChatAvatar from "@/components/chat/ChatAvatar";
 
 export default function ChatLayout({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, loading, userId: currentUserId } = useAuth() as any;
@@ -20,7 +21,9 @@ export default function ChatLayout({ children }: { children: React.ReactNode }) 
     globalOnlineUsers,
     setGlobalOnlineUsers,
     globalTypingUsers,
-    setGlobalTypingUsers
+    setGlobalTypingUsers,
+    unreadCounts,
+    setUnreadCounts
   } = useChat();
   const router = useRouter();
   const params = useParams();
@@ -43,6 +46,16 @@ export default function ChatLayout({ children }: { children: React.ReactNode }) 
     const handleIncomingMessage = (message: any) => {
       if (!message?.chatId) return;
       cacheActivity(message.chatId, message, currentUserId);
+      if (message.chatId !== activeChatId && String(message.userId) !== String(currentUserId)) {
+        setUnreadCounts((prev: Record<string, number>) => ({
+          ...prev,
+          [message.chatId]: (prev[message.chatId] || 0) + 1
+        }));
+      }
+    };
+
+    const handleSyncUnread = (counts: Record<string, number>) => {
+      setUnreadCounts(counts);
     };
 
     const handleInitialOnline = (data: { onlineUsers: string[] }) => {
@@ -85,6 +98,7 @@ export default function ChatLayout({ children }: { children: React.ReactNode }) 
     socket.on("globalUserOnline", handleGlobalUserOnline);
     socket.on("globalUserOffline", handleGlobalUserOffline);
     socket.on("userTyping", handleUserTyping);
+    socket.on("syncUnreadCounts", handleSyncUnread);
 
     return () => {
       socket.off("newChatMessage", handleIncomingMessage);
@@ -92,8 +106,9 @@ export default function ChatLayout({ children }: { children: React.ReactNode }) 
       socket.off("globalUserOnline", handleGlobalUserOnline);
       socket.off("globalUserOffline", handleGlobalUserOffline);
       socket.off("userTyping", handleUserTyping);
+      socket.off("syncUnreadCounts", handleSyncUnread);
     };
-  }, [cacheActivity, currentUserId, socket, setGlobalOnlineUsers, setGlobalTypingUsers]);
+  }, [cacheActivity, currentUserId, socket, setGlobalOnlineUsers, setGlobalTypingUsers, activeChatId, setUnreadCounts]);
 
   const dark = darkMode;
   const border = dark ? "border-zinc-800" : "border-zinc-200";
@@ -132,24 +147,6 @@ export default function ChatLayout({ children }: { children: React.ReactNode }) 
   // Check if we are on a specific chat subroute
   const isChatActive = !!activeChatId;
 
-  // Determine avatar gradient background based on name
-  const getAvatarGradient = (name: string) => {
-    const colors = [
-      "from-indigo-500 to-purple-500",
-      "from-blue-500 to-cyan-500",
-      "from-emerald-500 to-teal-500",
-      "from-rose-500 to-orange-500",
-      "from-pink-500 to-rose-500",
-      "from-purple-500 to-pink-500",
-    ];
-    let sum = 0;
-    const cleanName = name || "User";
-    for (let i = 0; i < cleanName.length; i++) {
-      sum += cleanName.charCodeAt(i);
-    }
-    return colors[sum % colors.length];
-  };
-
   const handleFriendClick = (friend: any) => {
     const sortedIds = [currentUserId, friend.id].sort();
     const chatId = `friend_${sortedIds[0]}_${sortedIds[1]}`;
@@ -157,7 +154,7 @@ export default function ChatLayout({ children }: { children: React.ReactNode }) 
   };
 
   return (
-    <div className={`h-[calc(100vh-72px)] w-full flex ${bg} overflow-hidden font-sans relative`}>
+    <div className={`h-[calc(100dvh-76px)] mt-[76px] md:h-screen md:mt-0 w-full flex ${bg} overflow-hidden font-sans relative`}>
       {/* LEFT PANE: Friends list (hidden on mobile if chat is active) */}
       <div
         className={`
@@ -166,25 +163,27 @@ export default function ChatLayout({ children }: { children: React.ReactNode }) 
         `}
       >
         {/* Header */}
-        <div className={`px-4 py-4 border-b ${border} shrink-0 space-y-3`}>
-          <div className="flex items-center gap-2">
-            <MessageSquare className="text-indigo-500" size={18} />
-            <h1 className="text-[17px] font-bold tracking-tight">Chats</h1>
+        <div className={`px-5 pt-[22px] pb-[14px] shrink-0`}>
+          <div className="flex items-center justify-between mb-[18px]">
+            <h1 className="text-[22px] font-bold tracking-tight font-sans">Chats</h1>
+            <div className={`w-[34px] h-[34px] rounded-[10px] flex items-center justify-center cursor-pointer transition-colors ${dark ? 'bg-zinc-900 hover:bg-zinc-800' : 'bg-[#F3F1FA] hover:bg-[#ECE9F8]'}`}>
+              <MoreVertical size={17} className={muted} />
+            </div>
           </div>
 
           {/* Search bar */}
           <div className="relative">
-            <Search className={`absolute left-3 top-1/2 -translate-y-1/2 ${muted}`} size={14} />
+            <Search className={`absolute left-[13px] top-1/2 -translate-y-1/2 ${muted}`} size={16} />
             <input
               type="text"
-              placeholder="Search chat..."
+              placeholder="Search chats"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               className={`
-                w-full pl-9 pr-4 py-2 text-[12.5px] rounded-xl border outline-none transition-colors
+                w-full pl-[36px] pr-3 py-[10px] text-[13.5px] rounded-xl outline-none transition-colors border
                 ${dark 
-                  ? "bg-zinc-950 border-zinc-800 text-white placeholder-zinc-700 focus:border-zinc-700" 
-                  : "bg-zinc-50 border-zinc-200 text-zinc-900 placeholder-zinc-400 focus:border-zinc-300"
+                  ? "bg-zinc-950 border-zinc-800 text-white placeholder-zinc-600 focus:border-zinc-700" 
+                  : "bg-[#F3F1FA] border-[#E7E3F3] text-[#15131F] placeholder-[#8D89A3] focus:border-[#D8D4EA]"
                 }
               `}
             />
@@ -192,7 +191,7 @@ export default function ChatLayout({ children }: { children: React.ReactNode }) 
         </div>
 
         {/* Friends list scroll area */}
-        <div className="flex-1 overflow-y-auto p-2 space-y-1">
+        <div className="flex-1 overflow-y-auto p-2 space-y-1 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-[#D8D4EA] dark:[&::-webkit-scrollbar-thumb]:bg-zinc-800 [&::-webkit-scrollbar-thumb]:rounded-full">
           {friendsLoading ? (
             <div className="space-y-2 animate-pulse p-2">
               {[1, 2, 3, 4, 5].map((i) => (
@@ -222,51 +221,52 @@ export default function ChatLayout({ children }: { children: React.ReactNode }) 
                   key={f.id}
                   onClick={() => handleFriendClick(f)}
                   className={`
-                    w-full text-left p-3 rounded-xl flex items-center gap-3 transition-colors border border-transparent
+                    w-full text-left px-2.5 py-2.5 rounded-[14px] flex items-center gap-3 transition-colors mb-0.5
                     ${isActive
                       ? dark
-                        ? "bg-zinc-900/80 border-zinc-800 text-white"
-                        : "bg-zinc-100 border-zinc-200 text-zinc-900 font-medium"
+                        ? "bg-zinc-900/80"
+                        : "bg-[#EFEAFB]"
                       : dark
                       ? "hover:bg-zinc-950/60"
-                      : "hover:bg-zinc-50/60"
+                      : "hover:bg-[#ECE9F8]"
                     }
                   `}
                 >
-                  {/* Avatar */}
-                  <div className="relative shrink-0">
-                    {f.avatarUrl ? (
-                      <div className="w-9 h-9 rounded-full overflow-hidden border border-zinc-200 dark:border-zinc-800">
-                        <img src={f.avatarUrl} alt={f.name} className="w-full h-full object-cover" />
-                      </div>
-                    ) : (
-                      <div className={`w-9 h-9 rounded-full bg-gradient-to-tr ${getAvatarGradient(f.name)} flex items-center justify-center text-white font-bold text-sm`}>
-                        {f.name.charAt(0).toUpperCase()}
-                      </div>
-                    )}
-                    {/* Online indicator */}
-                    {globalOnlineUsers.has(f.id) && (
-                      <span className="absolute bottom-0 right-0 flex h-2.5 w-2.5">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                        <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500 border border-white dark:border-black"></span>
-                      </span>
-                    )}
-                  </div>
+                  <ChatAvatar 
+                    name={f.name} 
+                    avatarUrl={f.avatarUrl} 
+                    size={46} 
+                    online={globalOnlineUsers.has(f.id)} 
+                    ring={true}
+                  />
 
                   {/* Name details */}
                   <div className="min-w-0 flex-1">
-                    <p className={`text-[13px] font-semibold truncate flex justify-between items-center ${isActive ? "text-indigo-500 dark:text-indigo-400" : ""}`}>
-                      <span>{f.name}</span>
-                    </p>
-                    <p className={`text-[10px] ${muted} truncate`}>
-                      {globalTypingUsers[f.id] === expectedChatId
-                        ? <span className="text-indigo-500 font-medium">Typing...</span>
-                        : recent?.preview
-                          ? `${recent.fromMe ? "You: " : ""}${recent.preview}`
-                          : isActive
-                            ? "Active conversation"
-                            : "Tap to open chat"}
-                    </p>
+                    <div className="flex justify-between items-baseline">
+                      <span className={`text-[14.5px] font-semibold truncate ${isActive ? (dark ? "text-[#9B7BF2]" : "text-[#4A22B0]") : (dark ? "text-white" : "text-[#15131F]")}`}>
+                        {f.name}
+                      </span>
+                      <span className={`text-[11px] shrink-0 ml-1.5 ${muted}`}>
+                        {/* If recent activity time, could show it here */}
+                        {recent?.ts ? new Date(recent.ts).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : ""}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center mt-0.5">
+                      <span className={`text-[12.5px] truncate ${unreadCounts[expectedChatId] > 0 ? "text-[#6C3CE9] font-medium" : muted}`}>
+                        {globalTypingUsers[f.id] === expectedChatId
+                          ? <span className="text-[#6C3CE9] font-medium">Typing...</span>
+                          : recent?.preview
+                            ? `${recent.fromMe ? "You: " : ""}${recent.preview.startsWith('AUDIO::') ? '🎤 Voice Message' : recent.preview.startsWith('IMAGE::') ? '🖼️ Image' : recent.preview.startsWith('FILE::') ? '📄 File' : recent.preview}`
+                            : isActive
+                              ? "Active conversation"
+                              : "Tap to open chat"}
+                      </span>
+                      {unreadCounts[expectedChatId] > 0 ? (
+                        <span className="bg-[#FF5D5D] text-white text-[10.5px] font-bold min-w-[18px] h-[18px] rounded-full flex items-center justify-center px-1.5 ml-1.5 shrink-0">
+                          {unreadCounts[expectedChatId] > 99 ? '99+' : unreadCounts[expectedChatId]}
+                        </span>
+                      ) : null}
+                    </div>
                   </div>
                 </button>
               );

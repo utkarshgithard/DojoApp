@@ -12,6 +12,7 @@ import { NotificationProvider } from "@/context/NotificationContext";
 import { TimerProvider } from "@/context/TimerContext";
 import { CalendarProvider } from "@/context/CalendarContext";
 import { ChatProvider } from "@/context/ChatContext";
+import { E2EEProvider } from "@/context/E2EEContext";
 import { ExamPrepProvider } from "@/context/ExamPrepContext";
 import React, { useState, useEffect } from "react";
 import { usePathname } from "next/navigation";
@@ -66,7 +67,7 @@ function ClientProvidersInner({ children }: { children: React.ReactNode }) {
       )}
       <Toaster />
       <AuthPromptModal />
-      <AiChatbot />
+      {!pathname.startsWith('/chat') && <AiChatbot />}
     </>
   );
 }
@@ -86,9 +87,11 @@ export default function ClientProviders({ children }: { children: React.ReactNod
                         <CalendarProvider>
                           <ExamPrepProvider>
                             <ChatProvider>
-                              <ClientProvidersInner>
-                                {children}
-                              </ClientProvidersInner>
+                              <E2EEProvider>
+                                <ClientProvidersInner>
+                                  {children}
+                                </ClientProvidersInner>
+                              </E2EEProvider>
                             </ChatProvider>
                           </ExamPrepProvider>
                         </CalendarProvider>

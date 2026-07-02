@@ -19,15 +19,18 @@ type ChatContextValue = {
   setMessagesForChat: (chatId: string, messages: Message[]) => void;
   appendMessageToChat: (chatId: string, message: Message) => void;
   updateMessageInChat: (chatId: string, message: Message) => void;
+  removeMessageFromChat: (chatId: string, messageId: string) => void;
   setFriendForChat: (chatId: string, friend: any | null) => void;
   setLoadingMessagesForChat: (chatId: string, loading: boolean) => void;
   setLoadingFriendForChat: (chatId: string, loading: boolean) => void;
   cacheActivity: (chatId: string, message: Message, currentUserId?: string | null) => void;
-  recentActivity: Record<string, { chatId: string; preview: string; ts: string; fromMe?: boolean }>;
+  recentActivity: Record<string, { chatId: string; preview: string; ts: string; fromMe?: boolean; status?: string }>;
   globalOnlineUsers: Set<string>;
   setGlobalOnlineUsers: React.Dispatch<React.SetStateAction<Set<string>>>;
   globalTypingUsers: Record<string, string>;
   setGlobalTypingUsers: React.Dispatch<React.SetStateAction<Record<string, string>>>;
+  unreadCounts: Record<string, number>;
+  setUnreadCounts: React.Dispatch<React.SetStateAction<Record<string, number>>>;
 };
 
 const ChatContext = createContext<ChatContextValue | null>(null);
@@ -42,9 +45,10 @@ const emptyChatState: ChatState = {
 export function ChatProvider({ children }: { children: React.ReactNode }) {
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
   const [chats, setChats] = useState<Record<string, ChatState>>({});
-  const [recentActivity, setRecentActivity] = useState<Record<string, { chatId: string; preview: string; ts: string; fromMe?: boolean }>>({});
+  const [recentActivity, setRecentActivity] = useState<Record<string, { chatId: string; preview: string; ts: string; fromMe?: boolean; status?: string }>>({});
   const [globalOnlineUsers, setGlobalOnlineUsers] = useState<Set<string>>(new Set());
   const [globalTypingUsers, setGlobalTypingUsers] = useState<Record<string, string>>({});
+  const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -93,6 +97,20 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
+  const removeMessageFromChat = useCallback((chatId: string, messageId: string) => {
+    setChats((prev) => {
+      const current = prev[chatId];
+      if (!current) return prev;
+      return {
+        ...prev,
+        [chatId]: {
+          ...current,
+          messages: current.messages.filter((m) => m.id !== messageId),
+        },
+      };
+    });
+  }, []);
+
   const setFriendForChat = useCallback((chatId: string, friend: any | null) => {
     setChatState(chatId, { friend, loadingFriend: false });
   }, [setChatState]);
@@ -114,6 +132,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
           preview: message.text || "",
           ts: message.ts ? new Date(message.ts).toISOString() : new Date().toISOString(),
           fromMe: String(message.userId) === String(currentUserId || ""),
+          status: message.status,
         },
       };
       if (typeof window !== "undefined") {
@@ -140,6 +159,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     setMessagesForChat,
     appendMessageToChat,
     updateMessageInChat,
+    removeMessageFromChat,
     setFriendForChat,
     setLoadingMessagesForChat,
     setLoadingFriendForChat,
@@ -149,11 +169,13 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     setGlobalOnlineUsers,
     globalTypingUsers,
     setGlobalTypingUsers,
+    unreadCounts,
+    setUnreadCounts,
   }), [
     activeChatId, chats, messagesByChat, recentActivity, 
-    setChatState, setMessagesForChat, appendMessageToChat, updateMessageInChat, 
+    setChatState, setMessagesForChat, appendMessageToChat, updateMessageInChat, removeMessageFromChat,
     setFriendForChat, setLoadingMessagesForChat, setLoadingFriendForChat, cacheActivity,
-    globalOnlineUsers, globalTypingUsers
+    globalOnlineUsers, globalTypingUsers, unreadCounts
   ]);
 
   return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>;

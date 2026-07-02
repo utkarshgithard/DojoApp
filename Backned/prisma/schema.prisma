@@ -123,6 +123,8 @@ model Message {
   /// Plaintext body (empty string for E2EE messages; kept for backward compat)
   text          String       @default("")
   ts            DateTime     @default(now())
+  /// Tracking if the recipient has read the message
+  isRead        Boolean      @default(false)
   /// base64 AES-GCM ciphertext of the message body
   ciphertext    String?
   /// JSON map of { userId: base64WrappedRoomKey } — one entry per recipient

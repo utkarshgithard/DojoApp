@@ -45,9 +45,7 @@ const typingTimers = new Map<string, NodeJS.Timeout>();
 // Key: socketId, Value: { count, resetAt }
 const chatRateLimits = new Map<string, { count: number; resetAt: number }>();
 
-// --- Global Online Tracking ---
-// Key: userId, Value: number of active socket connections
-const globalOnlineUsers = new Map<string, number>();
+
 
 // --- Constants ---
 const INVITE_TTL_MS = 15 * 60 * 1000;       // 15 minutes
@@ -74,7 +72,7 @@ async function areFriends(chatId: string, userId: string): Promise<boolean> {
   if (parts.length !== 3 || parts[0] !== 'friend') return false;
   const friendId = parts[1] === userId ? parts[2] : (parts[2] === userId ? parts[1] : null);
   if (!friendId) return false;
-  
+
   const friendship = await prisma.userFriend.findFirst({
     where: { userId, friendId }
   });
@@ -148,21 +146,20 @@ export function setupSocketHandlers(io: Server) {
       });
 
       if (!user) {
-        console.log('âŒ Socket rejected: user not found');
+        console.log('Socket rejected: user not found');
         return socket.disconnect(true);
       }
 
       // Join personal notification room
       (socket as any).user = user;
       socket.join(user.id);
-      console.log(`ðŸ”— Connected: ${user.name} (${user.id}) socket=${socket.id}`);
+      console.log(` Connected: ${user.name} (${user.id}) socket=${socket.id}`);
 
-      // Track global online status
-      const currentConns = globalOnlineUsers.get(user.id) || 0;
-      globalOnlineUsers.set(user.id, currentConns + 1);
-
-      if (currentConns === 0) {
-        // User just came online globally
+      // Track global online status using native Socket.io rooms
+      // The socket just joined `user.id`. Let's check how many sockets are in this room.
+      const userSockets = io.sockets.adapter.rooms.get(user.id);
+      if (userSockets && userSockets.size === 1) {
+        // User just came online globally (this is their only socket)
         prisma.userFriend.findMany({ where: { userId: user.id } }).then((friends) => {
           for (const friend of friends) {
             socket.to(friend.friendId).emit('globalUserOnline', { userId: user.id });
@@ -173,10 +170,27 @@ export function setupSocketHandlers(io: Server) {
       // Send initial online friends to this user
       prisma.userFriend.findMany({ where: { userId: user.id } }).then((friends) => {
         const onlineFriends = friends
-          .filter(f => (globalOnlineUsers.get(f.friendId) || 0) > 0)
+          .filter(f => (io.sockets.adapter.rooms.get(f.friendId)?.size || 0) > 0)
           .map(f => f.friendId);
         socket.emit('initialOnlineFriends', { onlineUsers: onlineFriends });
       }).catch(err => console.error("Error fetching online friends", err));
+
+      // 1.5 Calculate unread counts
+      prisma.message.groupBy({
+        by: ['chatId'],
+        where: {
+          chatId: { startsWith: 'friend_' },
+          userId: { not: user.id }, // messages sent BY others
+          isRead: false,
+        },
+        _count: { isRead: true }
+      }).then(unreadGroups => {
+        const unreadCounts: Record<string, number> = {};
+        unreadGroups.forEach(g => {
+          unreadCounts[g.chatId] = g._count.isRead;
+        });
+        socket.emit('syncUnreadCounts', unreadCounts);
+      }).catch(err => console.error("Error fetching unread counts", err));
 
       // 2. Connection state recovery (Socket.io v4+)
       // If the socket recovered from a brief disconnect, re-join any active sessions
@@ -196,6 +210,17 @@ export function setupSocketHandlers(io: Server) {
             socket.to(room).emit('room:peer-left', { userId: user.id });
           }
         }
+
+        // Global offline tracking: check if this is the last socket for this user
+        const userSockets = io.sockets.adapter.rooms.get(user.id);
+        if (userSockets && userSockets.size === 1 && userSockets.has(socket.id)) {
+          // This is the last connection disconnecting, user is going completely offline
+          prisma.userFriend.findMany({ where: { userId: user.id } }).then((friends) => {
+            for (const friend of friends) {
+              io.to(friend.friendId).emit('globalUserOffline', { userId: user.id });
+            }
+          }).catch(err => console.error("Error broadcasting offline status", err));
+        }
       });
 
       socket.on('disconnect', () => {
@@ -214,28 +239,15 @@ export function setupSocketHandlers(io: Server) {
               reason: 'disconnected',
             });
 
-        // DO NOT complete session on disconnect â€” a page refresh is also a disconnect.
+            // DO NOT complete session on disconnect â€” a page refresh is also a disconnect.
             // Leave DB status as-is so users can rejoin.
             if (active.participants.size === 0) {
-              
+
             }
           }
         }
 
-        // Global offline tracking
-        const currentConns = globalOnlineUsers.get(user.id) || 0;
-        if (currentConns > 0) {
-          globalOnlineUsers.set(user.id, currentConns - 1);
-          if (currentConns - 1 === 0) {
-            globalOnlineUsers.delete(user.id);
-            // Broadcast offline status
-            prisma.userFriend.findMany({ where: { userId: user.id } }).then((friends) => {
-              for (const friend of friends) {
-                io.to(friend.friendId).emit('globalUserOffline', { userId: user.id });
-              }
-            }).catch(err => console.error("Error broadcasting offline status", err));
-          }
-        }
+
 
         console.log(`ðŸ”Œ Disconnected: ${user.name} (${user.id}) socket=${socket.id}`);
       });
@@ -443,6 +455,39 @@ function registerChatHandlers(io: Server, socket: Socket, user: UserPayload) {
     }
   });
 
+  socket.on('deleteChatMessage', async ({ chatId, messageId }: { chatId: string; messageId: string }) => {
+    if (!chatId || !messageId) return;
+    const canonicalId = canonicalizeChatId(chatId);
+
+    try {
+      const msg = await prisma.message.findUnique({ where: { id: messageId } });
+      if (!msg) return;
+      if (msg.userId !== user.id) {
+        return socket.emit('chatError', { msg: 'You can only delete your own messages.' });
+      }
+
+      await prisma.message.delete({ where: { id: messageId } });
+
+      if (chatMessages.has(canonicalId)) {
+        const history = chatMessages.get(canonicalId)!;
+        const newHistory = history.filter(m => m.id !== messageId);
+        chatMessages.set(canonicalId, newHistory);
+      }
+
+      const parts = canonicalId.split('_');
+      const otherUserId = parts.length === 3 && parts[0] === 'friend'
+        ? (parts[1] === user.id ? parts[2] : parts[1])
+        : null;
+
+      io.to(`chat_${canonicalId}`).emit('messageDeleted', { chatId: canonicalId, messageId });
+      if (otherUserId) {
+        io.to(otherUserId).emit('messageDeleted', { chatId: canonicalId, messageId });
+      }
+    } catch (err) {
+      console.error('Failed to delete message:', err);
+    }
+  });
+
   // FIX: getSessionMessages is now for pagination only (older messages on scroll),
   // NOT for initial load — joinSession already delivers the initial history.
   // Client should pass a `before` cursor (message ID or timestamp) to paginate backwards.
@@ -502,14 +547,41 @@ function registerChatHandlers(io: Server, socket: Socket, user: UserPayload) {
     });
   });
 
-  socket.on('markMessagesRead', ({ chatId }: { chatId: string }) => {
+  socket.on('markMessagesRead', async ({ chatId }: { chatId: string }) => {
     if (!chatId) return;
     const canonicalId = canonicalizeChatId(chatId);
     const parts = canonicalId.split('_');
     if (parts.length !== 3 || parts[0] !== 'friend') return;
     const otherUserId = parts[1] === user.id ? parts[2] : (parts[2] === user.id ? parts[1] : null);
-    if (otherUserId) {
-      io.to(otherUserId).emit('messagesRead', { chatId: canonicalId, userId: user.id });
+    
+    try {
+      // Update DB
+      await prisma.message.updateMany({
+        where: {
+          chatId: canonicalId,
+          userId: { not: user.id },
+          isRead: false
+        },
+        data: { isRead: true }
+      });
+
+      // Update in-memory cache
+      if (chatMessages.has(canonicalId)) {
+        const history = chatMessages.get(canonicalId)!;
+        let modified = false;
+        for (const msg of history) {
+          if (msg.userId !== user.id && msg.status !== 'read') { // We also use status in frontend context
+             msg.isRead = true;
+             modified = true;
+          }
+        }
+      }
+
+      if (otherUserId) {
+        io.to(otherUserId).emit('messagesRead', { chatId: canonicalId, userId: user.id });
+      }
+    } catch (err) {
+      console.error("Error marking messages as read:", err);
     }
   });
 
@@ -522,7 +594,7 @@ function registerChatHandlers(io: Server, socket: Socket, user: UserPayload) {
     const otherUserId = parts.length === 3 && parts[0] === 'friend'
       ? (parts[1] === user.id ? parts[2] : (parts[2] === user.id ? parts[1] : null))
       : null;
-      
+
     const key = `${user.id}:${canonicalId}`;
     const existing = typingTimers.get(key);
     if (existing) clearTimeout(existing);

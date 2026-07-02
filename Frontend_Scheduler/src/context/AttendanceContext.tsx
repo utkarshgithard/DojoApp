@@ -101,7 +101,6 @@ export const AttendanceProvider = ({ children }: { children: React.ReactNode }) 
   }, []);
 
   const fetchFriends = useCallback(async (retryCount = 0) => {
-    setFriendsLoading(true);
     try {
       const res = await API.get("auth/friends-List");
       setFriends(res.data.friends);
