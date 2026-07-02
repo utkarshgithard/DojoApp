@@ -184,23 +184,39 @@ const Navbar = () => {
             {dark ? <Sun size={14} /> : <Moon size={14} />}
           </button>
 
-          {/* Mobile hamburger menu toggle button - placed immediately to the left of the profile */}
-          <div className="relative md:hidden">
-            <button
-              onClick={toggleMenu}
-              className={`p-1.5 rounded border transition-colors ${
-                dark ? 'border-gray-800 text-white hover:bg-gray-900' : 'border-gray-200 text-gray-900 hover:bg-gray-50'
-              }`}
-              aria-label="Menu"
-            >
-              {isOpen ? <X size={16} /> : <Menu size={16} />}
-            </button>
-            {unreadCount > 0 && !isOpen && (
-              <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-red-500 border border-white dark:border-black animate-ping" />
-            )}
-            {unreadCount > 0 && !isOpen && (
-              <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-red-500 border border-white dark:border-black" />
-            )}
+          {/* Mobile top nav controls (Friends & Notifications) */}
+          <div className="flex md:hidden items-center gap-2">
+            {/* Notifications */}
+            <div className="relative">
+              <Link
+                href="/notifications"
+                className={`flex p-1.5 rounded border transition-colors ${
+                  dark ? 'border-gray-800 text-white hover:bg-gray-900' : 'border-gray-200 text-gray-900 hover:bg-gray-50'
+                }`}
+                aria-label="Notifications"
+              >
+                <Bell size={16} />
+              </Link>
+            </div>
+
+            {/* Friends */}
+            <div className="relative">
+              <Link
+                href="/friends"
+                className={`flex p-1.5 rounded border transition-colors ${
+                  dark ? 'border-gray-800 text-white hover:bg-gray-900' : 'border-gray-200 text-gray-900 hover:bg-gray-50'
+                }`}
+                aria-label="Friends"
+              >
+                <Users size={16} />
+              </Link>
+              {unreadCount > 0 && (
+                <>
+                  <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-red-500 border border-white dark:border-black animate-ping" />
+                  <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-red-500 border border-white dark:border-black" />
+                </>
+              )}
+            </div>
           </div>
 
           {isMounted && isAuthenticated && (
@@ -345,132 +361,6 @@ const Navbar = () => {
           )}
         </div>
       </div>
-
-      {/* Mobile Menu */}
-      {isOpen && (
-        <div
-          className={`${dark ? 'bg-black/95 border-b border-gray-800 text-white' : 'bg-white/95 border-b border-gray-200 text-gray-900'} 
-          md:hidden px-5 py-4 space-y-3.5 backdrop-blur-lg transition-all duration-200`}
-        >
-          <Link
-            href="/community"
-            onClick={closeMenu}
-            className={`flex items-center gap-2.5 text-[14px] font-medium py-1 ${
-              pathname === '/community' ? textActive : textMuted
-            }`}
-          >
-            <Hash size={15} />
-            <span>Community</span>
-          </Link>
-          <Link
-            href="/dashboard"
-            onClick={closeMenu}
-            className={`flex items-center gap-2.5 text-[14px] font-medium py-1 ${
-              pathname === '/dashboard' ? textActive : textMuted
-            }`}
-          >
-            <LayoutDashboard size={15} />
-            <span>Dashboard</span>
-          </Link>
-          <Link
-            href="/chat"
-            onClick={closeMenu}
-            className={`flex items-center gap-2.5 text-[14px] font-medium py-1 w-full ${
-              pathname === '/chat' ? textActive : textMuted
-            }`}
-          >
-            <MessageSquare size={15} />
-            <span>Chat</span>
-          </Link>
-          <Link
-            href="/friends"
-            onClick={closeMenu}
-            className={`flex items-center gap-2.5 text-[14px] font-medium py-1 w-full ${
-              pathname === '/friends' ? textActive : textMuted
-            }`}
-          >
-            <UserPlus size={15} />
-            <span>Friends</span>
-          </Link>
-          <Link
-            href="/exam-prep"
-            onClick={closeMenu}
-            className={`flex items-center gap-2.5 text-[14px] font-medium py-1 ${
-              pathname === '/exam-prep' ? textActive : textMuted
-            }`}
-          >
-            <BookOpen size={15} />
-            <span>Exam Prep</span>
-          </Link>
-          <Link
-            href="/calendar"
-            onClick={closeMenu}
-            className={`flex items-center gap-2.5 text-[14px] font-medium py-1 ${
-              pathname === '/calendar' ? textActive : textMuted
-            }`}
-          >
-            <Calendar size={15} />
-            <span>Your Class</span>
-          </Link>
-          <Link
-            href="/notifications"
-            onClick={closeMenu}
-            className={`flex items-center gap-2.5 text-[14px] font-medium py-1 w-full ${
-              pathname === '/notifications' ? textActive : textMuted
-            }`}
-          >
-            <Bell size={15} />
-            <span>Notifications</span>
-            {unreadCount > 0 && (
-              <span className="ml-auto inline-flex items-center justify-center w-5 h-5 text-[10px] font-bold text-white bg-red-500 rounded-full animate-pulse">
-                {unreadCount}
-              </span>
-            )}
-          </Link>
-          <Link
-            href="/settings"
-            onClick={closeMenu}
-            className={`flex items-center gap-2.5 text-[14px] font-medium py-1 ${
-              pathname === '/settings' ? textActive : textMuted
-            }`}
-          >
-            <Settings size={15} />
-            <span>Profile</span>
-          </Link>
-
-          <button
-            onClick={() => {
-              setShowCoffeeModal(true);
-              setQrBlurred(true);
-              closeMenu();
-            }}
-            className={`flex items-center gap-2.5 text-[14px] font-medium py-1 w-full text-left transition-colors ${
-              dark ? 'text-amber-400 hover:text-amber-300' : 'text-amber-700 hover:text-amber-800'
-            }`}
-          >
-            <Coffee size={15} />
-            <span>Buy me a coffee</span>
-          </button>
-
-
-          {isMounted && isAuthenticated && (
-            <div className="pt-2 border-t border-gray-100 dark:border-gray-900">
-              <button
-                onClick={() => {
-                  handleLogout();
-                  closeMenu();
-                }}
-                className={`flex items-center justify-center gap-2 w-full py-2.5 rounded-lg text-[13px] font-medium border ${
-                  dark ? 'border-gray-800 text-gray-200 hover:bg-gray-900' : 'border-gray-200 text-gray-700 hover:bg-gray-50'
-                }`}
-              >
-                <LogOut size={14} />
-                <span>Log out</span>
-              </button>
-            </div>
-          )}
-        </div>
-      )}
     </nav>
 
       {/* Buy Me a Coffee Modal — accessible from mobile dropdown */}

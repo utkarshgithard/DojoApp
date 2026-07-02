@@ -91,7 +91,7 @@ const Dashboard = () => {
   }
 
   return (
-    <div className={`min-h-screen flex flex-col transition-colors duration-300 pt-[76px] md:pt-[20px] ${dark ? 'bg-black text-white' : 'bg-white text-gray-900'}`}>
+    <div className={`min-h-screen flex flex-col transition-colors duration-300 pt-[50px] md:pt-[20px] ${dark ? 'bg-black text-white' : 'bg-white text-gray-900'}`}>
 
       {/* Main Container */}
       <div className="flex-1 max-w-[1100px] w-full mx-auto px-5 py-0">
@@ -104,11 +104,10 @@ const Dashboard = () => {
               {profileLoading ? (
                 <div className="h-7 w-48 bg-gray-200 dark:bg-gray-850 rounded animate-pulse mb-1.5" />
               ) : (
-                <h1 className="text-[22px] font-medium tracking-tight mb-1">
+                <h1 className="text-[22px] sm:text-[18px] md:font-medium  tracking-tight ">
                   {userName ? `${userName}'s Workspace` : 'Dojo Workspace'}
                 </h1>
               )}
-              <p className={`text-[13px] ${muted}`}>Track classes and view weekly attendance insights</p>
             </div>
 
             {/* Pick Date */}

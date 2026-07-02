@@ -154,7 +154,10 @@ export default function ChatLayout({ children }: { children: React.ReactNode }) 
   };
 
   return (
-    <div className={`h-[calc(100dvh-76px)] mt-[76px] md:h-screen md:mt-0 w-full flex ${bg} overflow-hidden font-sans relative`}>
+    <div className={`
+      w-full flex ${bg} overflow-hidden font-sans relative
+      ${isChatActive ? "h-[100dvh] mt-0 md:h-screen" : "h-[calc(100dvh-49px)] mt-[49px] md:h-screen md:mt-0"}
+    `}>
       {/* LEFT PANE: Friends list (hidden on mobile if chat is active) */}
       <div
         className={`

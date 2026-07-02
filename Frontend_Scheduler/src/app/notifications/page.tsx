@@ -47,9 +47,9 @@ export default function NotificationsPage() {
   };
 
   return (
-    <div className={`min-h-screen pt-[76px] md:pt-[24px] transition-colors duration-300 ${dark ? 'bg-black text-white' : 'bg-white text-zinc-900'}`}>
+    <div className={`min-h-screen pt-[50px] md:pt-[24px] transition-colors duration-300 ${dark ? 'bg-black text-white' : 'bg-white text-zinc-900'}`}>
       <div className="max-w-[720px] w-full mx-auto px-4 pb-12">
-        
+
         {/* Header */}
         <div className={`sticky top-0 z-20 -mx-4 px-4 py-4 mb-6 backdrop-blur-md border-b ${dark ? 'bg-black/85 border-zinc-800' : 'bg-white/85 border-zinc-200'}`}>
           <div className="flex items-center justify-between">
@@ -82,11 +82,10 @@ export default function NotificationsPage() {
               {notifications.length > 0 && unreadCount > 0 && (
                 <button
                   onClick={markAllAsRead}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-[12px] font-semibold transition-all ${
-                    dark 
-                      ? 'border-indigo-500/30 bg-indigo-500/5 text-indigo-400 hover:bg-indigo-500/15' 
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-[12px] font-semibold transition-all ${dark
+                      ? 'border-indigo-500/30 bg-indigo-500/5 text-indigo-400 hover:bg-indigo-500/15'
                       : 'border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100'
-                  }`}
+                    }`}
                 >
                   <Check size={13} />
                   <span>Mark all read</span>
@@ -158,15 +157,14 @@ export default function NotificationsPage() {
                 <div
                   key={n.id}
                   onClick={() => handleNotificationClick(n)}
-                  className={`p-4 flex items-start gap-3.5 transition-all cursor-pointer ${
-                    !n.read 
-                      ? dark 
-                        ? 'bg-indigo-500/5 hover:bg-indigo-500/10' 
-                        : 'bg-indigo-50/50 hover:bg-indigo-150/40' 
-                      : dark 
-                        ? 'hover:bg-zinc-900/40' 
+                  className={`p-4 flex items-start gap-3.5 transition-all cursor-pointer ${!n.read
+                      ? dark
+                        ? 'bg-indigo-500/5 hover:bg-indigo-500/10'
+                        : 'bg-indigo-50/50 hover:bg-indigo-150/40'
+                      : dark
+                        ? 'hover:bg-zinc-900/40'
                         : 'hover:bg-zinc-50/60'
-                  }`}
+                    }`}
                 >
                   {/* Action Avatar with Status Icon Badge */}
                   <div className="relative shrink-0 select-none">
@@ -177,7 +175,7 @@ export default function NotificationsPage() {
                         <span className="text-[13px] font-bold uppercase">{n.sender.name.charAt(0)}</span>
                       )}
                     </div>
-                    
+
                     {/* Badge */}
                     <div className={`absolute -bottom-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center shadow border ${badgeBg}`}>
                       {badgeIcon}
@@ -211,11 +209,10 @@ export default function NotificationsPage() {
                     {n.type === 'follow_request' && (
                       <div className="pt-2" onClick={(e) => e.stopPropagation()}>
                         {followStates[n.senderId] ? (
-                          <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-semibold border ${
-                            dark 
-                              ? 'bg-zinc-900 border-zinc-800 text-zinc-450' 
+                          <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-semibold border ${dark
+                              ? 'bg-zinc-900 border-zinc-800 text-zinc-450'
                               : 'bg-zinc-100 border-zinc-200 text-zinc-600'
-                          }`}>
+                            }`}>
                             <Check size={12} className="text-emerald-500" />
                             <span>Following Back</span>
                           </span>
@@ -235,11 +232,10 @@ export default function NotificationsPage() {
                                 setLoadingFollows(prev => ({ ...prev, [n.senderId]: false }));
                               }
                             }}
-                            className={`inline-flex items-center justify-center min-w-[100px] h-7 px-3 rounded-lg text-xs font-semibold border transition-all ${
-                              dark
+                            className={`inline-flex items-center justify-center min-w-[100px] h-7 px-3 rounded-lg text-xs font-semibold border transition-all ${dark
                                 ? 'border-indigo-500/30 bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500/20'
                                 : 'border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100'
-                            }`}
+                              }`}
                           >
                             {loadingFollows[n.senderId] ? (
                               <div className="flex items-center gap-1">

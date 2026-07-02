@@ -24,7 +24,7 @@ export default function ExamPrepPage() {
   // AI Revision Planner Wizard states
   const [wizardStep, setWizardStep] = useState(1); // Steps 1 to 5, Step 6 is Summary
   const [wizardTopicName, setWizardTopicName] = useState("");
-  const [wizardDifficulty, setWizardDifficulty] = useState<'Easy'|'Medium'|'Hard'>("Medium");
+  const [wizardDifficulty, setWizardDifficulty] = useState<'Easy' | 'Medium' | 'Hard'>("Medium");
 
   const todayString = new Date().toISOString().split('T')[0];
   const [examType, setExamType] = useState("IIT JEE");
@@ -116,26 +116,23 @@ export default function ExamPrepPage() {
   const dark = darkMode;
   const border = dark ? "border-zinc-800" : "border-zinc-200";
   const muted = dark ? "text-zinc-400" : "text-zinc-500";
-  
-  // Card styles (Primary elevated, Secondary flat)
-  const primaryCardClass = `border-2 border-indigo-500/10 dark:border-indigo-500/20 rounded-2xl p-6 ${
-    dark ? "bg-zinc-950/30" : "bg-white"
-  } shadow-xl shadow-indigo-500/[0.02]`;
 
-  const secondaryCardClass = `border rounded-2xl p-5 ${border} ${
-    dark ? "bg-zinc-950/10" : "bg-white"
-  } shadow-sm`;
-  
-  const inputClass = `w-full px-3.5 py-2 text-sm rounded-xl border outline-none transition-all duration-200 ${
-    dark 
-      ? "bg-zinc-950 border-zinc-800 text-white placeholder-zinc-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/20" 
-      : "bg-white border-zinc-200 text-zinc-900 placeholder-zinc-400 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/20"
-  }`;
-  
+  // Card styles (Primary elevated, Secondary flat)
+  const primaryCardClass = `border-2 border-indigo-500/10 dark:border-indigo-500/20 rounded-2xl p-6 ${dark ? "bg-zinc-950/30" : "bg-white"
+    } shadow-xl shadow-indigo-500/[0.02]`;
+
+  const secondaryCardClass = `border rounded-2xl p-5 ${border} ${dark ? "bg-zinc-950/10" : "bg-white"
+    } shadow-sm`;
+
+  const inputClass = `w-full px-3.5 py-2 text-sm rounded-xl border outline-none transition-all duration-200 ${dark
+    ? "bg-zinc-950 border-zinc-800 text-white placeholder-zinc-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/20"
+    : "bg-white border-zinc-200 text-zinc-900 placeholder-zinc-400 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/20"
+    }`;
+
   const primaryBtn = `px-5 py-2.5 rounded-xl text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600 transition-all active:scale-[0.98] flex items-center justify-center gap-2 shrink-0 disabled:opacity-50 disabled:cursor-not-allowed`;
   const secondaryBtn = `px-5 py-2.5 rounded-xl text-sm font-semibold text-zinc-700 dark:text-zinc-200 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-900 dark:hover:bg-zinc-800 border ${border} transition-all active:scale-[0.98] flex items-center justify-center gap-2 shrink-0 disabled:opacity-50 disabled:cursor-not-allowed`;
   const destructiveBtn = `px-5 py-2.5 rounded-xl text-sm font-semibold text-white bg-rose-600 hover:bg-rose-700 dark:bg-rose-500 dark:hover:bg-rose-600 transition-all active:scale-[0.98] flex items-center justify-center gap-2 shrink-0 disabled:opacity-50 disabled:cursor-not-allowed`;
-  
+
   // 44x44px Touch Target Button
   const iconAddBtn = `w-11 h-11 rounded-xl text-white bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600 transition-all active:scale-95 flex items-center justify-center shrink-0 disabled:opacity-50 disabled:cursor-not-allowed`;
 
@@ -196,13 +193,13 @@ export default function ExamPrepPage() {
       const res = await fetch("/api/generate-plan", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          topics: [{ id: Date.now().toString(), name: wizardTopicName, difficulty: wizardDifficulty }], 
+        body: JSON.stringify({
+          topics: [{ id: Date.now().toString(), name: wizardTopicName, difficulty: wizardDifficulty }],
           examType,
           daysToComplete,
-          examDate: calculatedExamDateString, 
-          todayDate: todayString, 
-          hours: plannerHours 
+          examDate: calculatedExamDateString,
+          todayDate: todayString,
+          hours: plannerHours
         }),
       });
       const data = await res.json();
@@ -211,7 +208,7 @@ export default function ExamPrepPage() {
       }
       importAIPlan(data.plan);
       toast.success("AI tasks added to Master Calendar!");
-      
+
       // Reset Wizard state on success
       setWizardStep(1);
       setWizardTopicName("");
@@ -231,72 +228,66 @@ export default function ExamPrepPage() {
   };
 
   return (
-    <div className={`min-h-screen transition-colors duration-300 pt-[96px] md:pt-[24px] pb-32 ${dark ? "bg-black text-white" : "bg-white text-zinc-900"}`}>
+    <div className={`min-h-screen transition-colors duration-300 pt-[55px] md:pt-[24px] pb-32 ${dark ? "bg-black text-white" : "bg-white text-zinc-900"}`}>
       <div className="max-w-[1100px] w-full mx-auto px-5">
-        
+
         {/* Header */}
         <div className="mb-8 border-b pb-5 border-zinc-100 dark:border-zinc-900">
-          <p className={`text-[11px] uppercase tracking-widest ${muted} mb-1 flex items-center gap-1.5`}>
-            <BookOpen size={12} />
-            <span>Preparation Center</span>
-          </p>
           <h1 className="text-[22px] font-semibold tracking-tight">Exam Preparation</h1>
-          <p className={`text-[13px] ${muted} mt-0.5`}>Track deadlines, course progress, focus sessions, and reference notes. Synced across all your devices.</p>
         </div>
 
         {/* Desktop 2-Column Balanced Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
-          
+
           {/* Column 1: Focus, AI Planner & Deadlines */}
           <div className="space-y-8">
-            
+
             {/* Focus Session Card */}
             <section className={primaryCardClass}>
               <h2 className="text-[15px] font-semibold tracking-tight mb-5 flex items-center gap-2">
                 <Clock size={16} className="text-indigo-500" /> Focus Session
               </h2>
-              
+
               {!isFloating ? (
                 <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-stretch mb-5">
-                  
+
                   {/* Left: Active Timer */}
-                  <div 
+                  <div
                     onDoubleClick={() => setIsFloating(true)}
                     className={`md:col-span-7 flex flex-col items-center justify-center py-6 px-4 rounded-xl border ${border} ${dark ? 'bg-zinc-900/30 hover:bg-zinc-900/50' : 'bg-zinc-50 hover:bg-zinc-100'} transition-all cursor-pointer select-none group relative`}
                   >
                     <div className={`absolute top-2 right-4 opacity-0 group-hover:opacity-100 transition-opacity ${muted} text-[10px]`}>
                       Double click to float
                     </div>
-                    
+
                     <div className="text-[44px] font-light tracking-wider mb-5 font-mono">
                       {formatTime(time)}
                     </div>
-                    
+
                     <div className="flex gap-3">
                       {!isRunning ? (
-                        <button 
-                          onClick={(e) => { e.stopPropagation(); setIsRunning(true); }} 
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setIsRunning(true); }}
                           className="flex items-center gap-2 px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full text-xs font-semibold transition-all active:scale-95"
                         >
                           <Play size={14} fill="currentColor" /> {time > 0 ? "Resume" : "Start"}
                         </button>
                       ) : (
-                        <button 
-                          onClick={(e) => { e.stopPropagation(); setIsRunning(false); }} 
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setIsRunning(false); }}
                           className="flex items-center gap-2 px-5 py-2 bg-zinc-600 hover:bg-zinc-700 text-white rounded-full text-xs font-semibold transition-all active:scale-95"
                         >
                           <Pause size={14} fill="currentColor" /> Pause
                         </button>
                       )}
-                      
-                      <button 
-                        onClick={(e) => { e.stopPropagation(); stopTimer(); }} 
+
+                      <button
+                        onClick={(e) => { e.stopPropagation(); stopTimer(); }}
                         disabled={time === 0 && !isRunning}
-                        className={`flex items-center gap-2 px-5 py-2 rounded-full text-xs font-semibold transition-all ${
-                          time === 0 && !isRunning 
-                            ? 'bg-zinc-200 text-zinc-400 dark:bg-zinc-800 dark:text-zinc-600 cursor-not-allowed' 
-                            : 'bg-rose-600 hover:bg-rose-700 text-white active:scale-95'
-                        }`}
+                        className={`flex items-center gap-2 px-5 py-2 rounded-full text-xs font-semibold transition-all ${time === 0 && !isRunning
+                          ? 'bg-zinc-200 text-zinc-400 dark:bg-zinc-800 dark:text-zinc-600 cursor-not-allowed'
+                          : 'bg-rose-600 hover:bg-rose-700 text-white active:scale-95'
+                          }`}
                       >
                         <Square size={14} fill="currentColor" /> Stop & Log
                       </button>
@@ -312,16 +303,16 @@ export default function ExamPrepPage() {
                       </h3>
                       <p className={`text-[11px] ${muted} mt-0.5`}>Total focused study time logged today.</p>
                     </div>
-                    
+
                     <div className="mt-4 space-y-1.5">
                       <div className="flex justify-between text-[10px] font-bold">
                         <span className={muted}>Daily Goal (2h)</span>
                         <span className="text-indigo-600 dark:text-indigo-400">{Math.min(100, Math.round((totalFocusTime / 7200) * 100))}%</span>
                       </div>
                       <div className="w-full h-1.5 bg-zinc-200 dark:bg-zinc-800 rounded-full overflow-hidden">
-                        <div 
-                          className="h-full bg-indigo-500 dark:bg-indigo-400 rounded-full transition-all duration-500" 
-                          style={{ width: `${Math.min(100, Math.round((totalFocusTime / 7200) * 100))}%` }} 
+                        <div
+                          className="h-full bg-indigo-500 dark:bg-indigo-400 rounded-full transition-all duration-500"
+                          style={{ width: `${Math.min(100, Math.round((totalFocusTime / 7200) * 100))}%` }}
                         />
                       </div>
                     </div>
@@ -370,17 +361,17 @@ export default function ExamPrepPage() {
                   {wizardStep <= 5 ? `Step ${wizardStep} of 5` : "Summary"}
                 </span>
               </div>
-              
+
               {/* Progress Bar for Wizard */}
               <div className="w-full h-1 bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden mb-6">
-                <div 
-                  className="h-full bg-indigo-500 dark:bg-indigo-400 transition-all duration-300" 
-                  style={{ width: `${(Math.min(5, wizardStep) / 5) * 100}%` }} 
+                <div
+                  className="h-full bg-indigo-500 dark:bg-indigo-400 transition-all duration-300"
+                  style={{ width: `${(Math.min(5, wizardStep) / 5) * 100}%` }}
                 />
               </div>
 
               <div className="min-h-[150px] flex flex-col justify-between">
-                
+
                 {/* Step Contents */}
                 <div className="space-y-4">
                   {wizardStep === 1 && (
@@ -388,7 +379,7 @@ export default function ExamPrepPage() {
                       <label className="text-sm font-semibold text-zinc-700 dark:text-zinc-200 block">
                         What topic do you want to revise?
                       </label>
-                      <input 
+                      <input
                         type="text"
                         autoFocus
                         placeholder="e.g. Quantum Physics, Integration..."
@@ -415,13 +406,12 @@ export default function ExamPrepPage() {
                             key={diff}
                             type="button"
                             onClick={() => setWizardDifficulty(diff)}
-                            className={`py-3 px-4 rounded-xl border text-xs font-bold transition-all ${
-                              wizardDifficulty === diff
-                                ? 'bg-indigo-600 border-transparent text-white shadow-md shadow-indigo-500/10'
-                                : dark
-                                  ? 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:bg-zinc-800'
-                                  : 'bg-zinc-50 border-zinc-200 text-zinc-600 hover:bg-zinc-100'
-                            }`}
+                            className={`py-3 px-4 rounded-xl border text-xs font-bold transition-all ${wizardDifficulty === diff
+                              ? 'bg-indigo-600 border-transparent text-white shadow-md shadow-indigo-500/10'
+                              : dark
+                                ? 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:bg-zinc-800'
+                                : 'bg-zinc-50 border-zinc-200 text-zinc-600 hover:bg-zinc-100'
+                              }`}
                           >
                             {diff === 'Easy' ? 'Easy 😊' : diff === 'Medium' ? 'Medium 😐' : 'Hard 😰'}
                           </button>
@@ -435,9 +425,9 @@ export default function ExamPrepPage() {
                       <label className="text-sm font-semibold text-zinc-700 dark:text-zinc-200 block">
                         Which exam are you preparing for?
                       </label>
-                      <select 
-                        value={examType} 
-                        onChange={(e) => setExamType(e.target.value)} 
+                      <select
+                        value={examType}
+                        onChange={(e) => setExamType(e.target.value)}
                         className={inputClass}
                         autoFocus
                       >
@@ -462,13 +452,13 @@ export default function ExamPrepPage() {
                       <label className="text-sm font-semibold text-zinc-700 dark:text-zinc-200 block">
                         How many days do you have?
                       </label>
-                      <input 
-                        type="number" 
-                        min="1" 
+                      <input
+                        type="number"
+                        min="1"
                         autoFocus
-                        value={daysToComplete} 
-                        onChange={(e) => setDaysToComplete(parseInt(e.target.value) || 1)} 
-                        className={inputClass} 
+                        value={daysToComplete}
+                        onChange={(e) => setDaysToComplete(parseInt(e.target.value) || 1)}
+                        className={inputClass}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') {
                             setWizardStep(5);
@@ -483,13 +473,13 @@ export default function ExamPrepPage() {
                       <label className="text-sm font-semibold text-zinc-700 dark:text-zinc-200 block">
                         How many hours per day can you study?
                       </label>
-                      <input 
-                        type="number" 
-                        min="1" 
+                      <input
+                        type="number"
+                        min="1"
                         autoFocus
-                        value={plannerHours} 
-                        onChange={(e) => setPlannerHours(parseInt(e.target.value) || 1)} 
-                        className={inputClass} 
+                        value={plannerHours}
+                        onChange={(e) => setPlannerHours(parseInt(e.target.value) || 1)}
+                        className={inputClass}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') {
                             setWizardStep(6);
@@ -529,7 +519,7 @@ export default function ExamPrepPage() {
                 {/* Wizard Controls */}
                 <div className="flex gap-3 mt-6 pt-4 border-t border-zinc-100 dark:border-zinc-900">
                   {wizardStep > 1 && (
-                    <button 
+                    <button
                       type="button"
                       onClick={() => setWizardStep(wizardStep - 1)}
                       className={secondaryBtn}
@@ -538,9 +528,9 @@ export default function ExamPrepPage() {
                       Back
                     </button>
                   )}
-                  
+
                   {wizardStep < 6 ? (
-                    <button 
+                    <button
                       type="button"
                       disabled={wizardStep === 1 && !wizardTopicName.trim()}
                       onClick={() => setWizardStep(wizardStep + 1)}
@@ -549,14 +539,13 @@ export default function ExamPrepPage() {
                       Next
                     </button>
                   ) : (
-                    <button 
-                      onClick={handleGeneratePlan} 
+                    <button
+                      onClick={handleGeneratePlan}
                       disabled={isGenerating}
-                      className={`flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all flex items-center justify-center gap-2 ${
-                        isGenerating 
-                          ? 'bg-indigo-500/50 cursor-not-allowed text-white' 
-                          : 'bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600 active:scale-[0.98] text-white shadow-lg shadow-indigo-500/10'
-                      }`}
+                      className={`flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all flex items-center justify-center gap-2 ${isGenerating
+                        ? 'bg-indigo-500/50 cursor-not-allowed text-white'
+                        : 'bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600 active:scale-[0.98] text-white shadow-lg shadow-indigo-500/10'
+                        }`}
                     >
                       {isGenerating ? (
                         <><span className="inline-block w-4 h-4 rounded-full border-[2px] border-white/30 border-t-white animate-spin" /> Generating...</>
@@ -582,22 +571,21 @@ export default function ExamPrepPage() {
                 <Calendar size={16} className="text-zinc-400" /> Target Deadlines
               </h2>
               <form onSubmit={handleAddExam} className="flex flex-col gap-3 mb-4">
-                <input 
-                  name="name" 
-                  type="text" 
-                  placeholder="Enter upcoming exam name..." 
-                  required 
+                <input
+                  name="name"
+                  type="text"
+                  placeholder="Enter upcoming exam name..."
+                  required
                   value={tempDeadlineName}
                   onChange={(e) => setTempDeadlineName(e.target.value)}
-                  className={inputClass} 
+                  className={inputClass}
                 />
-                
+
                 {/* Second field slides/fades in smoothly only when first field is filled */}
-                <div className={`grid grid-cols-12 gap-2 transition-all duration-300 origin-top ${
-                  tempDeadlineName.trim() 
-                    ? "max-h-16 opacity-100 scale-y-100 translate-y-0" 
-                    : "max-h-0 opacity-0 scale-y-95 -translate-y-2 overflow-hidden pointer-events-none"
-                }`}>
+                <div className={`grid grid-cols-12 gap-2 transition-all duration-300 origin-top ${tempDeadlineName.trim()
+                  ? "max-h-16 opacity-100 scale-y-100 translate-y-0"
+                  : "max-h-0 opacity-0 scale-y-95 -translate-y-2 overflow-hidden pointer-events-none"
+                  }`}>
                   <div className="col-span-8">
                     <input name="date" type="date" required className={inputClass} />
                   </div>
@@ -608,7 +596,7 @@ export default function ExamPrepPage() {
                   </div>
                 </div>
               </form>
-              
+
               <div className="space-y-3">
                 {exams.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-6 px-4 border border-dashed rounded-xl border-zinc-200 dark:border-zinc-800 text-center">
@@ -649,29 +637,28 @@ export default function ExamPrepPage() {
 
           {/* Column 2: Courses & Central Resource Hub */}
           <div className="space-y-8">
-            
+
             {/* Course Planner Card (with Progressive Reveal) */}
             <section className={secondaryCardClass}>
               <h2 className="text-[15px] font-semibold tracking-tight mb-4 flex items-center gap-2">
                 <BookOpen size={16} className="text-zinc-400" /> Course Planner
               </h2>
               <form onSubmit={handleAddCourse} className="flex flex-col gap-3 mb-4">
-                <input 
-                  name="name" 
-                  type="text" 
-                  placeholder="Enter course name..." 
-                  required 
+                <input
+                  name="name"
+                  type="text"
+                  placeholder="Enter course name..."
+                  required
                   value={tempCourseName}
                   onChange={(e) => setTempCourseName(e.target.value)}
-                  className={inputClass} 
+                  className={inputClass}
                 />
-                
+
                 {/* Second field slides/fades in smoothly only when first field is filled */}
-                <div className={`grid grid-cols-12 gap-2 transition-all duration-300 origin-top ${
-                  tempCourseName.trim() 
-                    ? "max-h-16 opacity-100 scale-y-100 translate-y-0" 
-                    : "max-h-0 opacity-0 scale-y-95 -translate-y-2 overflow-hidden pointer-events-none"
-                }`}>
+                <div className={`grid grid-cols-12 gap-2 transition-all duration-300 origin-top ${tempCourseName.trim()
+                  ? "max-h-16 opacity-100 scale-y-100 translate-y-0"
+                  : "max-h-0 opacity-0 scale-y-95 -translate-y-2 overflow-hidden pointer-events-none"
+                  }`}>
                   <div className="col-span-8">
                     <input name="total" type="number" min="1" placeholder="Total lectures..." required className={inputClass} />
                   </div>
@@ -682,7 +669,7 @@ export default function ExamPrepPage() {
                   </div>
                 </div>
               </form>
-              
+
               <div className="space-y-4">
                 {courses.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-6 px-4 border border-dashed rounded-xl border-zinc-200 dark:border-zinc-800 text-center">
@@ -703,7 +690,7 @@ export default function ExamPrepPage() {
                             <Trash2 size={13} />
                           </button>
                         </div>
-                        
+
                         <div className="space-y-1.5">
                           <div className="flex items-center justify-between text-[11px] font-medium">
                             <span className={muted}>Lectures: {course.completedLectures} / {course.totalLectures}</span>
@@ -711,40 +698,39 @@ export default function ExamPrepPage() {
                           </div>
                           {/* Visible Progress Bar */}
                           <div className="w-full h-1.5 bg-zinc-105 dark:bg-zinc-800 rounded-full overflow-hidden">
-                            <div 
-                              className="h-full bg-indigo-500 dark:bg-indigo-400 rounded-full transition-all duration-300" 
-                              style={{ width: `${progress}%` }} 
+                            <div
+                              className="h-full bg-indigo-500 dark:bg-indigo-400 rounded-full transition-all duration-300"
+                              style={{ width: `${progress}%` }}
                             />
                           </div>
                         </div>
-                        
+
                         {/* Numbered Lecture Grid */}
                         <div className="flex flex-wrap gap-1.5 mt-2 max-h-[140px] overflow-y-auto pr-1 custom-scrollbar">
                           {Array.from({ length: course.totalLectures }).map((_, i) => {
                             const isCompleted = i < course.completedLectures;
                             const isCurrent = i === course.completedLectures;
-                            
+
                             return (
-                              <div 
-                                key={i} 
+                              <div
+                                key={i}
                                 onClick={() => {
                                   const newCompleted = i < course.completedLectures ? i : i + 1;
                                   updateCourseProgress(course.id, newCompleted);
                                 }}
-                                className={`w-9 h-9 rounded-lg border flex items-center justify-center text-[12px] font-bold cursor-pointer transition-all duration-200 hover:scale-105 shrink-0 ${
-                                  isCompleted 
-                                    ? 'bg-indigo-600 text-white border-transparent shadow-[0_0_8px_rgba(79,70,229,0.3)]' 
-                                    : isCurrent
-                                      ? 'bg-indigo-50 dark:bg-indigo-950/40 border-indigo-500 text-indigo-600 dark:text-indigo-400 ring-2 ring-indigo-500/20'
-                                      : dark 
-                                        ? 'bg-zinc-900 border-zinc-800 text-zinc-500 hover:bg-zinc-800' 
-                                        : 'bg-zinc-50 border-zinc-200 text-zinc-400 hover:bg-zinc-100'
-                                }`} 
+                                className={`w-9 h-9 rounded-lg border flex items-center justify-center text-[12px] font-bold cursor-pointer transition-all duration-200 hover:scale-105 shrink-0 ${isCompleted
+                                  ? 'bg-indigo-600 text-white border-transparent shadow-[0_0_8px_rgba(79,70,229,0.3)]'
+                                  : isCurrent
+                                    ? 'bg-indigo-50 dark:bg-indigo-950/40 border-indigo-500 text-indigo-600 dark:text-indigo-400 ring-2 ring-indigo-500/20'
+                                    : dark
+                                      ? 'bg-zinc-900 border-zinc-800 text-zinc-500 hover:bg-zinc-800'
+                                      : 'bg-zinc-50 border-zinc-200 text-zinc-400 hover:bg-zinc-100'
+                                  }`}
                                 title={
-                                  isCompleted 
-                                    ? `Lecture ${i + 1} (Completed)` 
-                                    : isCurrent 
-                                      ? `Lecture ${i + 1} (Up Next)` 
+                                  isCompleted
+                                    ? `Lecture ${i + 1} (Completed)`
+                                    : isCurrent
+                                      ? `Lecture ${i + 1} (Up Next)`
                                       : `Lecture ${i + 1} (Locked)`
                                 }
                               >
@@ -753,10 +739,10 @@ export default function ExamPrepPage() {
                             );
                           })}
                         </div>
-                        
+
                         {/* Quick Increment buttons */}
                         <div className="flex items-center gap-2 pt-2 border-t border-zinc-100 dark:border-zinc-900">
-                          <button 
+                          <button
                             onClick={() => {
                               const newCompleted = Math.max(0, course.completedLectures - 1);
                               updateCourseProgress(course.id, newCompleted);
@@ -765,7 +751,7 @@ export default function ExamPrepPage() {
                           >
                             -1 Lecture
                           </button>
-                          <button 
+                          <button
                             onClick={() => {
                               const newCompleted = Math.min(course.totalLectures, course.completedLectures + 1);
                               updateCourseProgress(course.id, newCompleted);
@@ -787,27 +773,26 @@ export default function ExamPrepPage() {
               <h2 className="text-[15px] font-semibold tracking-tight mb-4 flex items-center gap-2">
                 <LinkIcon size={16} className="text-zinc-400" /> Central Resource Hub
               </h2>
-              
+
               <div className="space-y-5">
                 <div>
                   <h3 className={`text-[12.5px] font-semibold mb-3 ${muted}`}>Quick Links</h3>
                   <form onSubmit={handleAddResource} className="flex flex-col gap-3 mb-3">
-                    <input 
-                      name="title" 
-                      type="text" 
-                      placeholder="Enter resource label (e.g. Syllabus PDF)..." 
-                      required 
+                    <input
+                      name="title"
+                      type="text"
+                      placeholder="Enter resource label (e.g. Syllabus PDF)..."
+                      required
                       value={tempResourceTitle}
                       onChange={(e) => setTempResourceTitle(e.target.value)}
-                      className={inputClass} 
+                      className={inputClass}
                     />
-                    
+
                     {/* Second field slides/fades in smoothly only when first field is filled */}
-                    <div className={`grid grid-cols-12 gap-2 transition-all duration-300 origin-top ${
-                      tempResourceTitle.trim() 
-                        ? "max-h-16 opacity-100 scale-y-100 translate-y-0" 
-                        : "max-h-0 opacity-0 scale-y-95 -translate-y-2 overflow-hidden pointer-events-none"
-                    }`}>
+                    <div className={`grid grid-cols-12 gap-2 transition-all duration-300 origin-top ${tempResourceTitle.trim()
+                      ? "max-h-16 opacity-100 scale-y-100 translate-y-0"
+                      : "max-h-0 opacity-0 scale-y-95 -translate-y-2 overflow-hidden pointer-events-none"
+                      }`}>
                       <div className="col-span-8">
                         <input name="url" type="url" placeholder="Paste URL link..." required className={inputClass} />
                       </div>
@@ -818,7 +803,7 @@ export default function ExamPrepPage() {
                       </div>
                     </div>
                   </form>
-                  
+
                   <div className="space-y-2">
                     {resources.length === 0 ? (
                       <div className="flex flex-col items-center justify-center py-6 px-4 border border-dashed rounded-xl border-zinc-200 dark:border-zinc-800 text-center">

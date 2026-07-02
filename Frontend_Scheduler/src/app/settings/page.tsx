@@ -241,17 +241,13 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className={`min-h-screen transition-colors duration-300 pt-[96px] md:pt-[24px] pb-20 ${dark ? 'bg-black text-white' : 'bg-white text-gray-900'}`}>
+    <div className={`min-h-screen transition-colors duration-300 pt-[50px] md:pt-[24px] pb-20 ${dark ? 'bg-black text-white' : 'bg-white text-gray-900'}`}>
       <div className="max-w-[1100px] w-full mx-auto px-5">
 
         {/* Page Header */}
         <div className="mb-8 border-b pb-5 border-gray-100 dark:border-gray-900">
-          <p className={`text-[11px] uppercase tracking-widest ${muted} mb-1 flex items-center gap-1.5`}>
-            <Settings size={12} />
-            <span>Preferences</span>
-          </p>
+
           <h1 className="text-[22px] font-medium tracking-tight">Account Settings</h1>
-          <p className={`text-[13px] ${muted} mt-0.5`}>Manage your personal profile details, copy your friend invitation key, or customize themes.</p>
         </div>
 
         <div className="flex flex-col gap-3">

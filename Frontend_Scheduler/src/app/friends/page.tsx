@@ -139,8 +139,8 @@ export default function FriendsPage() {
 
   const currentList = filtered(
     activeTab === 'friends' ? network.friends :
-    activeTab === 'following' ? network.following :
-    network.followers
+      activeTab === 'following' ? network.following :
+        network.followers
   );
 
   const muted = dark ? "text-zinc-400" : "text-zinc-500";
@@ -148,12 +148,12 @@ export default function FriendsPage() {
   const cardClass = `border rounded-xl p-5 ${border} ${dark ? "bg-black" : "bg-white"}`;
 
   return (
-    <div className={`min-h-screen transition-colors duration-300 pt-[96px] md:pt-[24px] pb-32 ${dark ? 'bg-[#0a0a0a] text-white' : 'bg-[#f5f5f5] text-zinc-900'}`}>
+    <div className={`min-h-screen transition-colors duration-300 pt-[50px] md:pt-[24px] pb-32 ${dark ? 'bg-[#0a0a0a] text-white' : 'bg-[#f5f5f5] text-zinc-900'}`}>
       <div className="max-w-[1024px] w-full mx-auto px-4">
-        
+
         {/* 2-Column Layout */}
         <div className="flex flex-col lg:flex-row gap-6 items-start">
-          
+
           {/* Left Column: Lists and Tabs */}
           <div className="flex-1 w-full space-y-5">
             {/* Horizontal Navigation Pills */}
@@ -162,15 +162,14 @@ export default function FriendsPage() {
                 <button
                   key={tab.key}
                   onClick={() => { setActiveTab(tab.key); setQuery(''); }}
-                  className={`flex-shrink-0 px-4 py-2 rounded-full text-[13px] font-medium transition-colors flex items-center gap-1.5 border ${
-                    activeTab === tab.key
+                  className={`flex-shrink-0 px-4 py-2 rounded-full text-[13px] font-medium transition-colors flex items-center gap-1.5 border ${activeTab === tab.key
                       ? dark
                         ? 'bg-white text-black border-white'
                         : 'bg-black text-white border-black'
                       : dark
                         ? 'bg-transparent border-gray-800 text-gray-400 hover:text-white hover:bg-gray-900/50'
                         : 'bg-transparent border-gray-200 text-gray-650 hover:text-black hover:bg-gray-50'
-                  }`}
+                    }`}
                 >
                   <span>{tab.label}</span>
                   {!networkLoading && (
@@ -185,8 +184,8 @@ export default function FriendsPage() {
               {/* Mobile Invite Link (Visible only on mobile/tablet) */}
               {userDetails?.friendCode && (
                 <div className="lg:hidden pb-3 border-b border-zinc-100 dark:border-zinc-900 mb-4">
-                  <button 
-                    onClick={handleCopyInviteLink} 
+                  <button
+                    onClick={handleCopyInviteLink}
                     className="w-full py-2 px-4 rounded-lg bg-indigo-600 hover:bg-indigo-750 text-white text-[12.5px] font-medium transition-all flex items-center justify-center gap-2"
                   >
                     {copiedLink ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
@@ -217,8 +216,8 @@ export default function FriendsPage() {
                   <div className="py-16 text-center">
                     <div className={`w-14 h-14 rounded-2xl mx-auto mb-3 flex items-center justify-center ${dark ? 'bg-zinc-900/50 border border-zinc-800' : 'bg-zinc-50 border border-zinc-150'}`}>
                       {activeTab === 'friends' ? <Users size={22} className={dark ? 'text-zinc-600' : 'text-zinc-400'} /> :
-                       activeTab === 'following' ? <UserCheck size={22} className={dark ? 'text-zinc-600' : 'text-zinc-400'} /> :
-                       <UserPlus size={22} className={dark ? 'text-zinc-600' : 'text-zinc-400'} />}
+                        activeTab === 'following' ? <UserCheck size={22} className={dark ? 'text-zinc-600' : 'text-zinc-400'} /> :
+                          <UserPlus size={22} className={dark ? 'text-zinc-600' : 'text-zinc-400'} />}
                     </div>
                     <p className={`text-[14px] font-semibold mb-1 ${dark ? 'text-zinc-300' : 'text-zinc-700'}`}>
                       {query ? 'No results' : activeTab === 'friends' ? 'No friends yet' : activeTab === 'following' ? 'Not following anyone' : 'No followers yet'}
@@ -236,7 +235,7 @@ export default function FriendsPage() {
                         <button onClick={() => router.push(`/user/${user.id}`)} className="shrink-0">
                           {getAvatar(user.name, user.avatarUrl)}
                         </button>
-    
+
                         <div className="flex-1 min-w-0">
                           <button
                             onClick={() => router.push(`/user/${user.id}`)}
@@ -260,26 +259,25 @@ export default function FriendsPage() {
                             </p>
                           )}
                         </div>
-    
+
                         <div className="flex items-center gap-2 shrink-0">
                           {user.id !== userId && activeTab !== 'friends' && (
                             <button
                               onClick={() => handleToggleFollow(user.id)}
-                              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-[12.5px] font-semibold border transition-all ${
-                                followStates[user.id]
+                              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-[12.5px] font-semibold border transition-all ${followStates[user.id]
                                   ? dark
                                     ? 'border-indigo-500/40 text-indigo-400 bg-indigo-500/10 hover:bg-red-500/10 hover:text-red-400 hover:border-red-500/30'
                                     : 'border-indigo-200 text-indigo-650 bg-indigo-550 hover:bg-red-550 hover:border-red-200'
                                   : dark
                                     ? 'border-zinc-700 text-zinc-300 hover:border-indigo-500 hover:text-indigo-400 hover:bg-indigo-500/10'
                                     : 'border-zinc-300 text-zinc-700 hover:border-indigo-300 hover:text-indigo-650 hover:bg-indigo-50'
-                              }`}
+                                }`}
                             >
                               {followStates[user.id] ? <UserMinus size={13} /> : <UserPlus size={13} />}
                               {followStates[user.id] ? 'Unfollow' : 'Follow'}
                             </button>
                           )}
-    
+
                           {activeTab === 'friends' && (
                             <button
                               onClick={() => {
@@ -287,17 +285,16 @@ export default function FriendsPage() {
                                 const chatId = `friend_${sortedIds[0]}_${sortedIds[1]}`;
                                 router.push(`/chat/${chatId}`);
                               }}
-                              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-[12.5px] font-semibold border transition-all ${
-                                dark
+                              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-[12.5px] font-semibold border transition-all ${dark
                                   ? 'border-indigo-500/40 text-indigo-400 hover:bg-indigo-500/10 hover:border-indigo-500/60'
                                   : 'border-indigo-200 text-indigo-650 bg-indigo-50 hover:bg-indigo-100 hover:border-indigo-300'
-                              }`}
+                                }`}
                             >
                               <MessageCircle size={13} />
                               Chat
                             </button>
                           )}
-    
+
                           <button
                             onClick={() => router.push(`/user/${user.id}`)}
                             className={`p-2 rounded-lg border transition-colors ${dark ? 'border-zinc-800 text-zinc-550 hover:bg-zinc-900 hover:text-white' : 'border-zinc-200 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700'}`}
@@ -316,17 +313,16 @@ export default function FriendsPage() {
           {/* Right Column: Sidebar Invite & Friend Code */}
           {userDetails?.friendCode && (
             <div className="w-full lg:w-[340px] shrink-0 space-y-5">
-              
+
               {/* Invite Link Card (Top - Desktop only) */}
-              <div className={`hidden lg:block p-5 rounded-xl border ${
-                dark ? 'bg-zinc-900/20 border-zinc-800/80' : 'bg-zinc-50/40 border-zinc-150'
-              } space-y-3`}>
+              <div className={`hidden lg:block p-5 rounded-xl border ${dark ? 'bg-zinc-900/20 border-zinc-800/80' : 'bg-zinc-50/40 border-zinc-150'
+                } space-y-3`}>
                 <div>
                   <h3 className="text-[14px] font-semibold tracking-tight">Invite Link</h3>
                   <p className={`text-[12.5px] ${muted} mt-0.5`}>Share this link to connect automatically.</p>
                 </div>
-                <button 
-                  onClick={handleCopyInviteLink} 
+                <button
+                  onClick={handleCopyInviteLink}
                   className="w-full py-2 px-4 rounded-lg bg-indigo-600 hover:bg-indigo-750 text-white text-[12.5px] font-medium transition-all flex items-center justify-center gap-2"
                 >
                   {copiedLink ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
@@ -335,21 +331,18 @@ export default function FriendsPage() {
               </div>
 
               {/* Friend Code & Add Friend Card (Bottom) */}
-              <div className={`p-5 rounded-xl border ${
-                dark ? 'bg-zinc-900/20 border-zinc-800/80' : 'bg-zinc-50/40 border-zinc-150'
-              } space-y-4`}>
+              <div className={`p-5 rounded-xl border ${dark ? 'bg-zinc-900/20 border-zinc-800/80' : 'bg-zinc-50/40 border-zinc-150'
+                } space-y-4`}>
                 {/* Your Friend Code */}
                 <div className="space-y-1.5">
                   <span className="text-[11px] font-medium tracking-wider uppercase opacity-60">Your Friend Code</span>
                   <div className="flex items-center gap-2">
-                    <span className={`flex-1 px-3 py-1.5 text-sm font-mono font-bold tracking-wider border rounded-lg text-center ${
-                      dark ? 'bg-black border-zinc-800 text-white' : 'bg-white border-zinc-200 text-zinc-950'
-                    }`}>{userDetails.friendCode}</span>
-                    <button 
-                      onClick={handleCopyCode} 
-                      className={`px-3 py-2 rounded-lg border font-medium text-[12px] transition-all flex items-center gap-1.5 shrink-0 ${
-                        dark ? 'bg-zinc-800 border-zinc-700 text-zinc-300 hover:bg-zinc-750' : 'bg-white border-zinc-200 text-zinc-700 hover:bg-zinc-50'
-                      }`}
+                    <span className={`flex-1 px-3 py-1.5 text-sm font-mono font-bold tracking-wider border rounded-lg text-center ${dark ? 'bg-black border-zinc-800 text-white' : 'bg-white border-zinc-200 text-zinc-950'
+                      }`}>{userDetails.friendCode}</span>
+                    <button
+                      onClick={handleCopyCode}
+                      className={`px-3 py-2 rounded-lg border font-medium text-[12px] transition-all flex items-center gap-1.5 shrink-0 ${dark ? 'bg-zinc-800 border-zinc-700 text-zinc-300 hover:bg-zinc-750' : 'bg-white border-zinc-200 text-zinc-700 hover:bg-zinc-50'
+                        }`}
                     >
                       {copied ? <Check size={12} className="text-emerald-500" /> : <Copy size={12} />}
                       <span>{copied ? 'Copied' : 'Copy'}</span>
@@ -373,11 +366,10 @@ export default function FriendsPage() {
                       onKeyDown={(e) => e.key === 'Enter' && handleAddFriend()}
                       placeholder="Friend code..."
                       maxLength={8}
-                      className={`flex-1 px-3 py-2 text-sm rounded-lg border outline-none font-mono transition-colors ${
-                        dark 
-                          ? 'bg-black border-zinc-800 text-white placeholder-zinc-700 focus:border-zinc-700' 
+                      className={`flex-1 px-3 py-2 text-sm rounded-lg border outline-none font-mono transition-colors ${dark
+                          ? 'bg-black border-zinc-800 text-white placeholder-zinc-700 focus:border-zinc-700'
                           : 'bg-white border-zinc-200 text-zinc-900 placeholder-zinc-400 focus:border-zinc-450'
-                      }`}
+                        }`}
                     />
                     <button
                       onClick={handleAddFriend}

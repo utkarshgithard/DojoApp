@@ -23,13 +23,17 @@ import OnboardingTour from "./OnboardingTour";
 import { Toaster } from "@/components/ui/sonner";
 import AuthPromptModal from "./community/AuthPromptModal";
 import AiChatbot from "./AiChatbot";
+import MobileBottomNav from "./MobileBottomNav";
 
 function ClientProvidersInner({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuth() as any;
   const pathname = usePathname();
   const noNavbarRoutes = ['/', '/login', '/register', '/verify', '/verify-email'];
+  const isMobileChatActive = pathname.startsWith('/chat/') && pathname !== '/chat';
+  
   const showNavbar = !noNavbarRoutes.some(route => pathname === route || pathname.startsWith('/verify-email/'))
-    && !pathname.startsWith('/session/');
+    && !pathname.startsWith('/session/')
+    && !isMobileChatActive;
 
   const sidebarRoutes = ['/dashboard', '/friends', '/community', '/setup-schedule', '/calendar', '/exam-prep', '/settings', '/notifications', '/chat'];
   const showSidebar = isAuthenticated && sidebarRoutes.some(route => pathname === route || pathname.startsWith(route + '/'));
@@ -57,7 +61,8 @@ function ClientProvidersInner({ children }: { children: React.ReactNode }) {
       {showSidebar ? (
         <div className="min-h-screen w-full flex">
           <Sidebar collapsed={sidebarCollapsed} toggleCollapse={toggleSidebar} />
-          <div className={`flex-1 w-full min-w-0 transition-all duration-300 ${mounted && sidebarCollapsed ? 'md:pl-20' : 'md:pl-64'}`}>
+          {!isMobileChatActive && <MobileBottomNav />}
+          <div className={`flex-1 w-full min-w-0 transition-all duration-300 ${!isMobileChatActive ? 'pb-[80px] md:pb-0' : ''} ${mounted && sidebarCollapsed ? 'md:pl-20' : 'md:pl-64'}`}>
             {children}
           </div>
           <OnboardingTour />
