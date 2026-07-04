@@ -730,8 +730,8 @@ export default function CommunityPage() {
       </div>
 
       {/* Floating Action Buttons (FAB) for Mobile Post & Camera Creation */}
-      {isAuthenticated && (
-        <div className="fixed bottom-6 right-6 z-40 flex flex-col gap-3 items-end xl:hidden group-has-[textarea:focus]:opacity-0 group-has-[textarea:focus]:pointer-events-none transition-all duration-300">
+      {isAuthenticated && !isComposeOpen && (
+        <div className="fixed bottom-[80px] right-6 z-40 flex flex-col gap-3 items-end xl:hidden group-has-[textarea:focus]:opacity-0 group-has-[textarea:focus]:pointer-events-none transition-all duration-300">
           {/* Quick Camera FAB */}
           <button
             onClick={() => cameraFabInputRef.current?.click()}

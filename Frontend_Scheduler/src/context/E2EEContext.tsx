@@ -236,7 +236,7 @@ export function E2EEProvider({ children }: { children: React.ReactNode }) {
         try {
           const res = await API.get(`/auth/public-keys?userIds=${missingIds.join(',')}`);
           const keys = res.data.keys as Record<string, { deviceId: string; publicKey: string }[]>;
-          
+
           for (const [uid, deviceList] of Object.entries(keys)) {
             const devIds: string[] = [];
             for (const dev of deviceList) {
@@ -317,12 +317,12 @@ export function E2EEProvider({ children }: { children: React.ReactNode }) {
       const myWrappedKey = encryptedKeys[myDeviceId] || encryptedKeys[userId];
 
       if (!myWrappedKey) {
-        console.warn(
-          '[E2EE][decrypt] No wrapped key found for current device/user.\n',
-          '  My deviceId:', myDeviceId, '\n',
-          '  My userId:', userId, '\n',
-          '  Keys in message:', Object.keys(encryptedKeys),
-        );
+        // console.warn(
+        //   '[E2EE][decrypt] No wrapped key found for current device/user.\n',
+        //   '  My deviceId:', myDeviceId, '\n',
+        //   '  My userId:', userId, '\n',
+        //   '  Keys in message:', Object.keys(encryptedKeys),
+        // );
         return '__E2EE_ERR__NOT_RECIPIENT';
       }
 

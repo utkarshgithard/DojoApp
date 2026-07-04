@@ -31,6 +31,8 @@ type ChatContextValue = {
   setGlobalTypingUsers: React.Dispatch<React.SetStateAction<Record<string, string>>>;
   unreadCounts: Record<string, number>;
   setUnreadCounts: React.Dispatch<React.SetStateAction<Record<string, number>>>;
+  forwardingMessages: Message[] | null;
+  setForwardingMessages: React.Dispatch<React.SetStateAction<Message[] | null>>;
 };
 
 const ChatContext = createContext<ChatContextValue | null>(null);
@@ -49,6 +51,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   const [globalOnlineUsers, setGlobalOnlineUsers] = useState<Set<string>>(new Set());
   const [globalTypingUsers, setGlobalTypingUsers] = useState<Record<string, string>>({});
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
+  const [forwardingMessages, setForwardingMessages] = useState<Message[] | null>(null);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -125,18 +128,33 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 
   const cacheActivity = useCallback((chatId: string, message: Message, currentUserId?: string | null) => {
     setRecentActivity((prev) => {
+      let previewText = message.text || "";
+      if (previewText.startsWith("IMAGE::")) {
+        previewText = "🖼️ Image";
+      } else if (previewText.startsWith("AUDIO::")) {
+        previewText = "🎤 Voice Message";
+      } else if (previewText.startsWith("FILE::")) {
+        previewText = "📄 File";
+      } else if (previewText.length > 200) {
+        previewText = previewText.slice(0, 200) + "...";
+      }
+
       const next = {
         ...prev,
         [chatId]: {
           chatId,
-          preview: message.text || "",
+          preview: previewText,
           ts: message.ts ? new Date(message.ts).toISOString() : new Date().toISOString(),
           fromMe: String(message.userId) === String(currentUserId || ""),
           status: message.status,
         },
       };
       if (typeof window !== "undefined") {
-        localStorage.setItem("friend_chat_activity", JSON.stringify(next));
+        try {
+          localStorage.setItem("friend_chat_activity", JSON.stringify(next));
+        } catch (e) {
+          console.error("Failed to write to localStorage (quota exceeded):", e);
+        }
       }
       return next;
     });
@@ -171,11 +189,14 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     setGlobalTypingUsers,
     unreadCounts,
     setUnreadCounts,
+    forwardingMessages,
+    setForwardingMessages,
   }), [
     activeChatId, chats, messagesByChat, recentActivity, 
     setChatState, setMessagesForChat, appendMessageToChat, updateMessageInChat, removeMessageFromChat,
     setFriendForChat, setLoadingMessagesForChat, setLoadingFriendForChat, cacheActivity,
-    globalOnlineUsers, globalTypingUsers, unreadCounts
+    globalOnlineUsers, globalTypingUsers, unreadCounts,
+    forwardingMessages, setForwardingMessages,
   ]);
 
   return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>;

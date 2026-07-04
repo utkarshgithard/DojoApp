@@ -7,7 +7,7 @@ import { useAttendance } from "@/context/AttendanceContext";
 import { useDarkMode } from "@/context/DarkModeContext";
 import { useSocket } from "@/context/SocketContext";
 import { useChat } from "@/context/ChatContext";
-import { MessageSquare, Search, Loader2, MoreVertical } from "lucide-react";
+import { MessageSquare, Search, Loader2, MoreVertical, CornerUpRight, X, Check } from "lucide-react";
 import ChatAvatar from "@/components/chat/ChatAvatar";
 
 export default function ChatLayout({ children }: { children: React.ReactNode }) {
@@ -23,13 +23,17 @@ export default function ChatLayout({ children }: { children: React.ReactNode }) 
     globalTypingUsers,
     setGlobalTypingUsers,
     unreadCounts,
-    setUnreadCounts
+    setUnreadCounts,
+    forwardingMessages,
+    setForwardingMessages,
   } = useChat();
   const router = useRouter();
   const params = useParams();
   const activeChatId = params?.id as string | undefined;
 
   const [query, setQuery] = useState("");
+  const [forwardTargets, setForwardTargets] = useState<Set<string>>(new Set());
+  const [isSendingForward, setIsSendingForward] = useState(false);
 
   // Use context recentActivity as the single source of truth
   const recentActivity = sharedRecentActivity;
@@ -147,10 +151,49 @@ export default function ChatLayout({ children }: { children: React.ReactNode }) 
   // Check if we are on a specific chat subroute
   const isChatActive = !!activeChatId;
 
+  const isForwarding = !!forwardingMessages && forwardingMessages.length > 0;
+
   const handleFriendClick = (friend: any) => {
+    if (isForwarding) {
+      // Toggle selection in forwarding mode
+      setForwardTargets(prev => {
+        const next = new Set(prev);
+        if (next.has(friend.id)) next.delete(friend.id);
+        else next.add(friend.id);
+        return next;
+      });
+      return;
+    }
     const sortedIds = [currentUserId, friend.id].sort();
     const chatId = `friend_${sortedIds[0]}_${sortedIds[1]}`;
     router.push(`/chat/${chatId}`);
+  };
+
+  const handleSendForwardFromLayout = async () => {
+    if (!socket || !forwardingMessages || forwardTargets.size === 0) return;
+    setIsSendingForward(true);
+    for (const friendId of Array.from(forwardTargets)) {
+      const sortedIds = [currentUserId, friendId].sort();
+      const targetChatId = `friend_${sortedIds[0]}_${sortedIds[1]}`;
+      for (const msg of forwardingMessages) {
+        const clientId = `client_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+        const isMedia = msg.text.startsWith('AUDIO::') || msg.text.startsWith('IMAGE::') || msg.text.startsWith('FILE::');
+        socket.emit('sendChatMessage', {
+          chatId: targetChatId,
+          text: isMedia ? msg.text : `↗ Forwarded\n${msg.text}`,
+          clientId,
+        });
+        await new Promise(r => setTimeout(r, 30));
+      }
+    }
+    setIsSendingForward(false);
+    setForwardingMessages(null);
+    setForwardTargets(new Set());
+  };
+
+  const cancelForwarding = () => {
+    setForwardingMessages(null);
+    setForwardTargets(new Set());
   };
 
   return (
@@ -161,36 +204,75 @@ export default function ChatLayout({ children }: { children: React.ReactNode }) 
       {/* LEFT PANE: Friends list (hidden on mobile if chat is active) */}
       <div
         className={`
-          flex-col border-r ${border} bg-white dark:bg-black shrink-0 w-full md:w-80 lg:w-[320px]
+          relative flex flex-col h-full border-r ${border} bg-white dark:bg-black shrink-0 w-full md:w-80 lg:w-[320px] overflow-hidden
           ${isChatActive ? "hidden md:flex" : "flex"}
         `}
       >
-        {/* Header */}
+        {/* Header — swaps to forwarding mode banner */}
         <div className={`px-5 pt-[22px] pb-[14px] shrink-0`}>
-          <div className="flex items-center justify-between mb-[18px]">
-            <h1 className="text-[22px] font-bold tracking-tight font-sans">Chats</h1>
-            <div className={`w-[34px] h-[34px] rounded-[10px] flex items-center justify-center cursor-pointer transition-colors ${dark ? 'bg-zinc-900 hover:bg-zinc-800' : 'bg-[#F3F1FA] hover:bg-[#ECE9F8]'}`}>
-              <MoreVertical size={17} className={muted} />
-            </div>
-          </div>
+          {isForwarding ? (
+            <>
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <CornerUpRight size={18} className="text-indigo-500" />
+                  <div>
+                    <h1 className="text-[16px] font-bold tracking-tight">Forward to</h1>
+                    <p className={`text-[11.5px] ${muted}`}>{forwardingMessages!.length} message{forwardingMessages!.length !== 1 ? 's' : ''}</p>
+                  </div>
+                </div>
+                <button
+                  onClick={cancelForwarding}
+                  className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${dark ? 'bg-zinc-900 hover:bg-zinc-800' : 'bg-zinc-100 hover:bg-zinc-200'}`}
+                >
+                  <X size={16} className={muted} />
+                </button>
+              </div>
+              {/* Search within forwarding mode */}
+              <div className="relative">
+                <Search className={`absolute left-[13px] top-1/2 -translate-y-1/2 ${muted}`} size={16} />
+                <input
+                  type="text"
+                  placeholder="Search chats"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  className={`
+                    w-full pl-[36px] pr-3 py-[10px] text-[13.5px] rounded-xl outline-none transition-colors border
+                    ${dark 
+                      ? "bg-zinc-950 border-zinc-800 text-white placeholder-zinc-600 focus:border-zinc-700" 
+                      : "bg-[#F3F1FA] border-[#E7E3F3] text-[#15131F] placeholder-[#8D89A3] focus:border-[#D8D4EA]"
+                    }
+                  `}
+                />
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="flex items-center justify-between mb-[18px]">
+                <h1 className="text-[22px] font-bold tracking-tight font-sans">Chats</h1>
+                <div className={`w-[34px] h-[34px] rounded-[10px] flex items-center justify-center cursor-pointer transition-colors ${dark ? 'bg-zinc-900 hover:bg-zinc-800' : 'bg-[#F3F1FA] hover:bg-[#ECE9F8]'}`}>
+                  <MoreVertical size={17} className={muted} />
+                </div>
+              </div>
 
-          {/* Search bar */}
-          <div className="relative">
-            <Search className={`absolute left-[13px] top-1/2 -translate-y-1/2 ${muted}`} size={16} />
-            <input
-              type="text"
-              placeholder="Search chats"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              className={`
-                w-full pl-[36px] pr-3 py-[10px] text-[13.5px] rounded-xl outline-none transition-colors border
-                ${dark 
-                  ? "bg-zinc-950 border-zinc-800 text-white placeholder-zinc-600 focus:border-zinc-700" 
-                  : "bg-[#F3F1FA] border-[#E7E3F3] text-[#15131F] placeholder-[#8D89A3] focus:border-[#D8D4EA]"
-                }
-              `}
-            />
-          </div>
+              {/* Search bar */}
+              <div className="relative">
+                <Search className={`absolute left-[13px] top-1/2 -translate-y-1/2 ${muted}`} size={16} />
+                <input
+                  type="text"
+                  placeholder="Search chats"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  className={`
+                    w-full pl-[36px] pr-3 py-[10px] text-[13.5px] rounded-xl outline-none transition-colors border
+                    ${dark 
+                      ? "bg-zinc-950 border-zinc-800 text-white placeholder-zinc-600 focus:border-zinc-700" 
+                      : "bg-[#F3F1FA] border-[#E7E3F3] text-[#15131F] placeholder-[#8D89A3] focus:border-[#D8D4EA]"
+                    }
+                  `}
+                />
+              </div>
+            </>
+          )}
         </div>
 
         {/* Friends list scroll area */}
@@ -214,68 +296,111 @@ export default function ChatLayout({ children }: { children: React.ReactNode }) 
               </p>
             </div>
           ) : (
-            sortedFriends.map((f: any) => {
-              const expectedChatId = getChatIdForFriend(f.id);
-              const isActive = activeChatId === expectedChatId;
-              const recent = recentActivity[expectedChatId];
+              sortedFriends.map((f: any) => {
+                const expectedChatId = getChatIdForFriend(f.id);
+                const isActive = activeChatId === expectedChatId;
+                const recent = recentActivity[expectedChatId];
+                const isForwardSelected = forwardTargets.has(f.id);
 
-              return (
-                <button
-                  key={f.id}
-                  onClick={() => handleFriendClick(f)}
-                  className={`
-                    w-full text-left px-2.5 py-2.5 rounded-[14px] flex items-center gap-3 transition-colors mb-0.5
-                    ${isActive
-                      ? dark
-                        ? "bg-zinc-900/80"
-                        : "bg-[#EFEAFB]"
-                      : dark
-                      ? "hover:bg-zinc-950/60"
-                      : "hover:bg-[#ECE9F8]"
-                    }
-                  `}
-                >
-                  <ChatAvatar 
-                    name={f.name} 
-                    avatarUrl={f.avatarUrl} 
-                    size={46} 
-                    online={globalOnlineUsers.has(f.id)} 
-                    ring={true}
-                  />
+                return (
+                  <button
+                    key={f.id}
+                    onClick={() => handleFriendClick(f)}
+                    className={`
+                      w-full text-left px-2.5 py-2.5 rounded-[14px] flex items-center gap-3 transition-colors mb-0.5
+                      ${isForwarding && isForwardSelected
+                        ? dark ? "bg-indigo-500/15 ring-1 ring-indigo-500/30" : "bg-indigo-50 ring-1 ring-indigo-200"
+                        : isActive && !isForwarding
+                          ? dark ? "bg-zinc-900/80" : "bg-[#EFEAFB]"
+                          : dark ? "hover:bg-zinc-950/60" : "hover:bg-[#ECE9F8]"
+                      }
+                    `}
+                  >
+                    <ChatAvatar 
+                      name={f.name} 
+                      avatarUrl={f.avatarUrl} 
+                      size={46} 
+                      online={globalOnlineUsers.has(f.id)} 
+                      ring={true}
+                    />
 
-                  {/* Name details */}
-                  <div className="min-w-0 flex-1">
-                    <div className="flex justify-between items-baseline">
-                      <span className={`text-[14.5px] font-semibold truncate ${isActive ? (dark ? "text-[#9B7BF2]" : "text-[#4A22B0]") : (dark ? "text-white" : "text-[#15131F]")}`}>
-                        {f.name}
-                      </span>
-                      <span className={`text-[11px] shrink-0 ml-1.5 ${muted}`}>
-                        {/* If recent activity time, could show it here */}
-                        {recent?.ts ? new Date(recent.ts).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : ""}
-                      </span>
-                    </div>
-                    <div className="flex justify-between items-center mt-0.5">
-                      <span className={`text-[12.5px] truncate ${unreadCounts[expectedChatId] > 0 ? "text-[#6C3CE9] font-medium" : muted}`}>
-                        {globalTypingUsers[f.id] === expectedChatId
-                          ? <span className="text-[#6C3CE9] font-medium">Typing...</span>
-                          : recent?.preview
-                            ? `${recent.fromMe ? "You: " : ""}${recent.preview.startsWith('AUDIO::') ? '🎤 Voice Message' : recent.preview.startsWith('IMAGE::') ? '🖼️ Image' : recent.preview.startsWith('FILE::') ? '📄 File' : recent.preview}`
-                            : isActive
-                              ? "Active conversation"
-                              : "Tap to open chat"}
-                      </span>
-                      {unreadCounts[expectedChatId] > 0 ? (
-                        <span className="bg-[#FF5D5D] text-white text-[10.5px] font-bold min-w-[18px] h-[18px] rounded-full flex items-center justify-center px-1.5 ml-1.5 shrink-0">
-                          {unreadCounts[expectedChatId] > 99 ? '99+' : unreadCounts[expectedChatId]}
+                    {/* Name details */}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex justify-between items-baseline">
+                        <span className={`text-[14.5px] font-semibold truncate ${isActive && !isForwarding ? (dark ? "text-[#9B7BF2]" : "text-[#4A22B0]") : (dark ? "text-white" : "text-[#15131F]")}`}>
+                          {f.name}
                         </span>
-                      ) : null}
+                        {!isForwarding && (
+                          <span className={`text-[11px] shrink-0 ml-1.5 ${muted}`}>
+                            {recent?.ts ? new Date(recent.ts).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : ""}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex justify-between items-center mt-0.5">
+                        <span className={`text-[12.5px] truncate ${!isForwarding && unreadCounts[expectedChatId] > 0 ? "text-[#6C3CE9] font-medium" : muted}`}>
+                          {isForwarding
+                            ? (globalOnlineUsers.has(f.id) ? 'Active now' : 'Offline')
+                            : globalTypingUsers[f.id] === expectedChatId
+                              ? <span className="text-[#6C3CE9] font-medium">Typing...</span>
+                              : recent?.preview
+                                ? (recent.preview === "$$DELETED$$" || recent.preview === "You deleted this message" || recent.preview === "This message was deleted")
+                                  ? (recent.fromMe ? "You deleted this message" : "This message was deleted")
+                                  : `${recent.fromMe ? "You: " : ""}${recent.preview.startsWith('AUDIO::') ? '🎤 Voice Message' : recent.preview.startsWith('IMAGE::') ? '🖼️ Image' : recent.preview.startsWith('FILE::') ? '📄 File' : recent.preview}`
+                                : isActive
+                                  ? "Active conversation"
+                                  : "Tap to open chat"}
+                        </span>
+                        {/* Checkbox when forwarding, unread badge otherwise */}
+                        {isForwarding ? (
+                          <div className={`shrink-0 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
+                            isForwardSelected ? 'bg-[#6C3CE9] border-[#6C3CE9]' : dark ? 'border-zinc-600' : 'border-zinc-300'
+                          }`}>
+                            {isForwardSelected && <Check size={11} color="white" strokeWidth={3} />}
+                          </div>
+                        ) : (
+                          unreadCounts[expectedChatId] > 0 ? (
+                            <span className="bg-[#FF5D5D] text-white text-[10.5px] font-bold min-w-[18px] h-[18px] rounded-full flex items-center justify-center px-1.5 ml-1.5 shrink-0">
+                              {unreadCounts[expectedChatId] > 99 ? '99+' : unreadCounts[expectedChatId]}
+                            </span>
+                          ) : null
+                        )}
+                      </div>
                     </div>
-                  </div>
-                </button>
-              );
-            })
+                  </button>
+                );
+              })
           )}
         </div>
+
+        {/* Floating Send button in forwarding mode */}
+        {isForwarding && (
+          <button
+            onClick={handleSendForwardFromLayout}
+            disabled={forwardTargets.size === 0 || isSendingForward}
+            className={`absolute bottom-20 md:bottom-8 right-6 z-30 w-14 h-14 rounded-full flex items-center justify-center text-white transition-all duration-300 shadow-2xl ${
+              forwardTargets.size > 0 && !isSendingForward
+                ? 'opacity-100 translate-y-0 scale-100 hover:scale-105 active:scale-95 cursor-pointer shadow-indigo-500/40'
+                : 'opacity-0 translate-y-20 scale-90 pointer-events-none'
+            }`}
+            style={{
+              background: 'linear-gradient(135deg, #6C3CE9, #4A22B0)',
+            }}
+            aria-label="Send forwarded messages"
+          >
+            {isSendingForward ? (
+              <Loader2 className="animate-spin" size={22} />
+            ) : (
+              <div className="relative">
+                <CornerUpRight size={22} strokeWidth={2.5} />
+                {forwardTargets.size > 0 && (
+                  <span className="absolute -top-3.5 -right-3.5 bg-red-500 text-white text-[10px] font-black w-[18px] h-[18px] rounded-full flex items-center justify-center border-2 border-white dark:border-zinc-950 animate-scale-in">
+                    {forwardTargets.size}
+                  </span>
+                )}
+              </div>
+            )}
+          </button>
+        )}
       </div>
 
       {/* RIGHT PANE: Chat area / children (hidden on mobile if no chat is active) */}

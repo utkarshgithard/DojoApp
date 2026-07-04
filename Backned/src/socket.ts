@@ -2,7 +2,8 @@ import { Server, Socket } from 'socket.io';
 import prisma from './lib/prisma.js';
 import { verifySocketTokenAsync } from './middleware/authmiddleware.js';
 import { sendPushToUser } from './utils/pushService.js';
-import { cacheDel, chatMessagePush, chatMessageGetAll, chatMessagesDel } from './lib/redis.js';
+import { cacheDel, chatMessagePush, chatMessageGetAll, chatMessagesDel, chatMessageMarkDeleted } from './lib/redis.js';
+import { randomUUID } from 'crypto';
 
 // Shared DB readiness flag â€” set to true by server.ts once DB is connected
 let _dbReady = false;
@@ -378,10 +379,10 @@ function registerChatHandlers(io: Server, socket: Socket, user: UserPayload) {
         return socket.emit('chatError', { msg: 'Not authorized to send messages' });
       }
 
-      // Build the message immediately with a temp ID so we can broadcast instantly
-      const tempId = `${user.id}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+      // Build the message immediately with a UUID so we can broadcast instantly
+      const messageId = randomUUID();
       const message: any = {
-        id: tempId,
+        id: messageId,
         chatId: canonicalId,
         userId: user.id,
         name: user.name,
@@ -432,6 +433,7 @@ function registerChatHandlers(io: Server, socket: Socket, user: UserPayload) {
 
       prisma.message.create({
         data: {
+          id: messageId,
           chatId: canonicalId,
           userId: user.id,
           name: user.name,
@@ -442,10 +444,6 @@ function registerChatHandlers(io: Server, socket: Socket, user: UserPayload) {
             encryptedKeys: JSON.stringify(encryptedKeys),
           }),
         },
-      }).then((dbMessage) => {
-        // Update the in-memory entry with the real DB id
-        const idx = chatHistory.findIndex((m) => m.id === tempId);
-        if (idx !== -1) chatHistory[idx].id = dbMessage.id;
       }).catch((err) => {
         console.error('Failed to persist message to DB:', err);
       });
@@ -466,13 +464,32 @@ function registerChatHandlers(io: Server, socket: Socket, user: UserPayload) {
         return socket.emit('chatError', { msg: 'You can only delete your own messages.' });
       }
 
-      await prisma.message.delete({ where: { id: messageId } });
+      await prisma.message.update({
+        where: { id: messageId },
+        data: {
+          text: '$$DELETED$$',
+          ciphertext: null,
+          iv: null,
+          encryptedKeys: null,
+        },
+      });
 
       if (chatMessages.has(canonicalId)) {
         const history = chatMessages.get(canonicalId)!;
-        const newHistory = history.filter(m => m.id !== messageId);
-        chatMessages.set(canonicalId, newHistory);
+        const msgIndex = history.findIndex(m => m.id === messageId);
+        if (msgIndex !== -1) {
+          history[msgIndex] = {
+            ...history[msgIndex],
+            text: '$$DELETED$$',
+            ciphertext: undefined,
+            iv: undefined,
+            encryptedKeys: undefined,
+          };
+        }
       }
+
+      // Mark as deleted in Redis (L2 cache)
+      await chatMessageMarkDeleted(canonicalId, messageId);
 
       const parts = canonicalId.split('_');
       const otherUserId = parts.length === 3 && parts[0] === 'friend'

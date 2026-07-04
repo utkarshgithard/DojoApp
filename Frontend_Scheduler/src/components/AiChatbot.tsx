@@ -195,7 +195,7 @@ Your goal is to politely answer questions about these features, act as a helpful
   };
 
   return (
-    <div className="fixed bottom-6 left-6 md:left-auto md:right-6 z-[9999] flex flex-col items-start md:items-end">
+    <div className="fixed bottom-[80px] md:bottom-6 left-6 md:left-auto md:right-6 z-[9999] flex flex-col items-start md:items-end">
       {/* Chat Popover */}
       {isOpen && (
         <div 
@@ -298,13 +298,13 @@ Your goal is to politely answer questions about these features, act as a helpful
       {/* Floating Toggle Button */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className={`w-14 h-14 flex items-center justify-center rounded-full shadow-lg transition-transform hover:scale-105 active:scale-95 ${
+        className={`w-11 h-11 md:w-14 md:h-14 flex items-center justify-center rounded-full shadow-lg transition-transform hover:scale-105 active:scale-95 ${
           isOpen 
             ? 'bg-zinc-200 text-black dark:bg-zinc-800 dark:text-white' 
-            : 'bg-gradient-to-tr from-indigo-600 to-violet-600 text-white font-bold text-[16px] tracking-wider'
+            : 'bg-gradient-to-tr from-indigo-600 to-violet-600 text-white font-bold text-[13px] md:text-[16px] tracking-wider'
         }`}
       >
-        {isOpen ? <X size={22} /> : <span className="select-none font-black">AI</span>}
+        {isOpen ? <X size={18} /> : <span className="select-none font-black text-[12px] md:text-[15px]">AI</span>}
       </button>
     </div>
   );

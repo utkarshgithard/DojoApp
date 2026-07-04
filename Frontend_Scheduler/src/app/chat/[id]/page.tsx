@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, Check, CheckCheck, Loader2, Send, Wifi, WifiOff, Phone, Video, Paperclip, Smile, MoreVertical, Mic, Square, FileText, Download, Play, Pause, Trash2, X } from "lucide-react";
+import { ArrowLeft, Check, CheckCheck, Loader2, Send, Wifi, WifiOff, Phone, Video, Paperclip, Smile, MoreVertical, Mic, Square, FileText, Download, Play, Pause, Trash2, X, CornerUpRight } from "lucide-react";
 import API from "@/lib/axios";
 import ChatAvatar from "@/components/chat/ChatAvatar";
 import { useAuth } from "@/context/authContext";
@@ -18,7 +18,7 @@ function formatMessageDate(dateStr: string | Date) {
   const now = new Date();
   const diffTime = Math.abs(now.getTime() - date.getTime());
   const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-  
+
   if (diffDays === 0 && now.getDate() === date.getDate()) return "Today";
   if (diffDays === 1 || (diffDays === 0 && now.getDate() !== date.getDate())) return "Yesterday";
   if (diffDays < 7) return date.toLocaleDateString([], { weekday: "long" });
@@ -43,11 +43,11 @@ function WaveformAnimation() {
   return (
     <div className="flex items-center gap-[3px] h-4">
       {[...Array(6)].map((_, i) => (
-        <div 
-          key={i} 
+        <div
+          key={i}
           className="w-[3px] bg-[#FF5D5D] rounded-full animate-bounce"
-          style={{ 
-            animationDelay: `${i * 0.15}s`, 
+          style={{
+            animationDelay: `${i * 0.15}s`,
             animationDuration: '0.9s',
             height: i % 2 === 0 ? '100%' : '60%'
           }}
@@ -66,18 +66,18 @@ function CustomAudioPlayer({ src, isOwn, dark, duration }: { src: string; isOwn:
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
-    
+
     const updateProgress = () => {
       setCurrentTime(audio.currentTime);
       setProgress((audio.currentTime / (audio.duration || 1)) * 100);
     };
-    
+
     const handleEnded = () => {
       setIsPlaying(false);
       setProgress(0);
       setCurrentTime(0);
     };
-    
+
     audio.addEventListener('timeupdate', updateProgress);
     audio.addEventListener('ended', handleEnded);
     return () => {
@@ -97,9 +97,9 @@ function CustomAudioPlayer({ src, isOwn, dark, duration }: { src: string; isOwn:
   };
 
   return (
-    <div className={`flex items-center gap-3 w-[220px] rounded-[12px]`}>
+    <div className={`flex items-center gap-3 w-[190px] sm:w-[220px] rounded-[12px]`}>
       <audio ref={audioRef} src={src} preload="metadata" />
-      <button 
+      <button
         onClick={togglePlay}
         className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 transition-colors ${isOwn ? 'bg-white/20 hover:bg-white/30 text-white' : (dark ? 'bg-zinc-800 hover:bg-zinc-700 text-white' : 'bg-[#E7E3F3] hover:bg-[#D8D4EA] text-[#15131F]')}`}
       >
@@ -108,15 +108,15 @@ function CustomAudioPlayer({ src, isOwn, dark, duration }: { src: string; isOwn:
       <div className="flex-1 flex flex-col justify-center gap-[5px]">
         {/* Progress Bar */}
         <div className={`h-[5px] w-full rounded-full overflow-hidden ${isOwn ? 'bg-white/30' : (dark ? 'bg-zinc-800' : 'bg-[#E7E3F3]')}`}>
-           <div 
-             className={`h-full transition-all duration-100 ease-linear ${isOwn ? 'bg-white' : (dark ? 'bg-[#9B7BF2]' : 'bg-[#6C3CE9]')}`} 
-             style={{ width: `${progress}%` }} 
-           />
+          <div
+            className={`h-full transition-all duration-100 ease-linear ${isOwn ? 'bg-white' : (dark ? 'bg-[#9B7BF2]' : 'bg-[#6C3CE9]')}`}
+            style={{ width: `${progress}%` }}
+          />
         </div>
         {/* Duration / Time */}
         <div className="flex justify-between items-center text-[10px] font-medium" style={{ opacity: isOwn ? 0.8 : 0.6 }}>
-           <span>{Math.floor(currentTime / 60)}:{Math.floor(currentTime % 60).toString().padStart(2, '0')}</span>
-           {duration !== undefined && <span>{Math.floor(duration / 60)}:{Math.floor(duration % 60).toString().padStart(2, '0')}</span>}
+          <span>{Math.floor(currentTime / 60)}:{Math.floor(currentTime % 60).toString().padStart(2, '0')}</span>
+          {duration !== undefined && <span>{Math.floor(duration / 60)}:{Math.floor(duration % 60).toString().padStart(2, '0')}</span>}
         </div>
       </div>
     </div>
@@ -124,11 +124,14 @@ function CustomAudioPlayer({ src, isOwn, dark, duration }: { src: string; isOwn:
 }
 
 function MessageContent({ text, isOwn, dark, onImageClick }: { text: string; isOwn: boolean; dark: boolean; onImageClick?: (url: string) => void }) {
+  if (text === "$$DELETED$$") {
+    return <span className="italic opacity-60">{isOwn ? "You deleted this message" : "This message was deleted"}</span>;
+  }
   if (text.startsWith("AUDIO::")) {
     try {
       const data = JSON.parse(text.slice(7));
       return <CustomAudioPlayer src={data.data} isOwn={isOwn} dark={dark} duration={data.duration} />;
-    } catch (e) {}
+    } catch (e) { }
   }
   if (text.startsWith("IMAGE::")) {
     try {
@@ -138,7 +141,7 @@ function MessageContent({ text, isOwn, dark, onImageClick }: { text: string; isO
           <img src={data.data} alt={data.name} className="w-[240px] aspect-[4/3] object-cover rounded-[10px] cursor-pointer hover:opacity-90 shadow-sm" />
         </div>
       );
-    } catch (e) {}
+    } catch (e) { }
   }
   if (text.startsWith("FILE::")) {
     try {
@@ -157,7 +160,7 @@ function MessageContent({ text, isOwn, dark, onImageClick }: { text: string; isO
           </div>
         </a>
       );
-    } catch (e) {}
+    } catch (e) { }
   }
 
   return <p className="break-words whitespace-pre-wrap">{text}</p>;
@@ -185,7 +188,8 @@ export default function FriendChatPage() {
     cacheActivity,
     globalOnlineUsers,
     globalTypingUsers,
-    setUnreadCounts
+    setUnreadCounts,
+    setForwardingMessages,
   } = useChat();
 
   const chatState = chats[chatId] || {
@@ -195,7 +199,7 @@ export default function FriendChatPage() {
     loadingFriend: true,
   };
   const { messages, friend, loadingMessages, loadingFriend } = chatState;
-  
+
   const { isReady: isE2EEReady, encrypt, decrypt, announcePublicKey } = useE2EE() as any;
 
   const [input, setInput] = useState("");
@@ -203,7 +207,9 @@ export default function FriendChatPage() {
   const listRef = useRef<HTMLDivElement>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  
+  const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const shareButtonRef = useRef<HTMLButtonElement | null>(null);
+
   // Audio Recording State
   const [isRecording, setIsRecording] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
@@ -215,9 +221,6 @@ export default function FriendChatPage() {
   const [audioPreview, setAudioPreview] = useState<{ data: string; duration: number } | null>(null);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
 
-  // Context Menu State
-  const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null);
-  const [contextMenuPos, setContextMenuPos] = useState<{ x: number; y: number } | null>(null);
 
   // Local Chat Management States
   const [localDeletedMessages, setLocalDeletedMessages] = useState<Set<string>>(new Set());
@@ -227,14 +230,18 @@ export default function FriendChatPage() {
   const [showThemeModal, setShowThemeModal] = useState(false);
   const [isHydrated, setIsHydrated] = useState(false);
 
+  // Multi-select & Forward state
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
   useEffect(() => {
     if (typeof window !== "undefined" && chatId) {
       const deleted = localStorage.getItem(`deleted_${chatId}`);
       if (deleted) setLocalDeletedMessages(new Set(JSON.parse(deleted)));
-      
+
       const cleared = localStorage.getItem(`cleared_${chatId}`);
       if (cleared) setClearedAt(Number(cleared));
-      
+
       const theme = localStorage.getItem(`theme_${chatId}`);
       if (theme) setChatTheme(theme);
 
@@ -335,7 +342,11 @@ export default function FriendChatPage() {
       try {
         const parsed = JSON.parse(cached) as Message[];
         if (Array.isArray(parsed) && parsed.length > 0) {
-          setMessagesForChat(chatId, parsed);
+          const cleared = localStorage.getItem(`cleared_${chatId}`);
+          const clearedTime = cleared ? Number(cleared) : 0;
+          const filtered = parsed.filter(m => new Date(m.ts).getTime() > clearedTime);
+
+          setMessagesForChat(chatId, filtered);
           setLoadingMessagesForChat(chatId, false);
           return;
         }
@@ -366,6 +377,11 @@ export default function FriendChatPage() {
     const handleHistory = async (data: { chatId?: string; messages?: Message[] }) => {
       if (data.chatId !== chatId) return;
       let nextMessages = data.messages || [];
+
+      const cleared = typeof window !== "undefined" ? localStorage.getItem(`cleared_${chatId}`) : null;
+      const clearedTime = cleared ? Number(cleared) : 0;
+      nextMessages = nextMessages.filter(m => new Date(m.ts).getTime() > clearedTime);
+
       nextMessages = await Promise.all(
         nextMessages.map(async (m) => ({ ...m, text: await decrypt(m) }))
       );
@@ -403,12 +419,23 @@ export default function FriendChatPage() {
 
     const handleMessageDeleted = (data: { chatId?: string; messageId?: string }) => {
       if (data.chatId !== chatId || !data.messageId) return;
-      removeMessageFromChat(chatId, data.messageId);
+      const msg = messagesRef.current.find(m => m.id === data.messageId);
+      if (msg) {
+        const deletedMsg = {
+          ...msg,
+          text: '$$DELETED$$',
+          ciphertext: undefined,
+          iv: undefined,
+          encryptedKeys: undefined
+        };
+        updateMessageInChat(chatId, deletedMsg);
+        persistRecentActivity(deletedMsg);
+      }
     };
 
     const handleMessagesRead = (data: { chatId?: string; userId?: string }) => {
       if (data.chatId !== chatId || !data.userId || data.userId === currentUserId) return;
-      
+
       // Update read status for messages in this chat using ref to avoid stale closure
       const next = messagesRef.current.map((msg) => {
         if (String(msg.userId) === String(currentUserId) && msg.status !== "read") {
@@ -472,6 +499,7 @@ export default function FriendChatPage() {
     return () => {
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
       if (recordTimerRef.current) clearInterval(recordTimerRef.current);
+      if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
     };
   }, []);
 
@@ -614,12 +642,20 @@ export default function FriendChatPage() {
   const handleDeleteMessage = (messageId: string) => {
     const msg = messages.find(m => m.id === messageId);
     if (!msg) return;
-    
+
     if (String(msg.userId) === String(currentUserId)) {
       if (socket && chatId) {
         socket.emit("deleteChatMessage", { chatId, messageId });
       }
-      removeMessageFromChat(chatId, messageId);
+      const deletedMsg = {
+        ...msg,
+        text: '$$DELETED$$',
+        ciphertext: undefined,
+        iv: undefined,
+        encryptedKeys: undefined
+      };
+      updateMessageInChat(chatId, deletedMsg);
+      persistRecentActivity(deletedMsg);
     } else {
       const newSet = new Set(localDeletedMessages);
       newSet.add(messageId);
@@ -628,9 +664,6 @@ export default function FriendChatPage() {
         localStorage.setItem(`deleted_${chatId}`, JSON.stringify(Array.from(newSet)));
       }
     }
-    
-    setSelectedMessageId(null);
-    setContextMenuPos(null);
   };
 
   const handleClearChat = () => {
@@ -638,8 +671,95 @@ export default function FriendChatPage() {
     setClearedAt(now);
     if (typeof window !== "undefined") {
       localStorage.setItem(`cleared_${chatId}`, String(now));
+      localStorage.removeItem(storageKey);
     }
+    setMessagesForChat(chatId, []);
     setShowHeaderMenu(false);
+  };
+
+  // ─── Multi-select & Forward handlers ──────────────────────────────────────
+  const enterSelectionMode = (id: string) => {
+    setSelectionMode(true);
+    setSelectedIds(new Set([id]));
+  };
+
+  const toggleSelectMessage = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+        if (next.size === 0) setSelectionMode(false);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const exitSelectionMode = () => {
+    setSelectionMode(false);
+    setSelectedIds(new Set());
+  };
+
+  const handleBulkDelete = () => {
+    const newLocalDeleted = new Set(localDeletedMessages);
+    let localDeletedChanged = false;
+    Array.from(selectedIds).forEach(messageId => {
+      const msg = messages.find(m => m.id === messageId);
+      if (!msg) return;
+      if (String(msg.userId) === String(currentUserId)) {
+        if (socket && chatId) socket.emit("deleteChatMessage", { chatId, messageId });
+        const deletedMsg = {
+          ...msg,
+          text: '$$DELETED$$',
+          ciphertext: undefined,
+          iv: undefined,
+          encryptedKeys: undefined
+        };
+        updateMessageInChat(chatId, deletedMsg);
+        persistRecentActivity(deletedMsg);
+      } else {
+        newLocalDeleted.add(messageId);
+        localDeletedChanged = true;
+      }
+    });
+    if (localDeletedChanged) {
+      setLocalDeletedMessages(newLocalDeleted);
+      if (typeof window !== "undefined") {
+        localStorage.setItem(`deleted_${chatId}`, JSON.stringify(Array.from(newLocalDeleted)));
+      }
+    }
+    exitSelectionMode();
+  };
+
+
+  // Store selected texts in context and let the sidebar list of chats handle targets selection (both desktop & mobile)
+  const handleShareClick = () => {
+    if (selectedIds.size === 0) return;
+    const msgsToForward = messages.filter(m =>
+      selectedIds.has(m.id) &&
+      m.text !== '$$DELETED$$'
+    );
+    if (msgsToForward.length > 0) setForwardingMessages(msgsToForward);
+    exitSelectionMode();
+    const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+    if (isMobile) {
+      router.push('/chat');
+    }
+  };
+
+  // Select All visible messages (Toggles select all / unselect all)
+  const handleSelectAll = () => {
+    const nonDeletedMessages = visibleMessages.filter(m => m.text !== '$$DELETED$$');
+    const allIds = new Set(nonDeletedMessages.map(m => m.id));
+    const allSelected = nonDeletedMessages.length > 0 && nonDeletedMessages.every(m => selectedIds.has(m.id));
+
+    if (allSelected) {
+      setSelectedIds(new Set());
+      setSelectionMode(false);
+    } else {
+      setSelectedIds(allIds);
+    }
   };
 
   const handleChangeTheme = (theme: string) => {
@@ -673,7 +793,7 @@ export default function FriendChatPage() {
     reader.onloadend = () => {
       const base64String = reader.result as string;
       const isImage = file.type.startsWith("image/");
-      
+
       const fileData = {
         name: file.name,
         type: file.type,
@@ -681,13 +801,13 @@ export default function FriendChatPage() {
         data: base64String
       };
 
-      const payload = isImage 
-        ? `IMAGE::${JSON.stringify(fileData)}` 
+      const payload = isImage
+        ? `IMAGE::${JSON.stringify(fileData)}`
         : `FILE::${JSON.stringify(fileData)}`;
-        
+
       sendMediaMessage(payload);
     };
-    
+
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
@@ -711,31 +831,36 @@ export default function FriendChatPage() {
 
   const visibleMessages = useMemo(() => {
     if (!isHydrated) return [];
-    return messages.filter(m => !localDeletedMessages.has(m.id) && new Date(m.ts).getTime() > clearedAt);
-  }, [messages, localDeletedMessages, clearedAt, isHydrated]);
+    return messages.filter(m => {
+      if (localDeletedMessages.has(m.id)) return false;
+      if (new Date(m.ts).getTime() <= clearedAt) return false;
+      if (m.text === "$$DELETED$$" && String(m.userId) === String(currentUserId)) return false;
+      return true;
+    });
+  }, [messages, localDeletedMessages, clearedAt, isHydrated, currentUserId]);
 
   const dateGroups = useMemo(() => {
     const result: { dateLabel: string; groups: { isOwn: boolean; items: Message[] }[] }[] = [];
-    
+
     visibleMessages.forEach((m) => {
       const dateLabel = formatMessageDate(m.ts);
-      
+
       let lastDateGroup = result[result.length - 1];
       if (!lastDateGroup || lastDateGroup.dateLabel !== dateLabel) {
         lastDateGroup = { dateLabel, groups: [] };
         result.push(lastDateGroup);
       }
-      
+
       const isOwn = String(m.userId) === String(currentUserId);
       const lastGroup = lastDateGroup.groups[lastDateGroup.groups.length - 1];
-      
+
       if (lastGroup && lastGroup.isOwn === isOwn) {
         lastGroup.items.push(m);
       } else {
         lastDateGroup.groups.push({ isOwn, items: [m] });
       }
     });
-    
+
     return result;
   }, [visibleMessages, currentUserId]);
 
@@ -743,8 +868,7 @@ export default function FriendChatPage() {
 
   return (
     <div className={`flex h-full flex-col ${bg}`}>
-      {/* Header */}
-      <header className={`h-[72px] shrink-0 border-b flex items-center justify-between px-6 ${dark ? 'bg-zinc-950 border-zinc-800' : 'bg-white border-[#E7E3F3]'}`}>
+      <header className={`h-[72px] shrink-0 border-b flex items-center justify-between px-1 md:px-4 transition-colors duration-200 ${dark ? 'bg-zinc-950 border-zinc-800' : 'bg-white border-[#E7E3F3]'}`}>
         <div className="flex items-center gap-3">
           <button
             onClick={() => router.push("/chat")}
@@ -753,67 +877,100 @@ export default function FriendChatPage() {
           >
             <ArrowLeft size={18} />
           </button>
-          
+
           {displayFriend ? (
-            <ChatAvatar 
-              name={displayFriend.name} 
-              avatarUrl={displayFriend.avatarUrl} 
-              size={42} 
-              online={isOnline} 
+            <ChatAvatar
+              name={displayFriend.name}
+              avatarUrl={displayFriend.avatarUrl}
+              size={42}
+              online={isOnline}
               ring={false}
             />
           ) : (
             <div className="w-[42px] h-[42px] rounded-full bg-zinc-200 dark:bg-zinc-800 animate-pulse" />
           )}
-          
+
           <div>
             {displayFriend ? (
-              <div className={`font-bold text-[16px] tracking-tight font-sans ${dark ? 'text-white' : 'text-[#15131F]'}`}>
+              <div className={`font-bold text-[14px] md:text-[16px] tracking-tight font-sans ${dark ? 'text-white' : 'text-[#15131F]'}`}>
                 {displayFriend.name}
               </div>
             ) : (
               <div className="h-4 w-24 bg-zinc-200 dark:bg-zinc-800 rounded animate-pulse mb-1.5" />
             )}
-            
+
             <div className="flex items-center gap-1.5 mt-0.5">
               <span
                 className={`w-[7px] h-[7px] rounded-full inline-block ${isOnline ? 'bg-[#25C77E]' : (dark ? 'bg-zinc-600' : 'bg-[#8D89A3]')}`}
               />
-              <span className={`text-[12.5px] font-medium ${isOnline ? 'text-[#25C77E]' : muted}`}>
-                {isOnline ? "Active now" : "Offline"}
+              <span className={`text-[10px] md:text-[12px] font-medium ${isOnline ? 'text-[#25C77E]' : muted}`}>
+                {isOnline ? "Online" : ""}
               </span>
             </div>
           </div>
         </div>
 
-        <div className="flex items-center gap-2 relative">
-          {[Phone, Video].map((Icon, i) => (
-            <div
-              key={i}
-              className={`w-[38px] h-[38px] rounded-[11px] flex items-center justify-center cursor-pointer transition-colors ${dark ? 'hover:bg-zinc-800' : 'hover:bg-[#ECE9F8]'}`}
-            >
-              <Icon size={17} className={muted} />
+        <div className="flex items-center gap-1 relative">
+          {selectionMode && (
+            <div className="flex items-center gap-1.5 mr-2">
+              <span className={`hidden sm:inline text-[12px] font-bold mr-1 ${dark ? 'text-zinc-400' : 'text-zinc-500'}`}>
+                {selectedIds.size} Selected
+              </span>
+              {/* Select All */}
+              <button
+                onClick={handleSelectAll}
+                className={`flex items-center px-2.5 py-1.5 rounded-lg text-[11px] font-bold transition-all ${dark ? 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300' : 'bg-[#F3F1FA] hover:bg-[#ECE9F8] text-zinc-500'}`}
+              >
+                All
+              </button>
+              {/* Forward / Share */}
+              <button
+                ref={shareButtonRef}
+                onClick={handleShareClick}
+                disabled={selectedIds.size === 0}
+                className={`w-[34px] h-[34px] rounded-lg flex items-center justify-center transition-colors disabled:opacity-40 ${dark ? 'hover:bg-zinc-800 bg-zinc-900 text-white' : 'hover:bg-[#ECE9F8] bg-[#F3F1FA] text-[#15131F]'}`}
+              >
+                <CornerUpRight size={15} />
+              </button>
+              {/* Delete */}
+              <button
+                onClick={handleBulkDelete}
+                disabled={selectedIds.size === 0}
+                className="w-[34px] h-[34px] rounded-lg flex items-center justify-center transition-colors disabled:opacity-40 bg-red-500/10 hover:bg-red-500/20 text-[#FF5D5D]"
+              >
+                <Trash2 size={15} />
+              </button>
+              {/* Cancel selection */}
+              <button
+                onClick={exitSelectionMode}
+                className={` h-[34px] rounded-lg flex items-center justify-center transition-colors ${dark ? 'hover:bg-zinc-800' : 'hover:bg-[#ECE9F8]'}`}
+              >
+                <X size={15} className={muted} />
+              </button>
+
             </div>
-          ))}
-          <div 
-            className={`w-[38px] h-[38px] rounded-[11px] flex items-center justify-center cursor-pointer transition-colors ${dark ? 'hover:bg-zinc-800' : 'hover:bg-[#ECE9F8]'}`}
+          )}
+
+
+          <div
+            className={` h-[38px] rounded-[11px] flex items-center justify-center cursor-pointer transition-colors ${dark ? 'hover:bg-zinc-800' : 'hover:bg-[#ECE9F8]'}`}
             onClick={() => setShowHeaderMenu(!showHeaderMenu)}
           >
             <MoreVertical size={17} className={muted} />
           </div>
-          
+
           {/* Header Dropdown */}
           {showHeaderMenu && (
             <>
               <div className="fixed inset-0 z-40" onClick={() => setShowHeaderMenu(false)} />
               <div className={`absolute top-12 right-0 z-50 w-48 rounded-xl shadow-lg border py-2 overflow-hidden ${dark ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-[#E7E3F3]'}`}>
-                <div 
+                <div
                   className={`px-4 py-2 text-sm font-medium cursor-pointer transition-colors ${dark ? 'hover:bg-zinc-800 text-white' : 'hover:bg-[#F3F1FA] text-[#15131F]'}`}
                   onClick={() => setShowThemeModal(true)}
                 >
                   Change Chat Theme
                 </div>
-                <div 
+                <div
                   className={`px-4 py-2 text-sm font-medium cursor-pointer transition-colors text-[#FF5D5D] ${dark ? 'hover:bg-zinc-800' : 'hover:bg-[#F3F1FA]'}`}
                   onClick={handleClearChat}
                 >
@@ -826,14 +983,14 @@ export default function FriendChatPage() {
       </header>
 
       {/* Messages */}
-      <div 
-        ref={listRef} 
+      <div
+        ref={listRef}
         className="flex-1 overflow-y-auto px-6 py-6 pb-2 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-[#D8D4EA] dark:[&::-webkit-scrollbar-thumb]:bg-zinc-800 [&::-webkit-scrollbar-thumb]:rounded-full"
         style={
           chatTheme === "midnight" ? { background: 'linear-gradient(to bottom, #0f0c29, #302b63, #24243e)' } :
-          chatTheme === "ocean" ? { background: 'linear-gradient(to bottom, #1cb5e0, #000046)' } :
-          chatTheme === "emerald" ? { background: 'linear-gradient(to bottom, #000000, #0f9b0f)' } :
-          {}
+            chatTheme === "ocean" ? { background: 'linear-gradient(to bottom, #1cb5e0, #000046)' } :
+              chatTheme === "emerald" ? { background: 'linear-gradient(to bottom, #000000, #0f9b0f)' } :
+                {}
         }
       >
         {(!isHydrated || loadingMessages) && visibleMessages.length === 0 ? (
@@ -858,25 +1015,76 @@ export default function FriendChatPage() {
                     {g.items.map((m, i) => {
                       const isFirst = i === 0;
                       const isLast = i === g.items.length - 1;
-                      
+
                       return (
-                        <div 
-                          key={m.id || `${m.userId}-${i}`} 
-                          className={`flex mb-[3px] ${g.isOwn ? "justify-end" : "justify-start"} relative`}
+                        <div
+                          key={m.id || `${m.userId}-${i}`}
+                          className={`flex mb-[3px] items-center transition-colors duration-150 rounded-xl ${selectionMode ? 'gap-3 cursor-pointer px-2 -mx-2' : (g.isOwn ? 'justify-end' : 'justify-start')} relative`}
+                          style={selectionMode && selectedIds.has(m.id) ? { background: dark ? 'rgba(108, 60, 233, 0.14)' : 'rgba(108, 60, 233, 0.07)' } : {}}
                           onContextMenu={(e) => {
                             e.preventDefault();
-                            setSelectedMessageId(m.id);
-                            setContextMenuPos({ x: e.clientX, y: e.clientY });
+                            if (m.text === "$$DELETED$$") return;
+                            if (selectionMode) {
+                              toggleSelectMessage(m.id);
+                            } else {
+                              enterSelectionMode(m.id);
+                            }
+                          }}
+                          onPointerDown={() => {
+                            if (m.text === "$$DELETED$$" || selectionMode) return;
+                            longPressTimerRef.current = setTimeout(() => {
+                              enterSelectionMode(m.id);
+                            }, 420);
+                          }}
+                          onPointerUp={() => {
+                            if (longPressTimerRef.current) {
+                              clearTimeout(longPressTimerRef.current);
+                              longPressTimerRef.current = null;
+                            }
+                          }}
+                          onPointerLeave={() => {
+                            if (longPressTimerRef.current) {
+                              clearTimeout(longPressTimerRef.current);
+                              longPressTimerRef.current = null;
+                            }
+                          }}
+                          onPointerCancel={() => {
+                            if (longPressTimerRef.current) {
+                              clearTimeout(longPressTimerRef.current);
+                              longPressTimerRef.current = null;
+                            }
+                          }}
+                          onClick={() => {
+                            if (selectionMode && m.text !== "$$DELETED$$") {
+                              toggleSelectMessage(m.id);
+                            }
                           }}
                         >
+                          {/* Selection checkbox */}
+                          {selectionMode && (
+                            <div
+                              className={`shrink-0 w-[20px] h-[20px] rounded-full border-2 flex items-center justify-center transition-all duration-200 pointer-events-none ${selectedIds.has(m.id)
+                                ? 'bg-[#6C3CE9] border-[#6C3CE9] shadow-md shadow-indigo-500/40 scale-110'
+                                : dark ? 'border-zinc-600 bg-zinc-900' : 'border-zinc-300 bg-white'
+                                }`}
+                            >
+                              {selectedIds.has(m.id) && <Check size={11} color="white" strokeWidth={3} />}
+                            </div>
+                          )}
                           <div
-                            className={`max-w-[70%] px-3.5 py-2.5 text-[14.5px] leading-[1.45] font-sans transition-all duration-200 ${selectedMessageId === m.id ? 'opacity-80 scale-[0.98]' : ''}`}
+                            className={`max-w-[85%] sm:max-w-[70%] px-3.5 py-2.5 text-[14.5px] leading-[1.45] font-sans transition-all duration-200 ${selectionMode && g.isOwn ? 'ml-auto' : ''}`}
                             style={{
-                              background: g.isOwn 
-                                ? `linear-gradient(135deg, #6C3CE9, #4A22B0)` 
-                                : (dark ? '#18181b' : '#FFFFFF'),
-                              color: g.isOwn ? '#fff' : (dark ? '#fff' : '#15131F'),
-                              border: g.isOwn ? 'none' : `1px solid ${dark ? '#27272a' : '#E7E3F3'}`,
+                              background: m.text === "$$DELETED$$"
+                                ? "transparent"
+                                : g.isOwn
+                                  ? `linear-gradient(135deg, #6C3CE9, #4A22B0)`
+                                  : (dark ? '#18181b' : '#FFFFFF'),
+                              color: m.text === "$$DELETED$$"
+                                ? (dark ? '#71717a' : '#8D89A3')
+                                : g.isOwn ? '#fff' : (dark ? '#fff' : '#15131F'),
+                              border: m.text === "$$DELETED$$"
+                                ? `1px dashed ${dark ? '#3f3f46' : '#C7C4D8'}`
+                                : g.isOwn ? 'none' : `1px solid ${dark ? '#27272a' : '#E7E3F3'}`,
                               borderTopLeftRadius: g.isOwn ? 18 : isFirst ? 18 : 6,
                               borderTopRightRadius: g.isOwn ? (isFirst ? 18 : 6) : 18,
                               borderBottomLeftRadius: g.isOwn ? 18 : isLast ? 4 : 6,
@@ -885,9 +1093,9 @@ export default function FriendChatPage() {
                           >
                             <MessageContent text={m.text} isOwn={g.isOwn} dark={dark} onImageClick={setSelectedImage} />
                             {isLast && (
-                              <div className="flex justify-end items-center gap-[3px] mt-[3px] text-[10.5px]" style={{ opacity: g.isOwn ? 0.75 : 0.5, color: g.isOwn ? '#fff' : (dark ? '#a1a1aa' : '#8D89A3') }}>
+                              <div className="flex justify-end items-center gap-[3px] mt-[3px] text-[10.5px]" style={{ opacity: 0.5, color: dark ? '#a1a1aa' : '#8D89A3' }}>
                                 <span>{new Date(m.ts).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</span>
-                                {g.isOwn && (
+                                {g.isOwn && m.text !== "$$DELETED$$" && (
                                   <span className="ml-[1px]">
                                     {m.status === "read" ? (
                                       <CheckCheck size={13} strokeWidth={2.5} color="#8FF0C7" />
@@ -908,7 +1116,7 @@ export default function FriendChatPage() {
                 ))}
               </div>
             ))}
-            
+
             {friendId && globalTypingUsers[friendId] === chatId && (
               <div className="mb-2 flex justify-start">
                 <div className={`px-3.5 py-2.5 rounded-[18px] rounded-bl-[4px] ${dark ? "bg-[#18181b] border border-[#27272a]" : "bg-[#FFFFFF] border border-[#E7E3F3]"}`}>
@@ -924,7 +1132,7 @@ export default function FriendChatPage() {
       <div className={`px-6 pt-4 pb-5 flex items-center gap-2.5 border-t shrink-0 ${dark ? 'bg-zinc-950 border-zinc-800' : 'bg-white border-[#E7E3F3]'}`}>
         {audioPreview ? (
           <div className="flex-1 flex items-center gap-3">
-            <button 
+            <button
               onClick={discardAudio}
               className={`w-[44px] h-[44px] rounded-full flex items-center justify-center transition-colors ${dark ? 'hover:bg-zinc-800 text-zinc-400 hover:text-[#FF5D5D]' : 'hover:bg-[#ECE9F8] text-zinc-500 hover:text-[#FF5D5D]'}`}
             >
@@ -944,13 +1152,13 @@ export default function FriendChatPage() {
         ) : (
           <>
             <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileSelect} />
-            <div 
+            <div
               onClick={() => fileInputRef.current?.click()}
               className={`w-[38px] h-[38px] rounded-[11px] flex items-center justify-center cursor-pointer transition-colors ${dark ? 'hover:bg-zinc-800' : 'hover:bg-[#ECE9F8]'}`}
             >
               <Paperclip size={18} className={muted} />
             </div>
-            
+
             <div className="flex-1 relative flex items-center">
               {isRecording ? (
                 <div className={`w-full pl-5 pr-5 py-[11px] rounded-[22px] border flex items-center justify-between ${dark ? 'bg-zinc-900 border-zinc-800' : 'bg-[#F3F1FA] border-[#E7E3F3]'}`}>
@@ -980,11 +1188,10 @@ export default function FriendChatPage() {
                     placeholder="Type a message..."
                     rows={1}
                     style={{ resize: 'none' }}
-                    className={`w-full pl-4 pr-[42px] py-[11px] rounded-[22px] outline-none text-[14px] font-sans border transition-colors overflow-y-auto ${
-                      dark 
-                        ? 'bg-zinc-900 border-zinc-800 text-white placeholder-zinc-500 focus:border-zinc-700' 
-                        : 'bg-[#F3F1FA] border-[#E7E3F3] text-[#15131F] placeholder-[#8D89A3] focus:border-[#D8D4EA]'
-                    } [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-zinc-300 dark:[&::-webkit-scrollbar-thumb]:bg-zinc-700`}
+                    className={`w-full pl-4 pr-[42px] py-[11px] rounded-[22px] outline-none text-[14px] font-sans border transition-colors overflow-y-auto ${dark
+                      ? 'bg-zinc-900 border-zinc-800 text-white placeholder-zinc-500 focus:border-zinc-700'
+                      : 'bg-[#F3F1FA] border-[#E7E3F3] text-[#15131F] placeholder-[#8D89A3] focus:border-[#D8D4EA]'
+                      } [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-zinc-300 dark:[&::-webkit-scrollbar-thumb]:bg-zinc-700`}
                   />
                   <div className="absolute right-[12px] bottom-[11px] cursor-pointer">
                     <Smile size={18} className={muted} />
@@ -992,7 +1199,7 @@ export default function FriendChatPage() {
                 </>
               )}
             </div>
-            
+
             {input.trim() ? (
               <button
                 onClick={sendMessage}
@@ -1019,55 +1226,25 @@ export default function FriendChatPage() {
 
       {/* Lightbox Modal */}
       {selectedImage && (
-        <div 
+        <div
           className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm"
           onClick={() => setSelectedImage(null)}
         >
-          <button 
+          <button
             className="absolute top-6 right-6 p-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors"
             onClick={() => setSelectedImage(null)}
           >
             <X size={24} />
           </button>
-          <img 
-            src={selectedImage} 
-            alt="Fullscreen Preview" 
-            className="max-w-[90vw] max-h-[90vh] object-contain rounded-[12px] shadow-2xl transition-transform duration-300 scale-100" 
-            onClick={(e) => e.stopPropagation()} 
+          <img
+            src={selectedImage}
+            alt="Fullscreen Preview"
+            className="max-w-[90vw] max-h-[90vh] object-contain rounded-[12px] shadow-2xl transition-transform duration-300 scale-100"
+            onClick={(e) => e.stopPropagation()}
           />
         </div>
       )}
 
-      {/* Context Menu Overlay */}
-      {selectedMessageId && contextMenuPos && (
-        <div 
-          className="fixed inset-0 z-[110]"
-          onClick={() => {
-            setSelectedMessageId(null);
-            setContextMenuPos(null);
-          }}
-          onContextMenu={(e) => {
-            e.preventDefault();
-            setSelectedMessageId(null);
-            setContextMenuPos(null);
-          }}
-        >
-          <div 
-            className={`absolute flex items-center gap-2 px-3 py-2 rounded-xl shadow-lg cursor-pointer transition-colors backdrop-blur-md ${dark ? 'bg-zinc-800/90 hover:bg-zinc-700/90 border border-zinc-700' : 'bg-white/90 hover:bg-zinc-50 border border-zinc-200'}`}
-            style={{ 
-              top: Math.min(contextMenuPos.y, typeof window !== 'undefined' ? window.innerHeight - 60 : contextMenuPos.y),
-              left: Math.min(contextMenuPos.x, typeof window !== 'undefined' ? window.innerWidth - 120 : contextMenuPos.x)
-            }}
-            onClick={(e) => {
-              e.stopPropagation();
-              handleDeleteMessage(selectedMessageId);
-            }}
-          >
-            <Trash2 size={16} className="text-[#FF5D5D]" />
-            <span className="text-[13.5px] font-medium text-[#FF5D5D]">Delete</span>
-          </div>
-        </div>
-      )}
 
       {/* Theme Modal */}
       {showThemeModal && (
@@ -1081,7 +1258,7 @@ export default function FriendChatPage() {
                 { id: "ocean", name: "Ocean", bg: 'linear-gradient(to bottom, #1cb5e0, #000046)' },
                 { id: "emerald", name: "Emerald", bg: 'linear-gradient(to bottom, #000000, #0f9b0f)' },
               ].map(theme => (
-                <div 
+                <div
                   key={theme.id}
                   onClick={() => handleChangeTheme(theme.id)}
                   className={`cursor-pointer rounded-xl h-20 border-2 transition-all hover:scale-105 flex items-end p-2 ${chatTheme === theme.id ? 'border-[#6C3CE9]' : 'border-transparent'}`}
@@ -1096,6 +1273,7 @@ export default function FriendChatPage() {
           </div>
         </div>
       )}
+
     </div>
   );
 }

@@ -139,4 +139,38 @@ export async function chatMessagesDel(sessionId: string): Promise<void> {
   }
 }
 
+/**
+ * Marks a single message as deleted by ID from a session's Redis list.
+ */
+export async function chatMessageMarkDeleted(sessionId: string, messageId: string): Promise<void> {
+  if (!redis) return;
+  const key = `chat:messages:${sessionId}`;
+  try {
+    const messages = await chatMessageGetAll(sessionId);
+    const updated = messages.map((m) => {
+      if (m.id === messageId) {
+        return {
+          ...m,
+          text: '$$DELETED$$',
+          ciphertext: undefined,
+          iv: undefined,
+          encryptedKeys: undefined,
+        };
+      }
+      return m;
+    });
+    
+    // Clear and rewrite
+    await redis.del(key);
+    for (const m of updated) {
+      await redis.rpush(key, JSON.stringify(m));
+    }
+    // Re-apply safety TTL (24 hours)
+    await redis.expire(key, 86400);
+    console.log(`🗑️  Redis: marked message ${messageId} as deleted in session ${sessionId}`);
+  } catch (err) {
+    console.error(`Redis mark deleted error for key ${key}:`, err);
+  }
+}
+
 export default redis;
