@@ -562,6 +562,7 @@ export default function CommunityPostCard({
       {showShareModal && (
         <ShareModal
           postId={post.id}
+          post={post}
           dark={dark}
           onClose={() => setShowShareModal(false)}
         />

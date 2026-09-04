@@ -1,7 +1,5 @@
 import type { Metadata } from 'next';
-
-const SITE_URL = 'https://dojoclass.space';
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://dojoapp-1.onrender.com/api';
+import { SITE_URL, getPostPreviewUrl, getPostShareUrl, getPublicApiUrl } from '@/lib/publicPostMetadata';
 
 interface Props {
   children: React.ReactNode;
@@ -16,7 +14,7 @@ export async function generateMetadata({
   const { id } = await params;
 
   try {
-    const res = await fetch(`${API_URL}/community/posts/${id}`, {
+    const res = await fetch(`${getPublicApiUrl()}/community/posts/${id}`, {
       next: { revalidate: 60 }, // refresh OG data every 60s
     });
 
@@ -31,17 +29,12 @@ export async function generateMetadata({
 
     const description = post?.content
       ? post.content.slice(0, 157) + (post.content.length > 157 ? '…' : '')
-      : 'Check out this post on DojoClass.';
+      : title;
 
-    // Prefer the first image attachment for og:image;
-    // otherwise Next.js will automatically use the opengraph-image.tsx
-    // in this same directory, which renders the post content as a card.
-    const ogImage =
-      post?.media?.[0]?.type === 'image'
-        ? post.media[0].url
-        : `${SITE_URL}/community/post/${id}/opengraph-image`;
-
-    const postUrl = `${SITE_URL}/community/post/${id}`;
+    // The generated card combines the post image with its text. This avoids
+    // WhatsApp showing only the raw image and makes the preview consistent.
+    const ogImage = getPostPreviewUrl(id);
+    const postUrl = getPostShareUrl(id);
 
     return {
       title,
@@ -65,10 +58,10 @@ export async function generateMetadata({
   } catch {
     return {
       title: 'Post on DojoClass',
-      description: 'Check out this post on DojoClass — the all-in-one student tool.',
+      description: 'DojoClass community post.',
       openGraph: {
         type: 'article',
-        url: `${SITE_URL}/community/post/${id}`,
+        url: getPostShareUrl(id),
         siteName: 'DojoClass',
         images: [`${SITE_URL}/opengraph-image`],
       },

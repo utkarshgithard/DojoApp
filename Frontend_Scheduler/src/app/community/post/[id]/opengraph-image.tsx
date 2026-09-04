@@ -1,13 +1,11 @@
 import { ImageResponse } from 'next/og';
 import { readFileSync } from 'fs';
 import { join } from 'path';
+import { getPublicApiUrl } from '@/lib/publicPostMetadata';
 
 export const runtime = 'nodejs';
 export const size = { width: 1200, height: 630 };
 export const contentType = 'image/png';
-
-const API_URL =
-  process.env.NEXT_PUBLIC_API_URL || 'https://dojoapp-1.onrender.com/api';
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -27,7 +25,7 @@ export default async function Image({ params }: Props) {
   let isVideo = false;
 
   try {
-    const res = await fetch(`${API_URL}/community/posts/${id}`, {
+    const res = await fetch(`${getPublicApiUrl()}/community/posts/${id}`, {
       next: { revalidate: 60 },
     });
     if (res.ok) {
@@ -119,6 +117,26 @@ export default async function Image({ params }: Props) {
             </div>
           )}
 
+          {/* Post description overlay so media shares retain context */}
+          {displayContent && (
+            <div
+              style={{
+                position: 'absolute',
+                bottom: 92,
+                left: 48,
+                right: 48,
+                color: 'rgba(255,255,255,0.96)',
+                fontSize: displayContent.length > 120 ? 25 : 31,
+                fontWeight: 600,
+                lineHeight: 1.25,
+                textShadow: '0 2px 8px rgba(0,0,0,0.65)',
+                display: 'flex',
+              }}
+            >
+              {displayContent}
+            </div>
+          )}
+
           {/* Bottom: favicon + author name */}
           <div
             style={{
@@ -196,7 +214,7 @@ export default async function Image({ params }: Props) {
               paddingLeft: 32,
             }}
           >
-            {displayContent || 'Check out this post on DojoClass'}
+            {displayContent || ' '}
           </p>
         </div>
 
