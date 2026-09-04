@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="800" viewBox="0 0 800 800">
+  <defs>
+    <pattern id="doodle" width="200" height="200" patternUnits="userSpaceOnUse">
+      <g fill="none" stroke="#E8E0D8" stroke-width="1.2" stroke-linecap="round" opacity="0.6">
+        <path d="M20 40 Q30 20 40 40 T60 40"/>
+        <circle cx="120" cy="50" r="12"/>
+        <path d="M30 120 L50 140 L30 160"/>
+        <path d="M110 110 Q130 100 150 110 Q130 130 110 110"/>
+      </g>
+    </pattern>
+  </defs>
+  <rect width="800" height="800" fill="#F7F3EF"/>
+  <rect width="800" height="800" fill="url(#doodle)"/>
+  <g opacity="0.08">
+    <circle cx="200" cy="300" r="120" fill="#FF8A65"/>
+    <circle cx="600" cy="600" r="180" fill="#A5D6A7"/>
+    <circle cx="500" cy="150" r="90" fill="#90CAF9"/>
+  </g>
+</svg>

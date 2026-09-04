@@ -125,7 +125,14 @@ function CustomAudioPlayer({ src, isOwn, dark, duration }: { src: string; isOwn:
 
 function MessageContent({ text, isOwn, dark, onImageClick }: { text: string; isOwn: boolean; dark: boolean; onImageClick?: (url: string) => void }) {
   if (text === "$$DELETED$$") {
-    return <span className="italic opacity-60">{isOwn ? "You deleted this message" : "This message was deleted"}</span>;
+    return (
+      <span className="italic opacity-75">
+        {isOwn ? "You deleted this message" : "This message was deleted"}
+      </span>
+    );
+  }
+  if (text.startsWith("__E2EE_ERR__")) {
+    return <span className="italic opacity-75">This message was deleted</span>;
   }
   if (text.startsWith("AUDIO::")) {
     try {
@@ -169,11 +176,18 @@ function MessageContent({ text, isOwn, dark, onImageClick }: { text: string; isO
 export default function FriendChatPage() {
   const params = useParams();
   const router = useRouter();
-  const chatId = params?.id as string;
+  const routeChatId = params?.id as string;
   const { socket } = useSocket() as any;
   const { userId: currentUserId } = useAuth() as any;
   const { friends: globalFriends } = useAttendance() as any;
   const { darkMode } = useDarkMode() as any;
+  // Keep the canonical pair ID for sockets/storage while exposing only the
+  // other user's ID in the browser URL.
+  const chatId = useMemo(() => {
+    if (!routeChatId || routeChatId.startsWith("friend_") || !currentUserId) return routeChatId;
+    const sortedIds = [currentUserId, routeChatId].sort();
+    return `friend_${sortedIds[0]}_${sortedIds[1]}`;
+  }, [routeChatId, currentUserId]);
   const {
     activeChatId,
     setActiveChatId,
@@ -251,16 +265,21 @@ export default function FriendChatPage() {
 
   const storageKey = useMemo(() => (chatId ? `friend_chat_${chatId}` : ""), [chatId]);
   const dark = darkMode;
+  const effectiveChatTheme = chatTheme === "default"
+    ? (dark ? "dark-waves" : "doodle-light")
+    : chatTheme;
   const border = dark ? "border-zinc-800" : "border-zinc-200";
   const muted = dark ? "text-zinc-400" : "text-zinc-500";
   const bg = dark ? "bg-black" : "bg-white";
 
   const friendId = useMemo(() => {
-    if (!chatId || !currentUserId) return null;
-    const parts = chatId.split("_");
-    if (parts.length !== 3 || parts[0] !== "friend") return null;
+    if (!routeChatId) return null;
+    if (!routeChatId.startsWith("friend_")) return routeChatId;
+    if (!currentUserId) return null;
+    const parts = routeChatId.split("_");
+    if (parts.length !== 3) return null;
     return parts[1] === currentUserId ? parts[2] : parts[1];
-  }, [chatId, currentUserId]);
+  }, [routeChatId, currentUserId]);
 
   const persistRecentActivity = useCallback((message: Message) => {
     if (typeof window === "undefined" || !chatId) return;
@@ -293,15 +312,15 @@ export default function FriendChatPage() {
 
   useEffect(() => {
     if (!chatId) return;
-    const parts = chatId.split("_");
+    const parts = routeChatId.split("_");
     if (parts.length === 3 && parts[0] === "friend") {
       const sorted = [parts[1], parts[2]].sort();
       const canonicalId = `friend_${sorted[0]}_${sorted[1]}`;
-      if (canonicalId !== chatId) {
+      if (canonicalId !== routeChatId) {
         router.replace(`/chat/${canonicalId}`);
       }
     }
-  }, [chatId, router]);
+  }, [routeChatId, router]);
 
   useEffect(() => {
     if (!friendId || !chatId) return;
@@ -382,9 +401,10 @@ export default function FriendChatPage() {
       const clearedTime = cleared ? Number(cleared) : 0;
       nextMessages = nextMessages.filter(m => new Date(m.ts).getTime() > clearedTime);
 
-      nextMessages = await Promise.all(
-        nextMessages.map(async (m) => ({ ...m, text: await decrypt(m) }))
-      );
+      nextMessages = await Promise.all(nextMessages.map(async (m) => ({
+        ...m,
+        text: m.text === "$$DELETED$$" ? "$$DELETED$$" : await decrypt(m),
+      })));
       setMessagesForChat(chatId, nextMessages);
       if (nextMessages.length > 0) {
         persistRecentActivity(nextMessages[nextMessages.length - 1]);
@@ -834,7 +854,6 @@ export default function FriendChatPage() {
     return messages.filter(m => {
       if (localDeletedMessages.has(m.id)) return false;
       if (new Date(m.ts).getTime() <= clearedAt) return false;
-      if (m.text === "$$DELETED$$" && String(m.userId) === String(currentUserId)) return false;
       return true;
     });
   }, [messages, localDeletedMessages, clearedAt, isHydrated, currentUserId]);
@@ -987,10 +1006,13 @@ export default function FriendChatPage() {
         ref={listRef}
         className="flex-1 overflow-y-auto px-6 py-6 pb-2 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-[#D8D4EA] dark:[&::-webkit-scrollbar-thumb]:bg-zinc-800 [&::-webkit-scrollbar-thumb]:rounded-full"
         style={
-          chatTheme === "midnight" ? { background: 'linear-gradient(to bottom, #0f0c29, #302b63, #24243e)' } :
-            chatTheme === "ocean" ? { background: 'linear-gradient(to bottom, #1cb5e0, #000046)' } :
-              chatTheme === "emerald" ? { background: 'linear-gradient(to bottom, #000000, #0f9b0f)' } :
-                {}
+          effectiveChatTheme === "doodle-light" ? { backgroundImage: 'url("/chat-wallpapers/doodle-light.svg")' } :
+            effectiveChatTheme === "chat-bubbles" ? { backgroundImage: 'url("/chat-wallpapers/chat-bubbles.svg")' } :
+              effectiveChatTheme === "dark-waves" ? { backgroundImage: 'url("/chat-wallpapers/dark-waves.svg")' } :
+                effectiveChatTheme === "midnight" ? { background: 'linear-gradient(to bottom, #0f0c29, #302b63, #24243e)' } :
+                  effectiveChatTheme === "ocean" ? { background: 'linear-gradient(to bottom, #1cb5e0, #000046)' } :
+                    effectiveChatTheme === "emerald" ? { background: 'linear-gradient(to bottom, #000000, #0f9b0f)' } :
+                      {}
         }
       >
         {(!isHydrated || loadingMessages) && visibleMessages.length === 0 ? (
@@ -1075,9 +1097,9 @@ export default function FriendChatPage() {
                             className={`max-w-[85%] sm:max-w-[70%] px-3.5 py-2.5 text-[14.5px] leading-[1.45] font-sans transition-all duration-200 ${selectionMode && g.isOwn ? 'ml-auto' : ''}`}
                             style={{
                               background: m.text === "$$DELETED$$"
-                                ? "transparent"
+                                ? (dark ? 'rgba(63, 63, 70, 0.7)' : 'rgba(243, 241, 250, 0.9)')
                                 : g.isOwn
-                                  ? `linear-gradient(135deg, #6C3CE9, #4A22B0)`
+                                  ? `linear-gradient(135deg, #8B5CF6, #6D28D9)`
                                   : (dark ? '#18181b' : '#FFFFFF'),
                               color: m.text === "$$DELETED$$"
                                 ? (dark ? '#71717a' : '#8D89A3')
@@ -1093,7 +1115,13 @@ export default function FriendChatPage() {
                           >
                             <MessageContent text={m.text} isOwn={g.isOwn} dark={dark} onImageClick={setSelectedImage} />
                             {isLast && (
-                              <div className="flex justify-end items-center gap-[3px] mt-[3px] text-[10.5px]" style={{ opacity: 0.5, color: dark ? '#a1a1aa' : '#8D89A3' }}>
+                              <div
+                                className="flex justify-end items-center gap-[3px] mt-[3px] text-[10.5px] font-medium"
+                                style={{
+                                  opacity: g.isOwn ? 0.9 : 0.7,
+                                  color: g.isOwn ? '#F5F3FF' : (dark ? '#D4D4D8' : '#6B6780'),
+                                }}
+                              >
                                 <span>{new Date(m.ts).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</span>
                                 {g.isOwn && m.text !== "$$DELETED$$" && (
                                   <span className="ml-[1px]">
@@ -1253,7 +1281,10 @@ export default function FriendChatPage() {
             <h3 className={`text-lg font-bold mb-4 ${dark ? 'text-white' : 'text-[#15131F]'}`}>Select Chat Theme</h3>
             <div className="grid grid-cols-2 gap-3">
               {[
-                { id: "default", name: "Default", bg: dark ? '#000' : '#fff' },
+                { id: "default", name: "Auto", bg: dark ? 'url("/chat-wallpapers/dark-waves.svg")' : 'url("/chat-wallpapers/doodle-light.svg")' },
+                { id: "doodle-light", name: "Doodle Light", bg: 'url("/chat-wallpapers/doodle-light.svg")' },
+                { id: "chat-bubbles", name: "Chat Bubbles", bg: 'url("/chat-wallpapers/chat-bubbles.svg")' },
+                { id: "dark-waves", name: "Dark Waves", bg: 'url("/chat-wallpapers/dark-waves.svg")' },
                 { id: "midnight", name: "Midnight", bg: 'linear-gradient(to bottom, #0f0c29, #302b63, #24243e)' },
                 { id: "ocean", name: "Ocean", bg: 'linear-gradient(to bottom, #1cb5e0, #000046)' },
                 { id: "emerald", name: "Emerald", bg: 'linear-gradient(to bottom, #000000, #0f9b0f)' },

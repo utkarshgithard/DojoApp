@@ -19,6 +19,16 @@ export const calculateHotScore = (likeCount: number, createdAt: Date): number =>
 
 const POSTS_PER_PAGE = 10;
 
+const canViewCommunity = async (communityId: string, visibility: string, userId?: string) => {
+  if (visibility === 'public') return true;
+  if (!userId) return false;
+  const membership = await prisma.communityMember.findUnique({
+    where: { communityId_userId: { communityId, userId } },
+    select: { userId: true },
+  });
+  return !!membership;
+};
+
 // ── Feed ─────────────────────────────────────────────────────────────────────
 
 export const getPosts = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
@@ -67,7 +77,7 @@ export const getPosts = async (req: AuthenticatedRequest, res: Response): Promis
         _count: { select: { likes: true, comments: true } },
         likes: userId ? { where: { userId }, select: { userId: true } } : undefined,
         community: {
-          select: { id: true, name: true, slug: true, avatarUrl: true }
+          select: { id: true, name: true, slug: true, avatarUrl: true, visibility: true }
         }
       },
     });
@@ -124,13 +134,18 @@ export const getPostById = async (req: AuthenticatedRequest, res: Response): Pro
         _count: { select: { likes: true, comments: true } },
         likes: userId ? { where: { userId }, select: { userId: true } } : undefined,
         community: {
-          select: { id: true, name: true, slug: true, avatarUrl: true }
+          select: { id: true, name: true, slug: true, avatarUrl: true, visibility: true }
         }
       },
     });
 
     if (!post) {
       res.status(404).json({ error: 'Post not found' });
+      return;
+    }
+
+    if (post.community && !(await canViewCommunity(post.community.id, post.community.visibility, userId))) {
+      res.status(403).json({ error: 'You must be a member to view this community post' });
       return;
     }
 
@@ -1034,6 +1049,18 @@ export const getComments = async (req: AuthenticatedRequest, res: Response): Pro
     const postId = req.params.id as string;
     const limit = parseInt(req.query.limit as string) || 20;
     const cursor = req.query.cursor as string | undefined;
+    const post = await prisma.post.findUnique({
+      where: { id: postId },
+      select: { community: { select: { id: true, visibility: true } } },
+    });
+    if (!post) {
+      res.status(404).json({ error: 'Post not found' });
+      return;
+    }
+    if (post.community && !(await canViewCommunity(post.community.id, post.community.visibility, req.userId))) {
+      res.status(403).json({ error: 'You must be a member to view this community post' });
+      return;
+    }
 
     const topLevelComments = await prisma.postComment.findMany({
       where: { postId, parentId: null },
@@ -1237,10 +1264,23 @@ export const getUserPosts = async (req: AuthenticatedRequest, res: Response): Pr
     const currentUserId = req.userId;
     const targetUserId = req.params.userId as string;
     const cursor = req.query.cursor as string | undefined;
+    const visibleCommunityIds = currentUserId
+      ? (await prisma.communityMember.findMany({
+          where: { userId: currentUserId },
+          select: { communityId: true },
+        })).map((membership) => membership.communityId)
+      : [];
 
     const [posts, followRecord] = await Promise.all([
       prisma.post.findMany({
-        where: { userId: targetUserId },
+        where: {
+          userId: targetUserId,
+          OR: [
+            { communityId: null },
+            { community: { visibility: 'public' } },
+            ...(visibleCommunityIds.length > 0 ? [{ communityId: { in: visibleCommunityIds } }] : []),
+          ],
+        },
         take: POSTS_PER_PAGE + 1,
         ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
         orderBy: { createdAt: 'desc' },

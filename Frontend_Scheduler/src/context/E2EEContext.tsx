@@ -295,6 +295,7 @@ export function E2EEProvider({ children }: { children: React.ReactNode }) {
 
   const decrypt = useCallback(
     async (msg: Message): Promise<string> => {
+      if (msg.text === '$$DELETED$$') return '$$DELETED$$';
       if (!msg.ciphertext || !msg.iv || !msg.encryptedKeys) return msg.text;
 
       let encryptedKeys = msg.encryptedKeys;
@@ -347,4 +348,3 @@ export function E2EEProvider({ children }: { children: React.ReactNode }) {
     </E2EEContext.Provider>
   );
 }
-

@@ -164,9 +164,7 @@ export default function ChatLayout({ children }: { children: React.ReactNode }) 
       });
       return;
     }
-    const sortedIds = [currentUserId, friend.id].sort();
-    const chatId = `friend_${sortedIds[0]}_${sortedIds[1]}`;
-    router.push(`/chat/${chatId}`);
+    router.push(`/chat/${friend.id}`);
   };
 
   const handleSendForwardFromLayout = async () => {

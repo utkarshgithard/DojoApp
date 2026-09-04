@@ -416,6 +416,7 @@ export const removeMember = async (req: AuthenticatedRequest, res: Response): Pr
 // ── Get Members ───────────────────────────────────────────────────────────────
 export const getCommunityMembers = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
+    const userId = req.userId;
     const slug = req.params.slug as string;
     const cursor = req.query.cursor as string | undefined;
 
@@ -423,6 +424,20 @@ export const getCommunityMembers = async (req: AuthenticatedRequest, res: Respon
     if (!community) {
       res.status(404).json({ error: 'Community not found' });
       return;
+    }
+    if (community.visibility !== 'public') {
+      if (!userId) {
+        res.status(403).json({ error: 'Login required to view private community members' });
+        return;
+      }
+      const membership = await prisma.communityMember.findUnique({
+        where: { communityId_userId: { communityId: community.id, userId } },
+        select: { userId: true },
+      });
+      if (!membership) {
+        res.status(403).json({ error: 'You must be a member to view private community members' });
+        return;
+      }
     }
 
     const members = await prisma.communityMember.findMany({

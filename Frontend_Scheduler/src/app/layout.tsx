@@ -5,6 +5,7 @@ import ClientProviders from "@/components/ClientProviders";
 import { cn } from "@/lib/utils";
 import JsonLd from "@/components/JsonLd";
 import ServiceWorkerRegistrar from "@/components/ServiceWorkerRegistrar";
+import InstallAppPrompt from "@/components/InstallAppPrompt";
 
 const geist = Geist({ subsets: ["latin"], variable: "--font-sans" });
 const playfair = Playfair_Display({
@@ -109,6 +110,7 @@ export default function RootLayout({
       </head>
       <body className={inter.className}>
         <ServiceWorkerRegistrar />
+        <InstallAppPrompt />
         <JsonLd />
         <ClientProviders>
           {children}

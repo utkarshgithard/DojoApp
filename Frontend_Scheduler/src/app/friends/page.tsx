@@ -480,8 +480,8 @@ export default function FriendsPage() {
           </div>
         </div>
 
-        {/* ── DESKTOP ONLY: Horizontal Suggestion Strip ON TOP ─────── */}
-        <div className="hidden md:block">
+        {/* ── Suggestions above the friends list on every screen size ── */}
+        <div className="pt-2">
           <SuggestedFriendsStrip
             suggestedUsers={suggestedUsers}
             suggestionsLoading={suggestionsLoading}
@@ -654,10 +654,7 @@ export default function FriendsPage() {
                     <div className="flex items-center gap-2 shrink-0">
                       <button
                         onClick={() => {
-                          const currentUserId = userDetails?.id || '';
-                          const sortedIds = [currentUserId, friend.id].sort();
-                          const chatId = `friend_${sortedIds[0]}_${sortedIds[1]}`;
-                          router.push(`/chat/${chatId}`);
+                          router.push(`/chat/${friend.id}`);
                         }}
                         className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-[12.5px] font-semibold border transition-all ${dark
                           ? 'border-indigo-500/30 text-indigo-400 bg-indigo-500/10 hover:bg-indigo-500/20'
@@ -681,22 +678,6 @@ export default function FriendsPage() {
               </div>
             )}
           </div>
-        </div>
-
-        {/* ── MOBILE ONLY: Horizontal Suggestion Strip AT THE BOTTOM ── */}
-        <div className="md:hidden pt-2">
-          <SuggestedFriendsStrip
-            suggestedUsers={suggestedUsers}
-            suggestionsLoading={suggestionsLoading}
-            dark={dark}
-            onAdd={handleAddById}
-            onDismiss={dismissSuggestion}
-            addingById={addingById}
-            onRefresh={loadSuggestions}
-            onLoadMore={loadMoreSuggestedUsers}
-            hasMore={suggestionsHasMore}
-            loadingMore={contextSuggestionsLoading}
-          />
         </div>
 
       </div>
