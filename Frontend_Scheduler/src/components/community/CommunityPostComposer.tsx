@@ -506,7 +506,6 @@ export default function CommunityPostComposer({
         const formData = new FormData();
         formData.append('video', fileToUpload, fileToUpload.name);
         const { data } = await API.post('/community/media/video', formData, {
-          headers: { 'Content-Type': 'multipart/form-data' },
           onUploadProgress: (event) => {
             if (event.total) {
               setAttachments((prev) =>
@@ -554,9 +553,13 @@ export default function CommunityPostComposer({
         )
       );
     } catch (err: any) {
+      console.error('[CommunityPostComposer] Media upload failed', err);
+      const serverMessage = err?.response?.data?.error;
       setAttachments((prev) =>
         prev.map((a) =>
-          a.id === attachment.id ? { ...a, uploading: false, error: 'Upload failed' } : a
+          a.id === attachment.id
+            ? { ...a, uploading: false, error: serverMessage || 'Upload failed' }
+            : a
         )
       );
     }

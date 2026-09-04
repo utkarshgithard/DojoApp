@@ -188,17 +188,10 @@ export default function CommunityPage() {
                   <ArrowLeft size={19} />
                 </button>
                 <div className="flex items-center gap-2.5">
-                  <div
-                    className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-md ${
-                      dark ? 'bg-indigo-600/20 text-indigo-400 ring-1 ring-indigo-500/30' : 'bg-indigo-50 text-indigo-600 ring-1 ring-indigo-200'
-                    }`}
-                  >
-                    <Users2 size={21} />
-                  </div>
                   <div>
                     <div className="flex items-center gap-2">
                       <h1 className={`text-[18px] sm:text-[21px] font-extrabold tracking-tight ${dark ? 'text-white' : 'text-zinc-900'}`}>
-                        Community Feed
+                        Community
                       </h1>
                     </div>
                   </div>
