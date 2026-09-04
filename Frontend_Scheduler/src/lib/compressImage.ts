@@ -40,7 +40,9 @@ export async function compressImage(
   if (skip) return file;
 
   // Skip very small files — no point re-encoding
-  if (file.size < 100 * 1024) return file;
+  // AVIF is not reliably supported by Next.js ImageResponse/social crawlers,
+  // so let the canvas normalize it even when the original is small.
+  if (file.size < 100 * 1024 && file.type !== 'image/avif') return file;
 
   return new Promise((resolve, reject) => {
     const img = new Image();

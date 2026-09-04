@@ -1,9 +1,7 @@
 import { ImageResponse } from 'next/og';
-import { readFileSync } from 'fs';
-import { join } from 'path';
 import { getPublicApiUrl } from '@/lib/publicPostMetadata';
 
-export const runtime = 'nodejs';
+export const runtime = 'edge';
 export const size = { width: 1200, height: 630 };
 export const contentType = 'image/png';
 
@@ -13,10 +11,6 @@ interface Props {
 
 export default async function Image({ params }: Props) {
   const { id } = await params;
-
-  // Read favicon once at build/request time
-  const faviconData = readFileSync(join(process.cwd(), 'public', 'favicon.png'));
-  const faviconBase64 = `data:image/png;base64,${faviconData.toString('base64')}`;
 
   // Fetch post data
   let authorName = 'DojoClass User';
@@ -59,11 +53,21 @@ export default async function Image({ params }: Props) {
       const mediaResponse = await fetch(mediaUrl, { cache: 'no-store' });
       const responseContentType = mediaResponse.headers.get('content-type') || '';
 
-      if (mediaResponse.ok && responseContentType.startsWith('image/')) {
-        const mediaBuffer = Buffer.from(await mediaResponse.arrayBuffer());
-        mediaDataUrl = `data:${responseContentType};base64,${mediaBuffer.toString('base64')}`;
+      const canEmbedMedia =
+        responseContentType === 'image/jpeg' ||
+        responseContentType === 'image/png' ||
+        responseContentType === 'image/webp' ||
+        responseContentType === 'image/gif';
+
+      if (mediaResponse.ok && canEmbedMedia) {
+        const mediaBytes = new Uint8Array(await mediaResponse.arrayBuffer());
+        let binary = '';
+        for (let index = 0; index < mediaBytes.length; index += 8192) {
+          binary += String.fromCharCode(...mediaBytes.subarray(index, index + 8192));
+        }
+        mediaDataUrl = `data:${responseContentType};base64,${btoa(binary)}`;
         console.info(
-          `[opengraph-image] Media loaded for ${id}: ${responseContentType}, ${mediaBuffer.byteLength} bytes`
+          `[opengraph-image] Media loaded for ${id}: ${responseContentType}, ${mediaBytes.byteLength} bytes`
         );
       } else {
         console.error(
@@ -152,7 +156,7 @@ export default async function Image({ params }: Props) {
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={faviconBase64}
+              src="https://dojoclass.space/favicon.png"
               style={{ width: 36, height: 36, objectFit: 'contain', opacity: 0.9 }}
             />
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -189,7 +193,7 @@ export default async function Image({ params }: Props) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 40 }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={faviconBase64}
+            src="https://dojoclass.space/favicon.png"
             style={{ width: 44, height: 44, objectFit: 'contain' }}
           />
           <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: 22, fontWeight: 600, letterSpacing: 0.5 }}>
