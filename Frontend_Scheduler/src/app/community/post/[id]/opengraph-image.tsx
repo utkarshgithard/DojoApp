@@ -28,6 +28,7 @@ export default async function Image({ params }: Props) {
     const res = await fetch(`${getPublicApiUrl()}/community/posts/${id}`, {
       next: { revalidate: 60 },
     });
+    console.info(`[opengraph-image] Post fetch ${res.status} for ${id}`);
     if (res.ok) {
       const data = await res.json();
       const post = data.post;
@@ -35,36 +36,51 @@ export default async function Image({ params }: Props) {
       const firstMedia = post?.media?.[0];
       if (firstMedia?.type === 'image') {
         // Use image directly
-        mediaUrl = firstMedia.url;
+        mediaUrl = typeof firstMedia.url === 'string' ? firstMedia.url : null;
         isVideo = false;
       } else if (firstMedia?.type === 'video') {
         // Use the pre-generated first-frame thumbnail stored in DB
-        mediaUrl = firstMedia.thumbnailUrl ?? null;
+        mediaUrl = typeof firstMedia.thumbnailUrl === 'string' ? firstMedia.thumbnailUrl : null;
         isVideo = true;
       }
+      console.info(
+        `[opengraph-image] Selected media for ${id}: ${firstMedia?.type ?? 'none'} (${mediaUrl ? 'url available' : 'no usable URL'})`
+      );
     }
-  } catch {
+  } catch (error) {
+    console.error(`[opengraph-image] Post fetch threw an error for ${id}`, error);
     // Use defaults on failure
   }
 
   // Embed storage media in the generated PNG. ImageResponse can otherwise
   // omit remote images when the social crawler requests this route.
   if (mediaUrl) {
-    const mediaResponse = await fetch(mediaUrl, { cache: 'no-store' });
-    if (mediaResponse.ok) {
-      const contentType = mediaResponse.headers.get('content-type') || 'image/jpeg';
-      const mediaBuffer = Buffer.from(await mediaResponse.arrayBuffer());
-      mediaDataUrl = `data:${contentType};base64,${mediaBuffer.toString('base64')}`;
-    } else {
-      console.error(`[opengraph-image] Media fetch failed with ${mediaResponse.status}`);
+    try {
+      const mediaResponse = await fetch(mediaUrl, { cache: 'no-store' });
+      const responseContentType = mediaResponse.headers.get('content-type') || '';
+
+      if (mediaResponse.ok && responseContentType.startsWith('image/')) {
+        const mediaBuffer = Buffer.from(await mediaResponse.arrayBuffer());
+        mediaDataUrl = `data:${responseContentType};base64,${mediaBuffer.toString('base64')}`;
+        console.info(
+          `[opengraph-image] Media loaded for ${id}: ${responseContentType}, ${mediaBuffer.byteLength} bytes`
+        );
+      } else {
+        console.error(
+          `[opengraph-image] Media fetch failed with ${mediaResponse.status} (${responseContentType || 'unknown content type'})`
+        );
+      }
+    } catch (error) {
+      console.error('[opengraph-image] Media fetch threw an error', error);
     }
   }
 
-  const authorCaption = `See what ${authorName} is saying about this on DojoClass`;
+  const authorCaption = `Read this post by ${authorName} on DojoClass`;
 
   // Keep uploaded media in its own section instead of applying a branded
   // background or placing the post text over the user's image.
   if (mediaDataUrl) {
+    console.info(`[opengraph-image] Rendering image preview for ${id}`);
     return new ImageResponse(
       (
         <div
@@ -155,6 +171,7 @@ export default async function Image({ params }: Props) {
   }
 
   // Text-only post → keep the preview generic and do not expose post content.
+  console.info(`[opengraph-image] Rendering text-only preview for ${id}`);
   return new ImageResponse(
     (
       <div

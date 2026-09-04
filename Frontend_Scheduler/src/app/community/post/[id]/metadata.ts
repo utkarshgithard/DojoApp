@@ -25,8 +25,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
     // Trim content for description (max 160 chars)
     const description = post?.author?.name
-      ? `See what ${post.author.name} is saying about this on DojoClass.`
-      : 'See what this user is saying about this on DojoClass.';
+      ? `Read this post by ${post.author.name} on DojoClass.`
+      : 'Read this post by this user on DojoClass.';
 
     const ogImage = getPostPreviewUrl(id);
     const postUrl = getPostShareUrl(id);
