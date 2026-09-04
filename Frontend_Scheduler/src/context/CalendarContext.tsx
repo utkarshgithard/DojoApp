@@ -66,16 +66,31 @@ export const CalendarProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       if (isAuthenticated && token) {
         try {
           const res = await API.get('/calendar');
-          const data = transformDbTasks(res.data);
+          const tasksArray = Array.isArray(res.data) ? res.data : [];
+          const data = transformDbTasks(tasksArray);
           setCalendarData(data);
         } catch (err) {
           console.error("Failed to load tasks from DB:", err);
+          const stored = localStorage.getItem("master_calendar_data");
+          if (stored) {
+            try {
+              setCalendarData(JSON.parse(stored));
+            } catch {
+              setCalendarData({});
+            }
+          } else {
+            setCalendarData({});
+          }
         }
       } else {
         // Fallback for guests
         const stored = localStorage.getItem("master_calendar_data");
         if (stored) {
-          setCalendarData(JSON.parse(stored));
+          try {
+            setCalendarData(JSON.parse(stored));
+          } catch {
+            setCalendarData({});
+          }
         }
       }
       setMounted(true);

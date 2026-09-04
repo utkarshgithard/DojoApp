@@ -1,8 +1,13 @@
-import axios from 'axios';
+import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
 import { auth } from './firebase';
 
+const configuredApiUrl = process.env.NEXT_PUBLIC_BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+const apiBaseUrl = configuredApiUrl.replace(/\/+$/, '').endsWith('/api')
+  ? configuredApiUrl.replace(/\/+$/, '')
+  : `${configuredApiUrl.replace(/\/+$/, '')}/api`;
+
 const API = axios.create({
-  baseURL: `${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5000'}/api`,
+  baseURL: apiBaseUrl,
 });
 
 // Wait for Firebase to emit the first auth state (resolves once initialization is complete)
@@ -36,10 +41,22 @@ API.interceptors.request.use(async (req) => {
 // Automatically handle expired tokens by refreshing via Firebase and retrying
 API.interceptors.response.use(
   (response) => response,
-  async (error) => {
+  async (error: AxiosError) => {
     const originalRequest = error.config;
-    if (error.response?.status === 401 && !originalRequest._retry) {
-      originalRequest._retry = true;
+    const method = originalRequest?.method?.toUpperCase();
+    const retryCount = Number((originalRequest as (InternalAxiosRequestConfig & { _getRetryCount?: number }) | undefined)?._getRetryCount || 0);
+
+    // GET requests are safe to retry during brief backend/database reconnects.
+    if (originalRequest && method === 'GET' && retryCount < 2 && (!error.response || error.response.status >= 500)) {
+      const retryRequest = originalRequest as InternalAxiosRequestConfig & { _getRetryCount?: number };
+      retryRequest._getRetryCount = retryCount + 1;
+      await new Promise((resolve) => setTimeout(resolve, 300 * 2 ** retryCount));
+      return API(retryRequest);
+    }
+
+    const authRetryRequest = originalRequest as (InternalAxiosRequestConfig & { _retry?: boolean }) | undefined;
+    if (error.response?.status === 401 && authRetryRequest && !authRetryRequest._retry) {
+      authRetryRequest._retry = true;
       try {
         // Wait for Firebase to be ready before calling auth.currentUser
         await firebaseReady;
@@ -48,9 +65,9 @@ API.interceptors.response.use(
           console.log('🔄 Axios Interceptor: Token expired (401). Refreshing ID token...');
           const newToken = await currentUser.getIdToken(true);
           localStorage.setItem('token', newToken);
-          originalRequest.headers.Authorization = newToken;
-          console.log('✅ Token refreshed successfully. Retrying request:', originalRequest.url);
-          return API(originalRequest);
+          authRetryRequest.headers.Authorization = newToken;
+          console.log('✅ Token refreshed successfully. Retrying request:', authRetryRequest.url);
+          return API(authRetryRequest);
         }
       } catch (refreshError) {
         console.error('❌ Token refresh failed in interceptor:', refreshError);

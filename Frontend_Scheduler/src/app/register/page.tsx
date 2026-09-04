@@ -1,13 +1,14 @@
 "use client";
 
-import { useState, useContext, useEffect } from 'react';
+import { useState, useContext, useEffect, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Search, Check, ChevronDown } from 'lucide-react';
 import { useDarkMode } from '@/context/DarkModeContext';
 import { auth } from '@/lib/firebase';
 import { sendSignInLinkToEmail, GoogleAuthProvider, signInWithPopup, createUserWithEmailAndPassword, updateProfile, sendEmailVerification } from 'firebase/auth';
 import { AuthContext } from '@/context/authContext';
 import API from '@/lib/axios';
+import { COLLEGES, College, searchColleges } from '@/lib/colleges';
 
 function GoogleIcon() {
   return (
@@ -70,9 +71,31 @@ export default function Register() {
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [emailError, setEmailError] = useState<string | null>(null);
-
-  // Email verification pending state
   const [verificationSent, setVerificationSent] = useState(false);
+
+  // College selection state
+  const [collegeQuery, setCollegeQuery] = useState('');
+  const [selectedCollege, setSelectedCollege] = useState<College | null>(null);
+  const [collegeDropdownOpen, setCollegeDropdownOpen] = useState(false);
+  const collegeDropdownRef = useRef<HTMLDivElement>(null);
+  const collegeSearchRef = useRef<HTMLInputElement>(null);
+
+  const filteredColleges = useMemo(() => {
+    const q = collegeQuery.toLowerCase().trim();
+    if (!q) return COLLEGES.slice(0, 50);
+    return searchColleges(q).slice(0, 50);
+  }, [collegeQuery]);
+
+  // Close college dropdown on outside click
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (collegeDropdownRef.current && !collegeDropdownRef.current.contains(e.target as Node)) {
+        setCollegeDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   useEffect(() => {
     if (!authLoading && isAuthenticated) router.push('/community');
@@ -110,34 +133,40 @@ export default function Register() {
       setError('Password must be at least 6 characters.');
       return;
     }
+    if (!selectedCollege) {
+      setError('Please select your college.');
+      return;
+    }
 
     setLoading(true);
     try {
       const result = await createUserWithEmailAndPassword(auth, form.email, password);
       const user = result.user;
-      
+
       // Update display name
       await updateProfile(user, { displayName: form.name });
 
       // Send email verification
       await sendEmailVerification(user);
-      
+
       const token = await user.getIdToken();
-      
+
       // Sync with backend
       await API.post(
         '/auth/sync',
-        { 
-          name: form.name, 
+        {
+          name: form.name,
           email: form.email,
-          inviteCode: typeof window !== 'undefined' ? localStorage.getItem('dojo_invite_code') : null
+          inviteCode: typeof window !== 'undefined' ? localStorage.getItem('dojo_invite_code') : null,
+          college: selectedCollege?.name,
+          collegeCode: selectedCollege?.code,
         },
         { headers: { Authorization: `Bearer ${token}` } }
       );
       if (typeof window !== 'undefined') {
         localStorage.removeItem('dojo_invite_code');
       }
-      
+
       login(token);
       setVerificationSent(true);
     } catch (err: any) {
@@ -155,6 +184,10 @@ export default function Register() {
 
     if (!isValidEmail(form.email)) {
       setEmailError('Please enter a valid email address.');
+      return;
+    }
+    if (!selectedCollege) {
+      setError('Please select your college.');
       return;
     }
 
@@ -187,10 +220,12 @@ export default function Register() {
       const token = await user.getIdToken();
       await API.post(
         '/auth/sync',
-        { 
-          name: user.displayName, 
+        {
+          name: user.displayName,
           email: user.email,
-          inviteCode: typeof window !== 'undefined' ? localStorage.getItem('dojo_invite_code') : null
+          inviteCode: typeof window !== 'undefined' ? localStorage.getItem('dojo_invite_code') : null,
+          college: selectedCollege?.name,
+          collegeCode: selectedCollege?.code,
         },
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -217,8 +252,92 @@ export default function Register() {
       ? 'bg-black border-gray-700 text-white placeholder-gray-600 focus:border-gray-500'
       : 'bg-white border-gray-200 text-gray-900 placeholder-gray-400 focus:border-gray-400'
     }`;
-  
+
   const passwordStrength = getPasswordStrength(password);
+
+  // College dropdown component
+  const renderCollegeSelector = () => (
+    <div ref={collegeDropdownRef} className="relative">
+      {selectedCollege ? (
+        <div
+          className={`${inputClass} flex items-center justify-between cursor-pointer`}
+          onClick={() => { setCollegeDropdownOpen(!collegeDropdownOpen); setCollegeQuery(''); }}
+        >
+          <div className="flex items-center gap-2 min-w-0">
+            <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 text-[10px] font-bold ${dark ? 'bg-indigo-500/20 text-indigo-300' : 'bg-indigo-50 text-indigo-600'}`}>
+              {selectedCollege.code.slice(0, 4)}
+            </div>
+            <div className="min-w-0">
+              <p className="text-[13px] font-medium truncate">{selectedCollege.name}</p>
+              <p className={`text-[10.5px] ${muted}`}>{selectedCollege.state} • {selectedCollege.code}</p>
+            </div>
+          </div>
+          <ChevronDown size={14} className={`shrink-0 transition-transform ${collegeDropdownOpen ? 'rotate-180' : ''} ${muted}`} />
+        </div>
+      ) : (
+        <div
+          className={`${inputClass} flex items-center justify-between cursor-pointer`}
+          onClick={() => { setCollegeDropdownOpen(!collegeDropdownOpen); setTimeout(() => collegeSearchRef.current?.focus(), 50); }}
+        >
+          <span className={muted}>Select your college</span>
+          <ChevronDown size={14} className={`shrink-0 transition-transform ${collegeDropdownOpen ? 'rotate-180' : ''} ${muted}`} />
+        </div>
+      )}
+
+      {collegeDropdownOpen && (
+        <div className={`absolute z-50 mt-1 w-full rounded-xl border shadow-xl overflow-hidden ${dark ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-zinc-200'}`}>
+          {/* Search input */}
+          <div className={`p-2 border-b ${dark ? 'border-zinc-800' : 'border-zinc-100'}`}>
+            <div className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg ${dark ? 'bg-zinc-800/60' : 'bg-zinc-50'}`}>
+              <Search size={13} className={muted} />
+              <input
+                ref={collegeSearchRef}
+                type="text"
+                placeholder="Search college or code…"
+                value={collegeQuery}
+                onChange={(e) => setCollegeQuery(e.target.value)}
+                className={`bg-transparent flex-1 text-[12.5px] outline-none ${dark ? 'text-white placeholder-zinc-600' : 'text-zinc-900 placeholder-zinc-400'}`}
+              />
+            </div>
+          </div>
+
+          {/* Results */}
+          <div className="max-h-[220px] overflow-y-auto">
+            {filteredColleges.length === 0 ? (
+              <div className={`p-4 text-center text-[12px] ${muted}`}>
+                No colleges found. Try a different search.
+              </div>
+            ) : (
+              filteredColleges.map((college) => (
+                <button
+                  key={`${college.code}-${college.name}`}
+                  type="button"
+                  onClick={() => {
+                    setSelectedCollege(college);
+                    setCollegeDropdownOpen(false);
+                    setCollegeQuery('');
+                    setError(null);
+                  }}
+                  className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-left transition-colors ${dark ? 'hover:bg-zinc-800' : 'hover:bg-zinc-50'}`}
+                >
+                  <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 text-[10px] font-bold ${dark ? 'bg-indigo-500/20 text-indigo-300' : 'bg-indigo-50 text-indigo-600'}`}>
+                    {college.code.slice(0, 4)}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className={`text-[12.5px] font-medium truncate ${dark ? 'text-white' : 'text-zinc-900'}`}>{college.name}</p>
+                    <p className={`text-[10.5px] ${muted}`}>{college.state} • {college.category === 'bihar-engineering' ? 'Bihar Engineering' : college.category === 'national' ? 'National Institute' : 'State College'}</p>
+                  </div>
+                  {selectedCollege?.code === college.code && (
+                    <Check size={14} className="text-indigo-500 shrink-0" />
+                  )}
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
 
   // Email verification pending screen
   if (verificationSent) {
@@ -282,26 +401,24 @@ export default function Register() {
             <button
               type="button"
               onClick={() => { setAuthMethod('password'); setError(null); }}
-              className={`flex-1 py-1.5 text-[12.5px] font-semibold rounded-lg transition-all ${
-                authMethod === 'password'
-                  ? dark
-                    ? 'bg-zinc-800 text-white shadow-sm'
-                    : 'bg-white text-zinc-900 shadow-sm'
-                  : 'text-zinc-500 hover:text-zinc-700'
-              }`}
+              className={`flex-1 py-1.5 text-[12.5px] font-semibold rounded-lg transition-all ${authMethod === 'password'
+                ? dark
+                  ? 'bg-zinc-800 text-white shadow-sm'
+                  : 'bg-white text-zinc-900 shadow-sm'
+                : 'text-zinc-500 hover:text-zinc-700'
+                }`}
             >
               Password
             </button>
             <button
               type="button"
               onClick={() => { setAuthMethod('magic-link'); setError(null); }}
-              className={`flex-1 py-1.5 text-[12.5px] font-semibold rounded-lg transition-all ${
-                authMethod === 'magic-link'
-                  ? dark
-                    ? 'bg-zinc-800 text-white shadow-sm'
-                    : 'bg-white text-zinc-900 shadow-sm'
-                  : 'text-zinc-500 hover:text-zinc-700'
-              }`}
+              className={`flex-1 py-1.5 text-[12.5px] font-semibold rounded-lg transition-all ${authMethod === 'magic-link'
+                ? dark
+                  ? 'bg-zinc-800 text-white shadow-sm'
+                  : 'bg-white text-zinc-900 shadow-sm'
+                : 'text-zinc-500 hover:text-zinc-700'
+                }`}
             >
               Magic Link
             </button>
@@ -345,6 +462,10 @@ export default function Register() {
                   <p className="text-red-500 text-[11.5px] mt-1 ml-0.5">{emailError}</p>
                 )}
               </div>
+
+              {/* College Selector */}
+              {renderCollegeSelector()}
+
               <div className="relative">
                 <input
                   type={showPassword ? "text" : "password"}
@@ -372,11 +493,10 @@ export default function Register() {
                     />
                   </div>
                   {passwordStrength.label && (
-                    <p className={`text-[11px] ${
-                      passwordStrength.label === 'Strong' ? 'text-green-500' :
+                    <p className={`text-[11px] ${passwordStrength.label === 'Strong' ? 'text-green-500' :
                       passwordStrength.label === 'Fair' ? 'text-yellow-500' :
-                      'text-orange-500'
-                    }`}>{passwordStrength.label}</p>
+                        'text-orange-500'
+                      }`}>{passwordStrength.label}</p>
                   )}
                 </div>
               )}
@@ -421,6 +541,10 @@ export default function Register() {
                   <p className="text-red-500 text-[11.5px] mt-1 ml-0.5">{emailError}</p>
                 )}
               </div>
+
+              {/* College Selector */}
+              {renderCollegeSelector()}
+
               <button
                 type="submit"
                 disabled={loading || googleLoading || !!emailError}

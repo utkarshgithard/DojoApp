@@ -4,6 +4,12 @@ import React, { createContext, useContext, useState, useCallback, useRef } from 
 import API from '@/lib/axios';
 import { toast } from 'sonner';
 
+export interface MutualFriendPreview {
+  id: string;
+  name: string;
+  avatarUrl?: string | null;
+}
+
 export interface NetworkUser {
   id: string;
   name: string;
@@ -11,12 +17,22 @@ export interface NetworkUser {
   friendCode?: string;
   followsBack?: boolean;
   since?: string;
+  // Mutual connection fields (friends list)
+  mutualFriends?: number;
+  mutualFriendPreviews?: MutualFriendPreview[];
+  // Suggestion-specific fields
+  mutualFollowers?: number;
+  sharedCommunities?: number;
+  sameCollege?: boolean;
+  reason?: string;
+  score?: number;
 }
 
 interface NetworkState {
   friends: NetworkUser[];
   following: NetworkUser[];
   followers: NetworkUser[];
+  suggestedUsers: NetworkUser[];
 }
 
 interface NetworkContextType {
@@ -30,19 +46,29 @@ interface NetworkContextType {
   toggleFollow: (targetId: string) => Promise<void>;
   addFriendOptimistic: (friend: NetworkUser) => void;
   addFriend: (friendCode: string) => Promise<{ success: boolean; message: string }>;
+  addFriendById: (targetUserId: string) => Promise<{ success: boolean; message: string }>;
+  dismissSuggestion: (userId: string) => void;
+  fetchSuggestedUsers: () => Promise<void>;
+  loadMoreSuggestedUsers: () => Promise<void>;
+  suggestionsHasMore: boolean;
+  suggestionsLoading: boolean;
 }
 
 const NetworkContext = createContext<NetworkContextType | undefined>(undefined);
 
 export const NetworkProvider = ({ children }: { children: React.ReactNode }) => {
-  const [network, setNetwork] = useState<NetworkState>({ friends: [], following: [], followers: [] });
+  const [network, setNetwork] = useState<NetworkState>({ friends: [], following: [], followers: [], suggestedUsers: [] });
   const [loading, setLoading] = useState(false);
   const [hasData, setHasData] = useState(false);
   const [followStates, setFollowStates] = useState<Record<string, boolean>>({});
   const fetchingRef = useRef(false);
+  const suggestionsRequestRef = useRef(false);
+  const suggestionsOffsetRef = useRef(0);
+  const [suggestionsHasMore, setSuggestionsHasMore] = useState(true);
+  const [suggestionsLoading, setSuggestionsLoading] = useState(false);
 
   const applyNetwork = (data: NetworkState) => {
-    setNetwork(data);
+    setNetwork((prev) => ({ ...prev, ...data }));
     setHasData(true);
     // Build follow states from the following list
     const states: Record<string, boolean> = {};
@@ -78,6 +104,52 @@ export const NetworkProvider = ({ children }: { children: React.ReactNode }) => 
       fetchingRef.current = false;
     }
   }, []);
+
+  const fetchSuggestedUsers = useCallback(async () => {
+    if (suggestionsRequestRef.current) return;
+    suggestionsRequestRef.current = true;
+    setSuggestionsLoading(true);
+    try {
+      const res = await API.get('/community/suggested-users', { params: { limit: 10, offset: 0 } });
+      suggestionsOffsetRef.current = res.data.nextOffset || res.data.suggestions?.length || 0;
+      setSuggestionsHasMore(res.data.hasMore !== false);
+      setNetwork((prev) => ({
+        ...prev,
+        suggestedUsers: res.data.suggestions || [],
+      }));
+    } catch (err) {
+      console.warn('[NetworkContext] Failed to fetch suggested users:', err);
+    } finally {
+      suggestionsRequestRef.current = false;
+      setSuggestionsLoading(false);
+    }
+  }, []);
+
+  const loadMoreSuggestedUsers = useCallback(async () => {
+    if (suggestionsRequestRef.current || !suggestionsHasMore) return;
+    suggestionsRequestRef.current = true;
+    setSuggestionsLoading(true);
+    try {
+      const res = await API.get('/community/suggested-users', {
+        params: { limit: 10, offset: suggestionsOffsetRef.current },
+      });
+      const suggestions = res.data.suggestions || [];
+      suggestionsOffsetRef.current = res.data.nextOffset || suggestionsOffsetRef.current + suggestions.length;
+      setSuggestionsHasMore(res.data.hasMore === true);
+      setNetwork((prev) => {
+        const existingIds = new Set(prev.suggestedUsers.map((user) => user.id));
+        return {
+          ...prev,
+          suggestedUsers: [...prev.suggestedUsers, ...suggestions.filter((user: NetworkUser) => !existingIds.has(user.id))],
+        };
+      });
+    } catch (err) {
+      console.warn('[NetworkContext] Failed to load more suggested users:', err);
+    } finally {
+      suggestionsRequestRef.current = false;
+      setSuggestionsLoading(false);
+    }
+  }, [suggestionsHasMore]);
 
   const syncFollowState = useCallback((targetId: string, isFollowing: boolean) => {
     setFollowStates((prev) => {
@@ -146,6 +218,28 @@ export const NetworkProvider = ({ children }: { children: React.ReactNode }) => 
     }
   }, [silentRefresh]);
 
+  const addFriendById = useCallback(async (targetUserId: string) => {
+    try {
+      const res = await API.post('/auth/add-by-id', { targetUserId });
+      // Optimistically remove from suggestions
+      setNetwork((prev) => ({
+        ...prev,
+        suggestedUsers: prev.suggestedUsers.filter((u) => u.id !== targetUserId),
+      }));
+      await silentRefresh();
+      return { success: true, message: res.data.message };
+    } catch (err: any) {
+      throw new Error(err.response?.data?.error || 'Failed to add friend');
+    }
+  }, [silentRefresh]);
+
+  const dismissSuggestion = useCallback((userId: string) => {
+    setNetwork((prev) => ({
+      ...prev,
+      suggestedUsers: prev.suggestedUsers.filter((u) => u.id !== userId),
+    }));
+  }, []);
+
   return (
     <NetworkContext.Provider value={{
       network,
@@ -158,6 +252,12 @@ export const NetworkProvider = ({ children }: { children: React.ReactNode }) => 
       toggleFollow,
       addFriendOptimistic,
       addFriend,
+      addFriendById,
+      dismissSuggestion,
+      fetchSuggestedUsers,
+      loadMoreSuggestedUsers,
+      suggestionsHasMore,
+      suggestionsLoading,
     }}>
       {children}
     </NetworkContext.Provider>

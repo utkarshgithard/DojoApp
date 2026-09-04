@@ -17,6 +17,8 @@ model User {
   friendCode            String             @unique
   verificationToken     String?
   bio                   String?
+  college               String?
+  collegeCode           String?
   createdAt             DateTime           @default(now())
   avatarUrl             String?
   role                  UserRole           @default(student)

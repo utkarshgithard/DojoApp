@@ -8,15 +8,19 @@ import prisma from '../lib/prisma.js';
  */
 export const getTasks = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
-    const userId = req.userId!;
+    const userId = req.userId;
+    if (!userId) {
+      res.status(400).json({ error: 'User ID missing' });
+      return;
+    }
     const tasks = await prisma.calendarTask.findMany({
       where: { userId },
       orderBy: { createdAt: 'asc' },
     });
-    res.json(tasks);
-  } catch (err) {
-    console.error('[getTasks]', err);
-    res.status(500).json({ error: 'Failed to fetch calendar tasks' });
+    res.json(tasks ?? []);
+  } catch (err: any) {
+    console.error('[getTasks] Error fetching calendar tasks:', err?.message || err);
+    res.status(500).json({ error: 'Failed to fetch calendar tasks', details: err?.message });
   }
 };
 

@@ -5,8 +5,9 @@ import { useRouter } from 'next/navigation';
 import React, { useEffect, useState, useRef, useCallback } from "react";
 import API from "@/lib/axios";
 import { useDarkMode } from '@/context/DarkModeContext';
-import { User, Palette, Copy, Check, Settings, Mail, BookOpen, Camera, Bell, BellOff, BellRing, X } from 'lucide-react';
+import { User, Palette, Copy, Check, Settings, Mail, BookOpen, Camera, Bell, BellOff, BellRing, X, Search, ChevronDown } from 'lucide-react';
 import Cropper, { Area } from 'react-easy-crop';
+import { COLLEGES, College, searchColleges } from '@/lib/colleges';
 
 const getCroppedImg = async (imageSrc: string, pixelCrop: Area): Promise<string> => {
   const image = new Image();
@@ -60,6 +61,11 @@ export default function SettingsPage() {
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
   const [croppedAreaPixels, setCroppedAreaPixels] = useState<Area | null>(null);
+  const [collegeQuery, setCollegeQuery] = useState('');
+  const [selectedCollege, setSelectedCollege] = useState<College | null>(null);
+  const [collegeDropdownOpen, setCollegeDropdownOpen] = useState(false);
+  const collegeDropdownRef = useRef<HTMLDivElement>(null);
+  const collegeSearchRef = useRef<HTMLInputElement>(null);
 
   // ── Notification state ───────────────────────────────────────────────────
   const [pushSupported, setPushSupported] = useState(false);
@@ -74,6 +80,11 @@ export default function SettingsPage() {
     avatarUrl: '',
   });
 
+  const filteredColleges = React.useMemo(() => {
+    const query = collegeQuery.toLowerCase().trim();
+    return (query ? searchColleges(query) : COLLEGES).slice(0, 50);
+  }, [collegeQuery]);
+
   // Populate local state from auth context's userDetails (already fetched at app startup)
   useEffect(() => {
     if (userDetails) {
@@ -84,8 +95,27 @@ export default function SettingsPage() {
         bio: userDetails.bio || '',
         avatarUrl: userDetails.avatarUrl || auth.currentUser?.photoURL || '',
       });
+      const currentCollege = userDetails.collegeCode
+        ? COLLEGES.find((college) => college.code === userDetails.collegeCode)
+        : undefined;
+      setSelectedCollege(currentCollege || (userDetails.college ? {
+        name: userDetails.college,
+        code: userDetails.collegeCode || '',
+        state: '',
+        category: 'state',
+      } : null));
     }
   }, [userDetails]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (collegeDropdownRef.current && !collegeDropdownRef.current.contains(event.target as Node)) {
+        setCollegeDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   // ── Detect push support & current subscription state ─────────────────────
   useEffect(() => {
@@ -149,9 +179,12 @@ export default function SettingsPage() {
         name: userData.name,
         bio: userData.bio,
         avatarUrl: userData.avatarUrl,
+        college: selectedCollege ? selectedCollege.name : (details.college || null),
+        collegeCode: selectedCollege ? (selectedCollege.code || null) : (details.collegeCode || null),
       });
       setDetails(res.data.user);
       setUserDetails(res.data.user);
+      localStorage.setItem('userDetails', JSON.stringify(res.data.user));
       if (res.data.user?.name) {
         setUserName(res.data.user.name);
       }
@@ -164,14 +197,7 @@ export default function SettingsPage() {
     }
   };
 
-  const handleCopyCode = () => {
-    if (details.friendCode) {
-      navigator.clipboard.writeText(details.friendCode);
-      setCopied(true);
-      toast.success('Friend Code copied to clipboard!');
-      setTimeout(() => setCopied(false), 2000);
-    }
-  };
+
 
   const dark = darkMode;
   const border = dark ? 'border-gray-800' : 'border-gray-200';
@@ -370,23 +396,6 @@ export default function SettingsPage() {
                       </div>
                     </div>
 
-                    {/* Friend Code Master Card */}
-                    <div className={`p-2 rounded-xl border flex justify-between items-center gap-4 ${dark ? 'border-gray-800 bg-gray-950/20' : 'border-gray-200 bg-gray-50/50'
-                      }`}>
-                      <div>
-                        <p className={`text-[10px] font-semibold uppercase tracking-wider ${muted} mb-1`}>Your Dojo Friend Code</p>
-                        <p className="text-[20px] font-mono font-bold tracking-widest text-current">{details.friendCode || '------'}</p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={handleCopyCode}
-                        className={secondaryBtn}
-                      >
-                        {copied ? <Check size={13} className="text-green-500" /> : <Copy size={13} />}
-                        <span>{copied ? 'Copied' : 'Copy Code'}</span>
-                      </button>
-                    </div>
-
                     <div className="space-y-1">
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                         {/* Name input */}
@@ -417,6 +426,67 @@ export default function SettingsPage() {
                         </div>
                       </div>
 
+                      {/* College selector */}
+                      <div ref={collegeDropdownRef} className="relative">
+                        <label className={labelClass}>College</label>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setCollegeDropdownOpen((open) => !open);
+                            setCollegeQuery('');
+                            setTimeout(() => collegeSearchRef.current?.focus(), 50);
+                          }}
+                          className={`${inputClass} flex items-center justify-between text-left`}
+                        >
+                          <span className={selectedCollege ? (dark ? 'text-white' : 'text-gray-900') : muted}>
+                            {selectedCollege ? `${selectedCollege.name} (${selectedCollege.code})` : 'Add your college'}
+                          </span>
+                          <ChevronDown size={14} className={`shrink-0 transition-transform ${collegeDropdownOpen ? 'rotate-180' : ''} ${muted}`} />
+                        </button>
+                        {collegeDropdownOpen && (
+                          <div className={`absolute z-50 mt-1 w-full rounded-xl border shadow-xl overflow-hidden ${dark ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-zinc-200'}`}>
+                            <div className={`p-2 border-b ${dark ? 'border-zinc-800' : 'border-zinc-100'}`}>
+                              <div className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg ${dark ? 'bg-zinc-800/60' : 'bg-zinc-50'}`}>
+                                <Search size={13} className={muted} />
+                                <input
+                                  ref={collegeSearchRef}
+                                  type="text"
+                                  placeholder="Search college or code..."
+                                  value={collegeQuery}
+                                  onChange={(event) => setCollegeQuery(event.target.value)}
+                                  className={`bg-transparent flex-1 text-[12.5px] outline-none ${dark ? 'text-white placeholder-zinc-600' : 'text-zinc-900 placeholder-zinc-400'}`}
+                                />
+                              </div>
+                            </div>
+                            <div className="max-h-[220px] overflow-y-auto">
+                              {filteredColleges.length === 0 ? (
+                                <div className={`p-4 text-center text-[12px] ${muted}`}>No colleges found. Try a different search.</div>
+                              ) : filteredColleges.map((college) => (
+                                <button
+                                  key={`${college.code}-${college.name}`}
+                                  type="button"
+                                  onClick={() => {
+                                    setSelectedCollege(college);
+                                    setCollegeDropdownOpen(false);
+                                    setCollegeQuery('');
+                                  }}
+                                  className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-left transition-colors ${dark ? 'hover:bg-zinc-800' : 'hover:bg-zinc-50'}`}
+                                >
+                                  <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 text-[10px] font-bold ${dark ? 'bg-indigo-500/20 text-indigo-300' : 'bg-indigo-50 text-indigo-600'}`}>
+                                    {college.code.slice(0, 4)}
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <p className={`text-[12.5px] font-medium truncate ${dark ? 'text-white' : 'text-zinc-900'}`}>{college.name}</p>
+                                    <p className={`text-[10.5px] ${muted}`}>{college.state} • {college.code}</p>
+                                  </div>
+                                  {selectedCollege?.code === college.code && <Check size={14} className="text-indigo-500 shrink-0" />}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
 
                       {/* Bio */}
                       <div>
@@ -437,7 +507,13 @@ export default function SettingsPage() {
                       <button
                         type="button"
                         onClick={handleSave}
-                        disabled={saving || (userData.name === (details.name || '') && userData.bio === (details.bio || '') && userData.avatarUrl === (details.avatarUrl || auth.currentUser?.photoURL || ''))}
+                        disabled={saving || (
+                          userData.name === (details.name || '') &&
+                          userData.bio === (details.bio || '') &&
+                          userData.avatarUrl === (details.avatarUrl || auth.currentUser?.photoURL || '') &&
+                          (selectedCollege?.name || null) === (details.college || null) &&
+                          (selectedCollege?.code || null) === (details.collegeCode || null)
+                        )}
                         className={primaryBtn}
                       >
                         {saving ? 'Saving changes...' : 'Save Settings'}

@@ -7,6 +7,7 @@ import { useDarkMode } from '@/context/DarkModeContext';
 import API from '@/lib/axios';
 import { toast } from 'sonner';
 import { Mail, Send, ShieldAlert, ArrowLeft, Image as ImageIcon } from 'lucide-react';
+import { compressAdminMedia } from '@/lib/compressImage';
 
 export default function AdminBroadcastPage() {
   const router = useRouter();
@@ -171,15 +172,19 @@ export default function AdminBroadcastPage() {
                     if (!file) return;
                     setUploadingImage(true);
                     try {
+                      // Compress before uploading to admin-media bucket
+                      const fileToUpload = await compressAdminMedia(file);
+
                       const { data } = await API.post('/community/media/sign', {
-                        fileName: file.name,
-                        mimeType: file.type,
+                        fileName: fileToUpload.name,
+                        mimeType: fileToUpload.type,
+                        purpose: 'admin-media',
                       });
                       
                       const uploadRes = await fetch(data.uploadUrl, {
                         method: 'PUT',
-                        body: file,
-                        headers: { 'Content-Type': file.type },
+                        body: fileToUpload,
+                        headers: { 'Content-Type': fileToUpload.type },
                       });
 
                       if (!uploadRes.ok) throw new Error('Upload failed to cloud storage');

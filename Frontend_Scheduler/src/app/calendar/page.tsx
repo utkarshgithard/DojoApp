@@ -1,13 +1,13 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import API from "@/lib/axios";
 import { useAuth } from "@/context/authContext";
 import { useAttendance } from "@/context/AttendanceContext";
 import { useDarkMode } from "@/context/DarkModeContext";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Calendar, Clock, Plus, Trash2, ChevronRight } from "lucide-react";
+import { Calendar, Clock, Plus, Trash2, ChevronRight, GripVertical } from "lucide-react";
 import { TimePicker } from "@/components/ui/time-picker";
 
 const weekdays = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
@@ -77,6 +77,25 @@ export default function CalendarPage() {
   
   // Track open state of Start Time pickers to dynamically hide End Time fields
   const [openStartPickers, setOpenStartPickers] = useState<{ [key: number]: boolean }>({});
+
+  // Drag-and-drop state
+  const [draggedSubject, setDraggedSubject] = useState<{ name: string; startTime: string; endTime: string } | null>(null);
+  const [dropTargetDay, setDropTargetDay] = useState<string | null>(null);
+  const [dropModal, setDropModal] = useState<{ targetDay: string; subjectName: string } | null>(null);
+  const [dropModalTime, setDropModalTime] = useState<{ startTime: string; endTime: string }>({ startTime: '', endTime: '' });
+
+  // Ref for the horizontally-scrollable day tabs bar (used for touch auto-scroll)
+  const dayTabsRef = useRef<HTMLDivElement>(null);
+  const autoScrollRef = useRef<number | null>(null);
+
+  // Track mobile breakpoint for save bar bottom padding
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768);
+    check();
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, []);
 
   // Setup schedule state (using native time strings)
   const [setupSchedule, setSetupSchedule] = useState<any>(
@@ -228,6 +247,125 @@ export default function CalendarPage() {
     } finally {
       setSubmitting(false);
     }
+  };
+
+  // Drag handlers
+  const handleSubjectDragStart = (e: React.DragEvent, item: { subject: string; startTime: string; endTime: string }) => {
+    if (!item.subject.trim()) return;
+    setDraggedSubject({ name: item.subject, startTime: item.startTime, endTime: item.endTime });
+    e.dataTransfer.effectAllowed = 'copy';
+  };
+
+  const handleDayTabDragOver = (e: React.DragEvent, day: string) => {
+    if (!draggedSubject) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+    setDropTargetDay(day);
+  };
+
+  const handleDayTabDrop = (e: React.DragEvent, day: string) => {
+    e.preventDefault();
+    if (draggedSubject) {
+      setDropModal({ targetDay: day, subjectName: draggedSubject.name });
+      setDropModalTime({ startTime: draggedSubject.startTime, endTime: draggedSubject.endTime });
+      setDraggedSubject(null);
+    }
+    setDropTargetDay(null);
+  };
+
+  const handleDayTabDragLeave = () => {
+    setDropTargetDay(null);
+  };
+
+  // Touch drag handlers for mobile
+  const touchDragItem = useRef<{ name: string; startTime: string; endTime: string } | null>(null);
+  // Tracks scroll direction so the single persistent interval reads it per-tick
+  const scrollDirectionRef = useRef<'left' | 'right' | null>(null);
+
+  const handleSubjectTouchStart = (item: { subject: string; startTime: string; endTime: string }) => {
+    if (!item.subject.trim()) return;
+    touchDragItem.current = { name: item.subject, startTime: item.startTime, endTime: item.endTime };
+    setDraggedSubject({ name: item.subject, startTime: item.startTime, endTime: item.endTime });
+  };
+
+  const handleSubjectTouchMove = (e: React.TouchEvent) => {
+    if (!touchDragItem.current || !dayTabsRef.current) return;
+    const touch = e.touches[0];
+    const container = dayTabsRef.current;
+
+    // ── Edge detection uses SCREEN edges, not container edges ──────────────
+    // The container is full-width on mobile so its edges === screen edges,
+    // which are never reachable while your finger is mid-screen.
+    // Instead we detect when the finger is within 80px of screen left/right.
+    const EDGE_ZONE = 80;
+    const SCROLL_SPEED = 10;
+    const sw = window.innerWidth;
+
+    if (touch.clientX < EDGE_ZONE) {
+      scrollDirectionRef.current = 'left';
+    } else if (touch.clientX > sw - EDGE_ZONE) {
+      scrollDirectionRef.current = 'right';
+    } else {
+      scrollDirectionRef.current = null;
+    }
+
+    // Start a single persistent interval — it reads the direction ref each tick
+    // so we never need to clear/restart it mid-drag.
+    if (!autoScrollRef.current) {
+      autoScrollRef.current = window.setInterval(() => {
+        if (!dayTabsRef.current) return;
+        if (scrollDirectionRef.current === 'left') {
+          dayTabsRef.current.scrollLeft -= SCROLL_SPEED;
+        } else if (scrollDirectionRef.current === 'right') {
+          dayTabsRef.current.scrollLeft += SCROLL_SPEED;
+        }
+      }, 16);
+    }
+
+    // Highlight the day tab directly under the finger
+    const els = container.querySelectorAll<HTMLButtonElement>('[data-day]');
+    let found = false;
+    els.forEach((el) => {
+      const elRect = el.getBoundingClientRect();
+      if (!found && touch.clientX >= elRect.left && touch.clientX <= elRect.right) {
+        setDropTargetDay(el.dataset.day || null);
+        found = true;
+      }
+    });
+    if (!found) setDropTargetDay(null);
+  };
+
+  const handleSubjectTouchEnd = (e: React.TouchEvent) => {
+    if (autoScrollRef.current) {
+      clearInterval(autoScrollRef.current);
+      autoScrollRef.current = null;
+    }
+    scrollDirectionRef.current = null;
+    const item = touchDragItem.current;
+    const target = dropTargetDay;
+    touchDragItem.current = null;
+    setDraggedSubject(null);
+    setDropTargetDay(null);
+
+    if (item && target) {
+      setDropModal({ targetDay: target, subjectName: item.name });
+      setDropModalTime({ startTime: item.startTime, endTime: item.endTime });
+    }
+  };
+
+  const confirmSubjectDrop = () => {
+    if (!dropModal) return;
+    const { targetDay, subjectName } = dropModal;
+    const newSlot = { subject: subjectName, startTime: dropModalTime.startTime, endTime: dropModalTime.endTime };
+    setSetupSchedule((prev: any) => ({
+      ...prev,
+      [targetDay]: [...(prev[targetDay] || []), newSlot],
+    }));
+    // ── Do NOT switch to targetDay ─ user stays on the source day so they can
+    // see the subject is still there (this is a COPY, not a move).
+    setDropModal(null);
+    setDropModalTime({ startTime: '', endTime: '' });
+    toast.success(`✓ "${subjectName}" copied to ${targetDay}. Your original is unchanged. Hit Save to apply.`);
   };
 
   const dark = darkMode;
@@ -432,8 +570,9 @@ export default function CalendarPage() {
               <div className={`absolute right-5 top-1.5 bottom-1.5 w-8 bg-gradient-to-l ${dark ? 'from-black' : 'from-white'} to-transparent pointer-events-none z-30`} />
 
               <div
+                ref={dayTabsRef}
                 className={`relative flex gap-2 p-1.5 rounded-2xl border ${border} ${dark ? 'bg-zinc-950/40 border-white/[0.08]' : 'bg-white/40 border-white/60'
-                  } backdrop-blur-xl overflow-x-auto no-scrollbar snap-x snap-mandatory scroll-smooth`}
+                  } backdrop-blur-xl overflow-x-auto no-scrollbar scroll-smooth`}
                 style={{
                   scrollbarWidth: 'none',
                   msOverflowStyle: 'none',
@@ -478,18 +617,26 @@ export default function CalendarPage() {
                 {weekdays.map((day) => {
                   const count = setupSchedule[day].filter((cls: any) => cls.subject.trim() !== '').length;
                   const isActive = activeSetupDay === day;
+                  const isDragTarget = dropTargetDay === day;
                   return (
                     <button
                       key={day}
                       id={`day-btn-${day}`}
+                      data-day={day}
                       type="button"
                       onClick={() => setActiveSetupDay(day)}
-                      className={`snap-center px-4 py-2 rounded-xl text-[12.5px] font-semibold capitalize transition-all duration-300 whitespace-nowrap flex items-center gap-2 select-none shrink-0 relative z-10 ${isActive
-                        ? (dark ? 'text-white' : 'text-zinc-900')
-                        : dark
-                          ? 'text-zinc-400 hover:text-zinc-200'
-                          : 'text-zinc-600 hover:text-zinc-900'
-                        }`}
+                      onDragOver={(e) => handleDayTabDragOver(e, day)}
+                      onDrop={(e) => handleDayTabDrop(e, day)}
+                      onDragLeave={handleDayTabDragLeave}
+                      className={`snap-center px-4 py-2 rounded-xl text-[12.5px] font-semibold capitalize transition-all duration-200 whitespace-nowrap flex items-center gap-2 select-none shrink-0 relative z-10 ${
+                        isDragTarget
+                          ? 'ring-2 ring-indigo-500 bg-indigo-500/10 text-indigo-500 dark:text-indigo-400 scale-105'
+                          : isActive
+                            ? (dark ? 'text-white' : 'text-zinc-900')
+                            : dark
+                              ? 'text-zinc-400 hover:text-zinc-200'
+                              : 'text-zinc-600 hover:text-zinc-900'
+                      }`}
                     >
                       <span>{day}</span>
                       {count > 0 && (
@@ -522,7 +669,27 @@ export default function CalendarPage() {
                   const isStartOpen = !!openStartPickers[idx];
 
                   return (
-                    <div key={idx} className="flex flex-col gap-3.5 p-3.5 rounded-xl border border-zinc-100 dark:border-zinc-900 bg-zinc-50/20 dark:bg-zinc-950/10 transition-all duration-305">
+                    <div
+                      key={idx}
+                      draggable={isSubjectFilled}
+                      onDragStart={(e) => handleSubjectDragStart(e, item)}
+                      onDragEnd={(e) => {
+                        // Prevent browser 'move' drop effect from hiding/removing the element
+                        e.preventDefault();
+                        setDraggedSubject(null);
+                      }}
+                      onTouchStart={() => handleSubjectTouchStart(item)}
+                      onTouchMove={handleSubjectTouchMove}
+                      onTouchEnd={handleSubjectTouchEnd}
+                      className={`flex flex-col gap-3.5 p-3.5 rounded-xl border border-zinc-100 dark:border-zinc-900 bg-zinc-50/20 dark:bg-zinc-950/10 transition-all duration-305 ${isSubjectFilled ? 'cursor-grab active:cursor-grabbing touch-none' : ''}`}
+                    >
+                      {/* Drag hint */}
+                      {isSubjectFilled && (
+                        <div className={`flex items-center gap-1.5 text-[10px] font-medium mb-[-6px] ${dark ? 'text-zinc-600' : 'text-zinc-400'}`}>
+                          <GripVertical size={12} />
+                          <span>Drag to copy to another day</span>
+                        </div>
+                      )}
                       
                       {/* Step 1: Subject Input */}
                       <div className="w-full">
@@ -597,8 +764,11 @@ export default function CalendarPage() {
               </div>
             </div>
 
-            {/* Fixed Bottom Save Bar */}
-            <div className={`fixed bottom-0 left-0 md:left-64 right-0 z-40 border-t ${border} ${dark ? 'bg-black/90' : 'bg-white/90'} backdrop-blur-md p-3.5 shadow-[0_-10px_40px_rgba(0,0,0,0.05)]`}>
+            {/* Fixed Bottom Save Bar — clears 65px mobile bottom nav on small screens */}
+            <div
+              className={`fixed bottom-0 left-0 md:left-64 right-0 z-40 border-t ${border} ${dark ? 'bg-black/90' : 'bg-white/90'} backdrop-blur-md shadow-[0_-10px_40px_rgba(0,0,0,0.05)] px-3.5 pt-3.5`}
+              style={{ paddingBottom: isMobile ? '79px' : '14px' }}
+            >
               <div className="max-w-[700px] w-full mx-auto flex flex-col sm:flex-row justify-between items-center gap-3">
                 <span className={`text-xs font-semibold ${muted} hidden sm:inline`}>
                   {hasUnsavedChanges ? "⚠️ You have unsaved changes in your schedule" : "✓ Schedule is up to date"}
@@ -619,6 +789,57 @@ export default function CalendarPage() {
           </form>
         )}
       </div>
+
+      {/* Drop Time Modal */}
+      {dropModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className={`rounded-2xl border p-6 max-w-sm w-full mx-4 shadow-2xl animate-in fade-in zoom-in-95 duration-200 ${
+            dark ? 'bg-zinc-950 border-zinc-800 text-white' : 'bg-white border-zinc-200 text-zinc-900'
+          }`}>
+            <div className="mb-5">
+              <h3 className="text-[16px] font-bold tracking-tight text-indigo-500">Add to {dropModal.targetDay}</h3>
+              <p className={`mt-1.5 text-sm ${dark ? 'text-zinc-400' : 'text-zinc-500'}`}>
+                Set the time for <span className="font-semibold text-current">{dropModal.subjectName}</span> on <span className="font-semibold text-current capitalize">{dropModal.targetDay}</span>.
+              </p>
+            </div>
+
+            <div className="space-y-4">
+              <div className="flex flex-col gap-1.5">
+                <span className={`text-[9px] font-bold uppercase tracking-wider ${dark ? 'text-zinc-400' : 'text-zinc-500'}`}>Start Time</span>
+                <TimePicker
+                  value={dropModalTime.startTime}
+                  onChange={(val) => setDropModalTime((prev) => ({ ...prev, startTime: val }))}
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <span className={`text-[9px] font-bold uppercase tracking-wider ${dark ? 'text-zinc-400' : 'text-zinc-500'}`}>End Time</span>
+                <TimePicker
+                  value={dropModalTime.endTime}
+                  onChange={(val) => setDropModalTime((prev) => ({ ...prev, endTime: val }))}
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2.5 mt-6 pt-4 border-t border-zinc-100 dark:border-zinc-900">
+              <button
+                type="button"
+                onClick={() => { setDropModal(null); setDropModalTime({ startTime: '', endTime: '' }); }}
+                className={secondaryBtn}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={!dropModalTime.startTime || !dropModalTime.endTime}
+                onClick={confirmSubjectDrop}
+                className={primaryBtn}
+              >
+                Add to {dropModal.targetDay}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Delete Confirmation Modal */}
       {deleteConfirm && (

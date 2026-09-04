@@ -25,6 +25,22 @@ import AuthPromptModal from "./community/AuthPromptModal";
 import AiChatbot from "./AiChatbot";
 import MobileBottomNav from "./MobileBottomNav";
 
+// Safeguard against Next.js 16 devtools unhandled releasePointerCapture DOMException
+if (typeof window !== "undefined" && typeof Element !== "undefined") {
+  const originalReleasePointerCapture = Element.prototype.releasePointerCapture;
+  if (originalReleasePointerCapture) {
+    Element.prototype.releasePointerCapture = function (pointerId: number) {
+      if (this.hasPointerCapture && this.hasPointerCapture(pointerId)) {
+        try {
+          originalReleasePointerCapture.call(this, pointerId);
+        } catch {
+          // Suppress DOMException if pointer capture was already released or inactive
+        }
+      }
+    };
+  }
+}
+
 function ClientProvidersInner({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuth() as any;
   const pathname = usePathname();

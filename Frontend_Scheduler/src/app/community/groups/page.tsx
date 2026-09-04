@@ -1,14 +1,13 @@
 'use client';
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/authContext';
 import { useDarkMode } from '@/context/DarkModeContext';
 import { useCommunityGroups } from '@/context/CommunityGroupContext';
 import CommunityGroupCard from '@/components/community/CommunityGroupCard';
 import CreateCommunityModal from '@/components/community/CreateCommunityModal';
-import API from '@/lib/axios';
-import { Users2, Search, Plus, ArrowLeft, RefreshCw, Compass, MailOpen, Check, Trash2 } from 'lucide-react';
+import { Users2, Search, Plus, ArrowLeft, Compass, MailOpen, Check, Trash2 } from 'lucide-react';
 
 export default function DiscoverCommunitiesPage() {
   const router = useRouter();
@@ -16,7 +15,21 @@ export default function DiscoverCommunitiesPage() {
   const { darkMode } = useDarkMode() as any;
   const dark = darkMode;
 
-  const { communities, nextCursor, loading: fetching, fetchCommunities, joinOrLeave } = useCommunityGroups();
+  const {
+    communities,
+    nextCursor,
+    loading: fetching,
+    error: communitiesError,
+    fetchCommunities,
+    prefetchCommunityCategories,
+    joinOrLeave,
+    invites,
+    fetchInvites,
+    acceptInvite,
+    declineInvite,
+  } = useCommunityGroups();
+  const hasLoadedCommunitiesRef = useRef(false);
+  const lastCommunityQueryRef = useRef('');
 
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -48,22 +61,6 @@ export default function DiscoverCommunitiesPage() {
     };
   }, [lastScrollY]);
 
-  const [invites, setInvites] = useState<any[]>([]);
-  const [invitesLoading, setInvitesLoading] = useState(false);
-
-  const fetchInvites = useCallback(async () => {
-    if (!isAuthenticated) return;
-    setInvitesLoading(true);
-    try {
-      const { data } = await API.get('/groups/invites/mine');
-      setInvites(data.invites || []);
-    } catch (err) {
-      console.error('[fetchInvites]', err);
-    } finally {
-      setInvitesLoading(false);
-    }
-  }, [isAuthenticated]);
-
   useEffect(() => {
     if (isAuthenticated) {
       fetchInvites();
@@ -72,9 +69,8 @@ export default function DiscoverCommunitiesPage() {
 
   const handleAcceptInvite = async (inviteId: string) => {
     try {
-      await API.post(`/groups/invites/${inviteId}/accept`);
-      setInvites((prev) => prev.filter((inv) => inv.id !== inviteId));
-      fetchCommunities(undefined, debouncedSearch || undefined, filter || undefined);
+      await acceptInvite(inviteId);
+      await fetchCommunities(undefined, debouncedSearch || undefined, filter || undefined);
     } catch (err: any) {
       alert(err?.response?.data?.error || 'Failed to accept invitation');
     }
@@ -82,8 +78,7 @@ export default function DiscoverCommunitiesPage() {
 
   const handleDeclineInvite = async (inviteId: string) => {
     try {
-      await API.delete(`/groups/invites/${inviteId}`);
-      setInvites((prev) => prev.filter((inv) => inv.id !== inviteId));
+      await declineInvite(inviteId);
     } catch (err: any) {
       alert(err?.response?.data?.error || 'Failed to decline invitation');
     }
@@ -91,16 +86,25 @@ export default function DiscoverCommunitiesPage() {
 
   // Debounce search input
   useEffect(() => {
-    const t = setTimeout(() => setDebouncedSearch(search), 300);
+    const t = setTimeout(() => setDebouncedSearch(search), 200);
     return () => clearTimeout(t);
   }, [search]);
 
   useEffect(() => {
     if (!loading) {
-      const isSilent = communities.length > 0;
-      fetchCommunities(undefined, debouncedSearch || undefined, filter || undefined, isSilent);
+      const queryKey = `${debouncedSearch}\u0000${filter}`;
+      const hasLoadedCommunities = hasLoadedCommunitiesRef.current;
+      const isSilent = hasLoadedCommunities && lastCommunityQueryRef.current === queryKey;
+      lastCommunityQueryRef.current = queryKey;
+      if (!debouncedSearch && !hasLoadedCommunities) {
+        hasLoadedCommunitiesRef.current = true;
+        prefetchCommunityCategories();
+      } else {
+        hasLoadedCommunitiesRef.current = true;
+        fetchCommunities(undefined, debouncedSearch || undefined, filter || undefined, isSilent);
+      }
     }
-  }, [loading, debouncedSearch, filter, fetchCommunities, communities.length]);
+  }, [loading, debouncedSearch, filter, fetchCommunities, prefetchCommunityCategories]);
 
   const handleJoinToggle = useCallback(async (slug: string) => {
     try {
@@ -146,13 +150,6 @@ export default function DiscoverCommunitiesPage() {
             </div>
 
             <div className="flex items-center gap-2">
-              <button
-                onClick={() => fetchCommunities(undefined, debouncedSearch || undefined, filter || undefined)}
-                disabled={fetching}
-                className={`p-2 rounded-xl border transition-all ${dark ? 'border-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-900' : 'border-zinc-200 text-zinc-500 hover:text-zinc-800 hover:bg-white'} disabled:opacity-40`}
-              >
-                <RefreshCw size={16} className={fetching ? 'animate-spin' : ''} />
-              </button>
               {isAuthenticated && (
                 <button
                   onClick={() => setShowCreate(true)}
@@ -281,6 +278,13 @@ export default function DiscoverCommunitiesPage() {
                 </div>
               </div>
             ))}
+          </div>
+        ) : communitiesError ? (
+          <div className={`rounded-2xl border p-12 text-center ${dark ? 'bg-zinc-900 border-zinc-800 text-zinc-300' : 'bg-white border-zinc-200 text-zinc-600'}`}>
+            <p className="text-[14px] font-medium">{communitiesError}</p>
+            <button onClick={() => fetchCommunities(undefined, debouncedSearch || undefined, filter || undefined)} className="mt-4 px-4 py-2 rounded-xl bg-indigo-600 text-white text-[13px] font-semibold">
+              Try again
+            </button>
           </div>
         ) : communities.length === 0 ? (
           <div className={`rounded-2xl border p-16 text-center ${dark ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-zinc-200'}`}>

@@ -12,6 +12,8 @@ export interface User {
   bio?: string;
   avatarUrl?: string;
   role?: 'student' | 'instructor' | 'admin';
+  college?: string;
+  collegeCode?: string;
 }
 
 export interface Friend {

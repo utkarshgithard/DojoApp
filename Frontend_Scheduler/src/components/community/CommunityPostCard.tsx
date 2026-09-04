@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import API from '@/lib/axios';
-import { Heart, MessageCircle, Trash2, MoreHorizontal, Share2, UserPlus, UserCheck } from 'lucide-react';
+import { Heart, MessageCircle, Trash2, MoreHorizontal, Share2, UserPlus, UserCheck, Link as LinkIcon, ExternalLink } from 'lucide-react';
 import { formatDistanceToNowStrict } from 'date-fns';
 import { useRouter } from 'next/navigation';
 import CommunityMediaGrid from './CommunityMediaGrid';
@@ -46,6 +46,91 @@ interface Post {
     avatarUrl?: string | null;
   } | null;
 }
+
+const parseMarkdownTokens = (text: string, dark: boolean): React.ReactNode[] => {
+  // Regex to match **bold**, *italic*, ~~strike~~, `code`, #hashtag, [link](url)
+  const regex = /(\*\*[^*]+\*\*|\*[^*]+\*|~~[^~]+~~|`[^`]+`|#[a-zA-Z0-9_]+|\[[^\]]+\]\([^)]+\))/g;
+  const parts = text.split(regex);
+
+  return parts.map((part, idx) => {
+    if (part.startsWith('**') && part.endsWith('**')) {
+      return <strong key={idx} className="font-bold text-indigo-500 dark:text-indigo-300">{part.slice(2, -2)}</strong>;
+    }
+    if (part.startsWith('*') && part.endsWith('*')) {
+      return <em key={idx} className="italic font-serif">{part.slice(1, -1)}</em>;
+    }
+    if (part.startsWith('~~') && part.endsWith('~~')) {
+      return <del key={idx} className="line-through opacity-75">{part.slice(2, -2)}</del>;
+    }
+    if (part.startsWith('`') && part.endsWith('`')) {
+      return (
+        <code key={idx} className={`px-1.5 py-0.5 rounded text-[13px] font-mono border ${
+          dark ? 'bg-zinc-950 border-zinc-800 text-indigo-300' : 'bg-indigo-50/80 border-indigo-200 text-indigo-700'
+        }`}>
+          {part.slice(1, -1)}
+        </code>
+      );
+    }
+    if (part.startsWith('#')) {
+      return (
+        <span key={idx} className="font-bold text-indigo-500 hover:underline cursor-pointer">
+          {part}
+        </span>
+      );
+    }
+    if (part.startsWith('[') && part.includes('](') && part.endsWith(')')) {
+      const title = part.substring(1, part.indexOf(']('));
+      let rawUrl = part.substring(part.indexOf('](') + 2, part.length - 1);
+      const url = rawUrl.startsWith('http://') || rawUrl.startsWith('https://') ? rawUrl : `https://${rawUrl}`;
+      return (
+        <a
+          key={idx}
+          href={url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-blue-600 dark:text-blue-400 underline font-medium hover:text-blue-700 dark:hover:text-blue-300 transition-colors inline-flex items-center gap-1 mx-0.5"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <ExternalLink size={13} className="shrink-0" />
+          <span>{title}</span>
+        </a>
+      );
+    }
+    return part;
+  });
+};
+
+const renderFormattedContent = (content: string, dark: boolean) => {
+  if (!content) return null;
+  const lines = content.split('\n');
+
+  return (
+    <div className="space-y-1">
+      {lines.map((line, lineIdx) => {
+        const isList = line.trim().startsWith('- ') || line.trim().startsWith('* ');
+        const textToParse = isList ? line.trim().substring(2) : line;
+        const tokens = parseMarkdownTokens(textToParse, dark);
+
+        if (isList) {
+          return (
+            <div key={lineIdx} className="flex items-start gap-2 pl-2 my-0.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 mt-2 shrink-0" />
+              <div className={`text-[14.5px] leading-relaxed break-words font-normal ${dark ? 'text-zinc-200' : 'text-zinc-800'}`}>
+                {tokens}
+              </div>
+            </div>
+          );
+        }
+
+        return (
+          <p key={lineIdx} className={`text-[14.5px] leading-relaxed break-words font-normal ${dark ? 'text-zinc-200' : 'text-zinc-800'}`}>
+            {tokens}
+          </p>
+        );
+      })}
+    </div>
+  );
+};
 
 interface CommunityPostCardProps {
   post: Post;
@@ -187,7 +272,7 @@ export default function CommunityPostCard({
     }
   };
 
-  const handleCommentToggle = () => setShowComments((v) => !v);
+  const handleCommentToggle = () => setShowComments((v: boolean) => !v);
   const handleCommentAdded = () => updatePostState(post.id, { commentCount: commentCount + 1 });
 
   const getAvatar = (author: PostAuthor) => {
@@ -226,101 +311,113 @@ export default function CommunityPostCard({
   return (
     <>
       <article
-        className={`transition-all duration-200 p-4 md:p-5 ${
+        className={`group/card relative transition-all duration-300 p-5 sm:p-6 ${
           dark
-            ? 'bg-zinc-900/10 hover:bg-zinc-900/30 text-white'
-            : 'bg-white hover:bg-zinc-50/50 text-zinc-900'
-        } ${deleting ? 'opacity-50 pointer-events-none' : ''}`}
+            ? 'bg-zinc-900/40 hover:bg-zinc-900/70 text-white'
+            : 'bg-white hover:bg-zinc-50/80 text-zinc-900'
+        } ${deleting ? 'opacity-40 pointer-events-none scale-[0.98]' : ''}`}
       >
-        {/* Header: Avatar + Name + Timestamp + Follow + Menu */}
-        <div className="flex items-start gap-3 mb-3">
-          <button onClick={handleUserClick} className="focus:outline-none text-left shrink-0">
-            {getAvatar(post.author)}
-          </button>
+        {/* Top Header: Avatar + Name + Group Pill + Follow Button + Options */}
+        <div className="flex items-start justify-between gap-3 mb-3.5">
+          <div className="flex items-center gap-3.5 min-w-0 flex-1">
+            <button
+              onClick={handleUserClick}
+              className="focus:outline-none text-left shrink-0 relative group/avatar"
+            >
+              <div className="relative rounded-full p-0.5 transition-all duration-300 group-hover/avatar:ring-2 group-hover/avatar:ring-indigo-500/50">
+                {getAvatar(post.author)}
+              </div>
+            </button>
 
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <button
-                onClick={handleUserClick}
-                className={`text-[14px] font-semibold hover:underline outline-none text-left transition-colors ${
-                  dark ? 'text-white' : 'text-zinc-900'
-                }`}
-              >
-                {post.author?.name || 'User'}
-              </button>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  onClick={handleUserClick}
+                  className={`text-[14.5px] font-bold hover:underline outline-none text-left transition-colors truncate ${
+                    dark ? 'text-zinc-100 hover:text-indigo-400' : 'text-zinc-900 hover:text-indigo-600'
+                  }`}
+                >
+                  {post.author?.name || 'User'}
+                </button>
 
-              {post.community && (
-                <>
-                  <span className={`text-[13px] ${dark ? 'text-zinc-400' : 'text-zinc-500'}`}>
-                    posted in the
-                  </span>
+                {post.community && (
                   <button
                     onClick={() => router.push(`/community/groups/${post.community?.slug}`)}
-                    className="text-[13px] font-semibold text-indigo-600 dark:text-indigo-400 hover:underline outline-none text-left transition-colors"
+                    className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11.5px] font-semibold transition-all duration-300 border ${
+                      dark
+                        ? 'bg-indigo-950/50 border-indigo-800/60 text-indigo-300 hover:bg-indigo-900/60 hover:border-indigo-700'
+                        : 'bg-indigo-50 border-indigo-200 text-indigo-700 hover:bg-indigo-100/80 hover:border-indigo-300'
+                    }`}
                   >
-                    /{post.community.name}
+                    <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse" />
+                    <span>/{post.community.name}</span>
                   </button>
-                </>
-              )}
+                )}
 
-              {/* Follow pill — only for other users' posts */}
-              {!isOwnPost && (
-                <button
-                  onClick={handleFollowClick}
-                  disabled={followLoading}
-                  className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold border transition-all ${
-                    following
-                      ? dark
-                        ? 'border-indigo-500/40 text-indigo-400 bg-indigo-500/10 hover:bg-red-500/10 hover:text-red-400 hover:border-red-500/40'
-                        : 'border-indigo-200 text-indigo-600 bg-indigo-50 hover:bg-red-50 hover:text-red-500 hover:border-red-200'
-                      : dark
-                        ? 'border-zinc-700 text-zinc-400 hover:border-indigo-500/50 hover:text-indigo-400 hover:bg-indigo-500/10'
-                        : 'border-zinc-300 text-zinc-500 hover:border-indigo-300 hover:text-indigo-600 hover:bg-indigo-50'
-                  } disabled:opacity-50`}
-                >
-                  {following ? <UserCheck size={10} /> : <UserPlus size={10} />}
-                  {following ? 'Following' : 'Follow'}
-                </button>
-              )}
+                {/* Follow pill */}
+                {!isOwnPost && (
+                  <button
+                    onClick={handleFollowClick}
+                    disabled={followLoading}
+                    className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold border transition-all duration-300 active:scale-95 ${
+                      following
+                        ? dark
+                          ? 'border-indigo-500/40 text-indigo-400 bg-indigo-500/10 hover:bg-rose-500/15 hover:text-rose-400 hover:border-rose-500/40'
+                          : 'border-indigo-200 text-indigo-600 bg-indigo-50 hover:bg-rose-50 hover:text-rose-500 hover:border-rose-200'
+                        : dark
+                          ? 'border-zinc-700 text-zinc-400 hover:border-indigo-500/60 hover:text-indigo-300 hover:bg-indigo-500/10'
+                          : 'border-zinc-300 text-zinc-600 hover:border-indigo-300 hover:text-indigo-600 hover:bg-indigo-50'
+                    } disabled:opacity-50 ml-auto sm:ml-0`}
+                  >
+                    {following ? <UserCheck size={11} /> : <UserPlus size={11} />}
+                    <span>{following ? 'Following' : 'Follow'}</span>
+                  </button>
+                )}
+              </div>
+
+              <p className={`text-[11.5px] mt-0.5 font-medium ${dark ? 'text-zinc-500' : 'text-zinc-400'}`}>
+                {post.createdAt ? formatDistanceToNowStrict(new Date(post.createdAt), { addSuffix: true }) : 'just now'}
+              </p>
             </div>
-            <p className={`text-[11.5px] mt-0.5 ${dark ? 'text-zinc-500' : 'text-zinc-400'}`}>
-              {post.createdAt ? formatDistanceToNowStrict(new Date(post.createdAt), { addSuffix: true }) : 'just now'}
-            </p>
           </div>
 
-          {/* Options menu — own posts, moderator, or site admin */}
+          {/* Options Menu Dropdown */}
           {(isOwnPost || isModerator || isAdmin) && (
-            <div className="relative">
+            <div className="relative shrink-0">
               <button
                 onClick={() => setMenuOpen((v) => !v)}
-                className={`p-1.5 rounded-lg transition-colors ${dark ? 'text-zinc-500 hover:text-white hover:bg-zinc-800' : 'text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100'}`}
+                className={`p-1.5 rounded-xl transition-all duration-200 ${
+                  dark
+                    ? 'text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800/80'
+                    : 'text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100'
+                }`}
               >
-                <MoreHorizontal size={16} />
+                <MoreHorizontal size={18} />
               </button>
               {menuOpen && (
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
                   <div
-                    className={`absolute right-0 top-full mt-1 z-50 w-36 rounded-lg border shadow-xl p-1 ${
-                      dark ? 'bg-zinc-900 border-zinc-700' : 'bg-white border-zinc-200'
+                    className={`absolute right-0 top-full mt-1.5 z-50 w-40 rounded-xl border shadow-xl p-1.5 backdrop-blur-md transition-all duration-200 animate-in fade-in zoom-in-95 ${
+                      dark ? 'bg-zinc-900/95 border-zinc-700/80 shadow-black/40' : 'bg-white/95 border-zinc-200 shadow-zinc-200/50'
                     }`}
                   >
                     {isOwnPost && (
                       <button
                         onClick={() => { setMenuOpen(false); setIsEditing(true); }}
-                        className={`flex items-center gap-2 w-full px-3 py-2 rounded-lg text-[13px] font-medium transition-colors ${
-                          dark ? 'text-zinc-300 hover:bg-zinc-800' : 'text-zinc-700 hover:bg-zinc-100'
+                        className={`flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-[13px] font-medium transition-colors ${
+                          dark ? 'text-zinc-200 hover:bg-zinc-800/80' : 'text-zinc-700 hover:bg-zinc-100'
                         }`}
                       >
-                        <Edit2 size={13} />
+                        <Edit2 size={14} className="text-indigo-400" />
                         <span>Edit post</span>
                       </button>
                     )}
                     <button
                       onClick={() => { setMenuOpen(false); handleDelete(); }}
-                      className="flex items-center gap-2 w-full px-3 py-2 rounded-lg text-[13px] font-medium text-red-500 hover:bg-red-500/5 transition-colors"
+                      className="flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-[13px] font-medium text-rose-500 hover:bg-rose-500/10 transition-colors"
                     >
-                      <Trash2 size={13} />
+                      <Trash2 size={14} />
                       <span>Delete post</span>
                     </button>
                   </div>
@@ -330,23 +427,23 @@ export default function CommunityPostCard({
           )}
         </div>
 
-        {/* Post content */}
+        {/* Post content body */}
         {isEditing ? (
-          <div className={`mt-2 p-3 rounded-lg border ${dark ? 'bg-zinc-950 border-zinc-800' : 'bg-zinc-50 border-zinc-200'}`}>
+          <div className={`mt-2.5 p-3.5 rounded-xl border transition-all ${dark ? 'bg-zinc-950/80 border-indigo-500/40 ring-2 ring-indigo-500/20' : 'bg-zinc-50 border-indigo-300 ring-2 ring-indigo-500/10'}`}>
             <textarea
               value={editContent}
               onChange={(e) => setEditContent(e.target.value.slice(0, 500))}
-              className={`w-full resize-none text-[14px] leading-relaxed bg-transparent outline-none ${
-                dark ? 'text-zinc-200 placeholder:text-zinc-600' : 'text-zinc-800 placeholder:text-zinc-400'
+              className={`w-full resize-none text-[14.5px] leading-relaxed bg-transparent outline-none ${
+                dark ? 'text-zinc-100 placeholder:text-zinc-600' : 'text-zinc-800 placeholder:text-zinc-400'
               }`}
               rows={3}
               autoFocus
             />
-            <div className="flex justify-end gap-2 mt-2">
+            <div className="flex justify-end gap-2 mt-2.5">
               <button
                 onClick={() => { setIsEditing(false); setEditContent(currentPostContent); }}
-                className={`text-[12px] font-medium px-3 py-1.5 rounded-md transition-colors ${
-                  dark ? 'text-zinc-400 hover:bg-zinc-800' : 'text-zinc-500 hover:bg-zinc-200'
+                className={`text-[12.5px] font-medium px-3 py-1.5 rounded-lg transition-colors ${
+                  dark ? 'text-zinc-400 hover:bg-zinc-800' : 'text-zinc-600 hover:bg-zinc-200'
                 }`}
               >
                 Cancel
@@ -354,59 +451,75 @@ export default function CommunityPostCard({
               <button
                 onClick={handleEditSave}
                 disabled={savingEdit || !editContent.trim()}
-                className="flex items-center gap-1.5 text-[12px] font-semibold px-3 py-1.5 rounded-md bg-indigo-600 hover:bg-indigo-700 text-white disabled:opacity-50 transition-colors"
+                className="flex items-center gap-1.5 text-[12.5px] font-semibold px-4 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/20 disabled:opacity-50 transition-all duration-200 active:scale-95"
               >
-                {savingEdit ? <span className="w-3 h-3 border-[1.5px] border-white border-t-transparent rounded-full animate-spin" /> : <Save size={13} />}
-                Save
+                {savingEdit ? <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <Save size={14} />}
+                Save changes
               </button>
             </div>
           </div>
         ) : (
           currentPostContent && (
-            <p className={`text-[14px] leading-relaxed whitespace-pre-wrap break-words ${dark ? 'text-zinc-200' : 'text-zinc-800'}`}>
-              {currentPostContent}
-            </p>
+            <div className="mt-1">
+              {renderFormattedContent(currentPostContent, dark)}
+            </div>
           )
         )}
 
-        {/* Media Grid */}
+        {/* Media Grid Display */}
         {post.media && post.media.length > 0 && (
-          <CommunityMediaGrid media={post.media} />
+          <div className="mt-3.5">
+            <CommunityMediaGrid media={post.media} />
+          </div>
         )}
 
-        {/* Action bar */}
-        <div className={`flex items-center gap-4 mt-4 pt-3 border-t ${dark ? 'border-zinc-800' : 'border-zinc-100'}`}>
-          {/* Like */}
-          <button
-            onClick={handleLike}
-            className={`flex items-center gap-1.5 text-[13px] font-medium transition-all duration-200 group ${
-              liked ? 'text-red-500' : dark ? 'text-zinc-500 hover:text-red-400' : 'text-zinc-500 hover:text-red-500'
-            }`}
-          >
-            <Heart
-              size={17}
-              className={`transition-transform duration-200 ${likeAnim ? 'scale-125' : 'scale-100'} ${liked ? 'fill-red-500' : 'fill-transparent group-hover:scale-110'}`}
-            />
-            <span>{likeCount > 0 ? likeCount : ''}</span>
-          </button>
+        {/* Interactive Action Bar */}
+        <div className={`flex items-center justify-between mt-4 pt-3.5 border-t transition-colors ${
+          dark ? 'border-zinc-800/80' : 'border-zinc-100'
+        }`}>
+          <div className="flex items-center gap-2 sm:gap-3">
+            {/* Like Button */}
+            <button
+              onClick={handleLike}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-[13px] font-semibold transition-all duration-300 group/like active:scale-90 ${
+                liked
+                  ? 'bg-rose-500/10 text-rose-500 dark:bg-rose-500/15 dark:text-rose-400'
+                  : dark
+                  ? 'text-zinc-400 hover:text-rose-400 hover:bg-rose-500/10'
+                  : 'text-zinc-500 hover:text-rose-500 hover:bg-rose-50'
+              }`}
+            >
+              <Heart
+                size={17}
+                className={`transition-all duration-300 ${likeAnim ? 'scale-125' : 'group-hover/like:scale-110'} ${
+                  liked ? 'fill-rose-500 text-rose-500' : 'fill-transparent'
+                }`}
+              />
+              <span>{likeCount > 0 ? likeCount : 'Like'}</span>
+            </button>
 
-          {/* Comment toggle */}
-          <button
-            onClick={handleCommentToggle}
-            className={`flex items-center gap-1.5 text-[13px] font-medium transition-colors group ${
-              showComments
-                ? 'text-indigo-500'
-                : dark ? 'text-zinc-500 hover:text-indigo-400' : 'text-zinc-500 hover:text-indigo-500'
-            }`}
-          >
-            <MessageCircle
-              size={17}
-              className={`transition-transform duration-150 group-hover:scale-110 ${showComments ? 'fill-indigo-500/20' : 'fill-transparent'}`}
-            />
-            <span>{commentCount > 0 ? commentCount : ''}</span>
-          </button>
+            {/* Comment Button */}
+            <button
+              onClick={handleCommentToggle}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-[13px] font-semibold transition-all duration-300 group/comment active:scale-90 ${
+                showComments
+                  ? 'bg-indigo-500/10 text-indigo-600 dark:bg-indigo-500/15 dark:text-indigo-400'
+                  : dark
+                  ? 'text-zinc-400 hover:text-indigo-400 hover:bg-indigo-500/10'
+                  : 'text-zinc-500 hover:text-indigo-600 hover:bg-indigo-50'
+              }`}
+            >
+              <MessageCircle
+                size={17}
+                className={`transition-transform duration-200 group-hover/comment:scale-110 ${
+                  showComments ? 'fill-indigo-500/20' : 'fill-transparent'
+                }`}
+              />
+              <span>{commentCount > 0 ? commentCount : 'Comment'}</span>
+            </button>
+          </div>
 
-          {/* Share */}
+          {/* Share Button */}
           <button
             onClick={() => {
               if (!currentUserId) {
@@ -415,29 +528,33 @@ export default function CommunityPostCard({
                 setShowShareModal(true);
               }
             }}
-            className={`flex items-center gap-1.5 text-[13px] font-medium transition-colors group ${
-              dark ? 'text-zinc-500 hover:text-emerald-400' : 'text-zinc-400 hover:text-emerald-600'
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-[13px] font-semibold transition-all duration-300 group/share active:scale-90 ${
+              dark
+                ? 'text-zinc-400 hover:text-emerald-400 hover:bg-emerald-500/10'
+                : 'text-zinc-500 hover:text-emerald-600 hover:bg-emerald-50'
             }`}
           >
             <Share2
-              size={15}
-              className="transition-transform duration-150 group-hover:scale-110"
+              size={16}
+              className="transition-transform duration-200 group-hover/share:scale-110"
             />
-            <span className="text-[12px]">Share</span>
+            <span className="hidden sm:inline">Share</span>
           </button>
         </div>
 
-        {/* Comments */}
+        {/* Comment Section Drawer */}
         {showComments && (
-          <CommunityCommentSection
-            postId={post.id}
-            comments={[]}
-            currentUserId={currentUserId}
-            dark={dark}
-            onCommentAdded={handleCommentAdded}
-            onCommentDeleted={(count) => updatePostState(post.id, { commentCount: Math.max(0, commentCount - count) })}
-            onUserClick={onUserClick}
-          />
+          <div className="mt-3 animate-in fade-in slide-in-from-top-2 duration-300">
+            <CommunityCommentSection
+              postId={post.id}
+              comments={[]}
+              currentUserId={currentUserId}
+              dark={dark}
+              onCommentAdded={handleCommentAdded}
+              onCommentDeleted={(count) => updatePostState(post.id, { commentCount: Math.max(0, commentCount - count) })}
+              onUserClick={onUserClick}
+            />
+          </div>
         )}
       </article>
 

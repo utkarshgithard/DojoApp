@@ -8,12 +8,12 @@ import { createNotification } from '../utils/notificationHelper.js';
 export const calculateHotScore = (likeCount: number, createdAt: Date): number => {
   const gravity = 1.8; // Standard Hacker News gravity constant
   const ageInHours = Math.max(0, (Date.now() - createdAt.getTime()) / (1000 * 60 * 60));
-  
+
   // We use (likeCount + 1) instead of just likeCount so that posts with 0 likes 
   // still get a positive score that decays over time, rather than all being exactly 0.
   const upvotes = likeCount;
   const downvotes = 0; // App currently only supports likes
-  
+
   return (upvotes - downvotes + 1) / Math.pow(ageInHours + 2, gravity);
 };
 
@@ -229,13 +229,13 @@ export const createPost = async (req: AuthenticatedRequest, res: Response): Prom
         hotScore: calculateHotScore(0, new Date()), // Initialize hotScore
         media: media && media.length > 0
           ? {
-              create: media.map((m, idx) => ({
-                url: m.url,
-                type: m.type,
-                thumbnailUrl: m.thumbnailUrl ?? null,
-                order: idx,
-              })),
-            }
+            create: media.map((m, idx) => ({
+              url: m.url,
+              type: m.type,
+              thumbnailUrl: m.thumbnailUrl ?? null,
+              order: idx,
+            })),
+          }
           : undefined,
       },
       include: {
@@ -385,14 +385,14 @@ export const toggleLike = async (req: AuthenticatedRequest, res: Response): Prom
     }
 
     const likeCount = await prisma.postLike.count({ where: { postId } });
-    
+
     // Recalculate hot score
     const newScore = calculateHotScore(likeCount, post.createdAt);
     await prisma.post.update({
       where: { id: postId },
       data: { hotScore: newScore }
     });
-    
+
     // Broadcast interaction
     const io = req.app.get('io');
     if (io) {
@@ -432,7 +432,7 @@ export const toggleFollow = async (req: AuthenticatedRequest, res: Response): Pr
     if (existing) {
       // 1. Delete follow record
       await prisma.userFollow.delete({ where: { followerId_followingId: { followerId, followingId } } });
-      
+
       // 2. Dissolve mutual friendship if they were friends
       await prisma.userFriend.deleteMany({
         where: {
@@ -495,8 +495,8 @@ export const getFollowStatus = async (req: AuthenticatedRequest, res: Response):
     const [followRecord, followerCount, followingCount] = await Promise.all([
       followerId
         ? prisma.userFollow.findUnique({
-            where: { followerId_followingId: { followerId, followingId } },
-          })
+          where: { followerId_followingId: { followerId, followingId } },
+        })
         : null,
       prisma.userFollow.count({ where: { followingId } }),
       prisma.userFollow.count({ where: { followerId: followingId } }),
@@ -597,6 +597,170 @@ export const getFollowing = async (req: AuthenticatedRequest, res: Response): Pr
   }
 };
 
+// ── Suggested Users ────────────────────────────────────────────────────────────
+
+export const getSuggestedUsers = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const userId = req.userId!;
+    const limit = parseInt(req.query.limit as string) || 10;
+    const offset = Math.max(0, parseInt(req.query.offset as string) || 0);
+
+    // Fetch current user's profile and social graph in parallel
+    const [currentUser, myFriendRecords, myFollowRecords, myFollowerRecords, myMemberships] = await Promise.all([
+      prisma.user.findUnique({
+        where: { id: userId },
+        select: { collegeCode: true, college: true },
+      }),
+      prisma.userFriend.findMany({ where: { userId }, select: { friendId: true } }),
+      prisma.userFollow.findMany({ where: { followerId: userId }, select: { followingId: true } }),
+      prisma.userFollow.findMany({ where: { followingId: userId }, select: { followerId: true } }),
+      prisma.communityMember.findMany({ where: { userId }, select: { communityId: true } }),
+    ]);
+
+    const myFriendIds = new Set(myFriendRecords.map((f) => f.friendId));
+    const myFollowingIds = new Set(myFollowRecords.map((f) => f.followingId));
+    const myFollowerIds = new Set(myFollowerRecords.map((f) => f.followerId));
+    const myCommunityIds = new Set(myMemberships.map((m) => m.communityId));
+
+    // Users to exclude: self + existing friends + people we already follow
+    const excludeIds = new Set([
+      userId,
+      ...myFriendIds,
+      ...myFollowingIds,
+    ]);
+
+    // Fetch candidate users with their social graph for scoring
+    const candidates = await prisma.user.findMany({
+      where: { id: { notIn: Array.from(excludeIds) } },
+      orderBy: { createdAt: 'desc' },
+      // Fetch a wider pool so same-college users are not missed because of recency.
+      take: Math.min(500, (offset + limit) * 20),
+      select: {
+        id: true,
+        name: true,
+        avatarUrl: true,
+        friendCode: true,
+        collegeCode: true,
+        college: true,
+        communityMemberships: { select: { communityId: true } },
+        friends: { select: { friendId: true } },
+        followers: { select: { followerId: true } },
+      },
+    });
+
+    // Score and annotate each candidate using Instagram algorithm weights
+    const scored = candidates.map((u) => {
+      const theirFriendIds = new Set(u.friends.map((f) => f.friendId));
+      const theirFollowerIds = new Set(u.followers.map((f) => f.followerId));
+      const theirCommunityIds = new Set(u.communityMemberships.map((m) => m.communityId));
+
+      // Mutual & Social graph signals
+      const followsYou = myFollowerIds.has(u.id);
+      const mutualFriendCount = [...myFriendIds].filter((id) => theirFriendIds.has(id)).length;
+      const mutualFollowerCount = [...myFollowerIds].filter((id) => theirFollowerIds.has(id)).length;
+      const sharedCommunityCount = [...myCommunityIds].filter((id) => theirCommunityIds.has(id)).length;
+      const sameCollege = Boolean(
+        (currentUser?.collegeCode && u.collegeCode && currentUser.collegeCode === u.collegeCode) ||
+        (!currentUser?.collegeCode && currentUser?.college && u.college && currentUser.college === u.college)
+      );
+
+      // Same-college users get a strong boost while social graph signals still break ties.
+      const score =
+        (sameCollege ? 30 : 0) +
+        (followsYou ? 25 : 0) +
+        mutualFriendCount * 15 +
+        sharedCommunityCount * 8 +
+        mutualFollowerCount * 5;
+
+      return {
+        ...u,
+        score,
+        followsYou,
+        mutualFriendCount,
+        mutualFollowerCount,
+        sharedCommunityCount,
+        sameCollege,
+        theirFriendIds,
+      };
+    });
+
+    // Sort by score descending, then slice to limit
+    scored.sort((a, b) => b.score - a.score);
+    const topSuggestions = scored.slice(offset, offset + limit);
+
+    // Format suggestions with dynamic Instagram-style reason text and avatar previews
+    const formatted = await Promise.all(
+      topSuggestions.map(async (u) => {
+        const avatarUrl = await checkAndSyncAvatar({ id: u.id, name: u.name, avatarUrl: u.avatarUrl } as any);
+
+        // Collect mutual friend details (up to 3 for avatar previews)
+        const mutualFriendIds = [...myFriendIds].filter((id) => u.theirFriendIds.has(id)).slice(0, 3);
+
+        let mutualFriendPreviews: { id: string; name: string; avatarUrl: string | null }[] = [];
+        if (mutualFriendIds.length > 0) {
+          const mutualUsers = await prisma.user.findMany({
+            where: { id: { in: mutualFriendIds } },
+            select: { id: true, name: true, avatarUrl: true },
+          });
+          mutualFriendPreviews = await Promise.all(
+            mutualUsers.map(async (mu) => ({
+              id: mu.id,
+              name: mu.name,
+              avatarUrl: await checkAndSyncAvatar(mu as any),
+            }))
+          );
+        }
+
+        // Instagram-style human readable reason text
+        let reason: string;
+        if (u.sameCollege) {
+          reason = 'From your college';
+        } else if (u.followsYou) {
+          reason = 'Follows you';
+        } else if (mutualFriendPreviews.length > 0) {
+          const firstMutualName = mutualFriendPreviews[0].name.split(' ')[0];
+          const remainingCount = u.mutualFriendCount - 1;
+          reason = remainingCount > 0
+            ? `Followed by ${firstMutualName} + ${remainingCount} other${remainingCount > 1 ? 's' : ''}`
+            : `Followed by ${firstMutualName}`;
+        } else if (u.sharedCommunityCount > 0) {
+          reason = u.sharedCommunityCount === 1
+            ? 'In a community together'
+            : `${u.sharedCommunityCount} shared communities`;
+        } else if (u.mutualFollowerCount > 0) {
+          reason = 'Followed by your network';
+        } else {
+          reason = 'Suggested for you';
+        }
+
+        return {
+          id: u.id,
+          name: u.name,
+          avatarUrl,
+          friendCode: u.friendCode,
+          score: u.score,
+          followsYou: u.followsYou,
+          mutualFriends: u.mutualFriendCount,
+          mutualFollowers: u.mutualFollowerCount,
+          sharedCommunities: u.sharedCommunityCount,
+          sameCollege: u.sameCollege,
+          reason,
+          mutualFriendPreviews,
+        };
+      })
+    );
+
+    res.json({
+      suggestions: formatted,
+      hasMore: offset + limit < scored.length,
+      nextOffset: offset + formatted.length,
+    });
+  } catch (err) {
+    console.error('[getSuggestedUsers]', err);
+    res.status(500).json({ error: 'Failed to fetch suggested users' });
+  }
+};
+
 // ── My Network (friends + follow counts) ──────────────────────────────────────
 
 export const getMyNetwork = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
@@ -629,10 +793,67 @@ export const getMyNetwork = async (req: AuthenticatedRequest, res: Response): Pr
       }),
     ]);
 
+    // ── Mutual connections computation ──────────────────────────────────────
+    // For each friend, find which of my OTHER friends are also friends with them.
+    const myFriendIds = friendData.map((f) => f.friendId);
+
+    // Fetch each friend's friend list in one batched query
+    const friendsOfFriends = await prisma.userFriend.findMany({
+      where: {
+        userId: { in: myFriendIds },
+        friendId: { in: myFriendIds },
+      },
+      select: { userId: true, friendId: true },
+    });
+
+    // Build a map: friendId -> Set of mutual friend IDs (excluding themselves)
+    const mutualMap = new Map<string, Set<string>>();
+    for (const record of friendsOfFriends) {
+      if (record.userId === record.friendId) continue; // skip self
+      if (!mutualMap.has(record.userId)) {
+        mutualMap.set(record.userId, new Set());
+      }
+      mutualMap.get(record.userId)!.add(record.friendId);
+    }
+
+    // Collect all mutual friend IDs so we can fetch their details in one query
+    const allMutualIds = new Set<string>();
+    for (const set of mutualMap.values()) {
+      for (const id of set) allMutualIds.add(id);
+    }
+
+    const mutualUserDetails = await prisma.user.findMany({
+      where: { id: { in: Array.from(allMutualIds) } },
+      select: { id: true, name: true, avatarUrl: true },
+    });
+
+    const mutualDetailsMap = new Map<string, { id: string; name: string; avatarUrl: string | null }>();
+    for (const mu of mutualUserDetails) {
+      const avatarUrl = await checkAndSyncAvatar(mu as any);
+      mutualDetailsMap.set(mu.id, { id: mu.id, name: mu.name, avatarUrl });
+    }
+
     const friends = await Promise.all(
       friendData.map(async (f) => {
         const avatarUrl = await checkAndSyncAvatar(f.friend);
-        return { id: f.friend.id, name: f.friend.name, avatarUrl, friendCode: f.friend.friendCode };
+
+        // Build mutual connection previews (up to 3 avatars)
+        const mutualIds = mutualMap.get(f.friendId);
+        const mutualFriendPreviews = mutualIds
+          ? Array.from(mutualIds)
+            .slice(0, 3)
+            .map((id) => mutualDetailsMap.get(id))
+            .filter((m): m is { id: string; name: string; avatarUrl: string | null } => !!m)
+          : [];
+
+        return {
+          id: f.friend.id,
+          name: f.friend.name,
+          avatarUrl,
+          friendCode: f.friend.friendCode,
+          mutualFriends: mutualIds ? mutualIds.size : 0,
+          mutualFriendPreviews,
+        };
       })
     );
 
@@ -889,9 +1110,9 @@ export const addComment = async (req: AuthenticatedRequest, res: Response): Prom
     }
 
     const comment = await prisma.postComment.create({
-      data: { 
-        postId, 
-        userId, 
+      data: {
+        postId,
+        userId,
         content: content.trim(),
         parentId: parentId || null,
       },
@@ -1037,8 +1258,8 @@ export const getUserPosts = async (req: AuthenticatedRequest, res: Response): Pr
       }),
       currentUserId
         ? prisma.userFollow.findUnique({
-            where: { followerId_followingId: { followerId: currentUserId, followingId: targetUserId } },
-          })
+          where: { followerId_followingId: { followerId: currentUserId, followingId: targetUserId } },
+        })
         : null,
     ]);
 
@@ -1076,4 +1297,3 @@ export const getUserPosts = async (req: AuthenticatedRequest, res: Response): Pr
     res.status(500).json({ error: 'Failed to fetch user posts' });
   }
 };
-

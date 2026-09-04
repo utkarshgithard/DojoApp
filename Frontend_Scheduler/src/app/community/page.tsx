@@ -164,80 +164,98 @@ export default function CommunityPage() {
     >
       <div className="max-w-[680px] xl:max-w-[1240px] w-full mx-auto px-4 relative xl:grid xl:grid-cols-[minmax(0,680px)_480px] xl:justify-center xl:gap-6 xl:items-start">
         <div className="w-full flex flex-col">
-          {/* Page header */}
-          <div className={`sticky ${showNavbar ? 'top-[50px]' : 'top-0'} md:top-0 z-20 mb-4 backdrop-blur-md border rounded-md flex items-center justify-between p-3 sm:p-4 transition-all duration-300 ${dark ? 'bg-zinc-950/40 border-zinc-800 text-white' : 'bg-white border-zinc-200 text-zinc-900'
-            }`}>
-            <div className="flex items-center gap-2 sm:gap-3">
-              <button
-                onClick={() => router.back()}
-                className={`p-1.5 sm:p-2 rounded-xl transition-all mr-0.5 sm:mr-1 ${dark ? 'text-zinc-400 hover:text-white hover:bg-zinc-900' : 'text-zinc-500 hover:text-zinc-800 hover:bg-zinc-100'}`}
-                title="Go back"
-              >
-                <ArrowLeft size={18} className="sm:w-5 sm:h-5" />
-              </button>
-              <div
-                className={`hidden sm:flex w-10 h-10 rounded-xl items-center justify-center ${dark ? 'bg-indigo-500/10 text-indigo-400' : 'bg-indigo-50 text-indigo-600'
-                  }`}
-              >
-                <Users2 size={20} />
-              </div>
-              <div>
-                <h1 className={`text-[17px] sm:text-[20px] font-bold tracking-tight ${dark ? 'text-white' : 'text-zinc-900'}`}>
-                  Community
-                </h1>
-                <p className={`text-[12.5px] hidden sm:block ${dark ? 'text-zinc-500' : 'text-zinc-500'}`}>
-                  Share updates from the dojo
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              {/* Mobile Shared Inbox Icon */}
-              {isAuthenticated && (
+          {/* Page header sticky wrapper that masks scrolling posts cleanly */}
+          <div
+            className={`sticky ${showNavbar ? 'top-[50px]' : 'top-0'} md:top-0 z-30 pt-3 md:pt-4 pb-3 -mt-3 md:-mt-4 mb-4 backdrop-blur-xl transition-all duration-300 ${
+              dark ? 'bg-[#0a0a0a]/95' : 'bg-[#f5f5f5]/95'
+            }`}
+          >
+            <div
+              className={`border rounded-2xl flex items-center justify-between p-3.5 sm:p-4 transition-all duration-300 shadow-sm ${
+                dark
+                  ? 'bg-zinc-950 border-zinc-800/90 text-white shadow-black/40'
+                  : 'bg-white border-zinc-200/90 text-zinc-900 shadow-zinc-200/50'
+              }`}
+            >
+              <div className="flex items-center gap-3">
                 <button
-                  onClick={() => router.push('/community/shares')}
-                  className={`relative p-2 rounded-xl border transition-all xl:hidden ${dark
-                    ? 'border-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-900'
-                    : 'border-zinc-200 text-zinc-500 hover:text-zinc-800 hover:bg-white'
-                    }`}
-                  title="Shared with me"
-                >
-                  <Inbox size={16} />
-                  {sharesTotalCount > 0 && (
-                    <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center animate-pulse">
-                      {sharesTotalCount}
-                    </span>
-                  )}
-                </button>
-              )}
-
-              <button
-                onClick={() => router.push('/community/groups')}
-                className={`p-2 rounded-xl border transition-all ${dark
-                  ? 'border-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-900'
-                  : 'border-zinc-200 text-zinc-500 hover:text-zinc-800 hover:bg-zinc-100'
+                  onClick={() => router.back()}
+                  className={`p-2 rounded-xl transition-all duration-200 ${
+                    dark ? 'text-zinc-400 hover:text-white hover:bg-zinc-800/80' : 'text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100'
                   }`}
-                title="Explore Communities"
-              >
-                <Orbit size={16} />
-              </button>
+                  title="Go back"
+                >
+                  <ArrowLeft size={19} />
+                </button>
+                <div className="flex items-center gap-2.5">
+                  <div
+                    className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-md ${
+                      dark ? 'bg-indigo-600/20 text-indigo-400 ring-1 ring-indigo-500/30' : 'bg-indigo-50 text-indigo-600 ring-1 ring-indigo-200'
+                    }`}
+                  >
+                    <Users2 size={21} />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h1 className={`text-[18px] sm:text-[21px] font-extrabold tracking-tight ${dark ? 'text-white' : 'text-zinc-900'}`}>
+                        Community Feed
+                      </h1>
+                    </div>
+                  </div>
+                </div>
+              </div>
 
-              <button
-                onClick={handleRefresh}
-                disabled={fetching}
-                className={`p-2 rounded-xl border transition-all ${dark
-                  ? 'border-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-900'
-                  : 'border-zinc-200 text-zinc-500 hover:text-zinc-800 hover:bg-zinc-100'
+              <div className="flex items-center gap-2">
+                {/* Mobile Shared Inbox Icon */}
+                {isAuthenticated && (
+                  <button
+                    onClick={() => router.push('/community/shares')}
+                    className={`relative p-2.5 rounded-xl border transition-all duration-200 xl:hidden ${
+                      dark
+                        ? 'border-zinc-800/80 text-zinc-400 hover:text-white hover:bg-zinc-800'
+                        : 'border-zinc-200 text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100'
+                    }`}
+                    title="Shared with me"
+                  >
+                    <Inbox size={17} />
+                    {sharesTotalCount > 0 && (
+                      <span className="absolute -top-1 -right-1 w-4.5 h-4.5 bg-rose-500 text-white text-[9.5px] font-extrabold rounded-full flex items-center justify-center shadow-md shadow-rose-500/30 animate-pulse">
+                        {sharesTotalCount}
+                      </span>
+                    )}
+                  </button>
+                )}
+
+                <button
+                  onClick={() => router.push('/community/groups')}
+                  className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border text-[13px] font-semibold transition-all duration-200 ${
+                    dark
+                      ? 'border-zinc-800/80 text-zinc-300 hover:text-white hover:bg-zinc-800 hover:border-zinc-700'
+                      : 'border-zinc-200 text-zinc-700 hover:text-zinc-900 hover:bg-zinc-100'
+                  }`}
+                  title="Explore Communities"
+                >
+                  <Orbit size={16} className="text-indigo-500" />
+                  <span className="hidden sm:inline">Groups</span>
+                </button>
+
+                <button
+                  onClick={handleRefresh}
+                  disabled={fetching}
+                  className={`p-2.5 rounded-xl border transition-all duration-200 ${
+                    dark
+                      ? 'border-zinc-800/80 text-zinc-400 hover:text-white hover:bg-zinc-800'
+                      : 'border-zinc-200 text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100'
                   } disabled:opacity-40`}
-                title="Refresh feed"
-              >
-                <RefreshCw size={16} className={fetching ? 'animate-spin' : ''} />
-              </button>
+                  title="Refresh feed"
+                >
+                  <RefreshCw size={17} className={fetching ? 'animate-spin text-indigo-500' : ''} />
+                </button>
+              </div>
             </div>
           </div>
 
-
-          {/* New Posts Indicator at the bottom */}
+          {/* Floating New Posts Banner */}
           {hasNewPosts && (
             <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 animate-in fade-in slide-in-from-bottom-4 duration-300">
               <button
@@ -245,72 +263,73 @@ export default function CommunityPage() {
                   applyNewPosts();
                   window.scrollTo({ top: 0, behavior: 'smooth' });
                 }}
-                className={`flex items-center gap-2 px-5 py-2.5 rounded-full shadow-xl border text-[13px] font-semibold transition-all duration-300 hover:scale-105 active:scale-95 ${dark
-                  ? 'bg-zinc-900/90 backdrop-blur-md border-zinc-800 text-indigo-400 hover:bg-zinc-800 hover:text-indigo-300'
-                  : 'bg-white/90 backdrop-blur-md border-zinc-200 text-indigo-600 hover:bg-zinc-50 hover:text-indigo-700'
-                  } animate-bounce`}
-                style={{ animationDuration: '2.5s' }}
+                className={`flex items-center gap-2 px-5 py-2.5 rounded-full shadow-2xl border text-[13px] font-bold transition-all duration-300 hover:scale-105 active:scale-95 ${dark
+                  ? 'bg-zinc-900/90 backdrop-blur-xl border-indigo-500/40 text-indigo-300 hover:bg-zinc-800 shadow-indigo-900/40'
+                  : 'bg-white/95 backdrop-blur-xl border-indigo-300 text-indigo-600 hover:bg-indigo-50 shadow-indigo-500/20'
+                  }`}
               >
-                <ArrowUp size={14} />
+                <ArrowUp size={15} className="animate-bounce" />
                 <span>New posts available</span>
               </button>
             </div>
           )}
 
-          {/* Feed */}
+          {/* Feed Content */}
           {initialLoading ? (
-            <div className="space-y-2">
+            <div className="space-y-4">
               {[1, 2, 3].map((i) => (
                 <div
                   key={i}
-                  className={`rounded-md border p-4 animate-pulse ${dark ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-zinc-200'
+                  className={`rounded-2xl border p-5 sm:p-6 animate-pulse transition-all ${dark ? 'bg-zinc-900/40 border-zinc-800/80' : 'bg-white border-zinc-200/80'
                     }`}
                 >
-                  <div className="flex gap-3 mb-3">
-                    <div className={`w-10 h-10 rounded-full ${dark ? 'bg-zinc-800' : 'bg-zinc-200'}`} />
-                    <div className="flex-1 space-y-2">
-                      <div className={`h-3 w-32 rounded ${dark ? 'bg-zinc-800' : 'bg-zinc-200'}`} />
-                      <div className={`h-2.5 w-20 rounded ${dark ? 'bg-zinc-800' : 'bg-zinc-200'}`} />
+                  <div className="flex gap-3.5 mb-4">
+                    <div className={`w-11 h-11 rounded-full ${dark ? 'bg-zinc-800' : 'bg-zinc-200'}`} />
+                    <div className="flex-1 space-y-2 pt-1">
+                      <div className={`h-3.5 w-36 rounded-md ${dark ? 'bg-zinc-800' : 'bg-zinc-200'}`} />
+                      <div className={`h-2.5 w-24 rounded-md ${dark ? 'bg-zinc-800' : 'bg-zinc-200'}`} />
                     </div>
                   </div>
-                  <div className={`h-3 rounded mb-2 ${dark ? 'bg-zinc-800' : 'bg-zinc-200'}`} />
-                  <div className={`h-3 rounded w-3/4 ${dark ? 'bg-zinc-800' : 'bg-zinc-200'}`} />
+                  <div className="space-y-2 mb-3">
+                    <div className={`h-3.5 rounded-md ${dark ? 'bg-zinc-800' : 'bg-zinc-200'}`} />
+                    <div className={`h-3.5 rounded-md w-4/5 ${dark ? 'bg-zinc-800' : 'bg-zinc-200'}`} />
+                  </div>
                 </div>
               ))}
             </div>
           ) : error ? (
             <div
-              className={`rounded-md border p-8 text-center ${dark ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-zinc-200'
+              className={`rounded-2xl border p-10 text-center shadow-md ${dark ? 'bg-zinc-900/60 border-zinc-800/80' : 'bg-white border-zinc-200'
                 }`}
             >
-              <p className={`text-[14px] mb-4 ${dark ? 'text-zinc-400' : 'text-zinc-500'}`}>{error}</p>
+              <p className={`text-[14.5px] font-medium mb-4 ${dark ? 'text-zinc-300' : 'text-zinc-600'}`}>{error}</p>
               <button
                 onClick={handleRefresh}
-                className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-[13px] font-medium transition-all"
+                className="px-5 py-2.5 rounded-full bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white text-[13.5px] font-bold shadow-md shadow-indigo-600/25 transition-all duration-200 active:scale-95"
               >
                 Try again
               </button>
             </div>
           ) : posts.length === 0 ? (
             <div
-              className={`rounded-md border p-12 text-center ${dark ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-zinc-200'
+              className={`rounded-2xl border p-12 text-center shadow-md ${dark ? 'bg-zinc-900/60 border-zinc-800/80' : 'bg-white border-zinc-200'
                 }`}
             >
               <div
-                className={`w-16 h-16 rounded-lg mx-auto mb-4 flex items-center justify-center ${dark ? 'bg-zinc-800' : 'bg-zinc-100'
+                className={`w-16 h-16 rounded-2xl mx-auto mb-4 flex items-center justify-center shadow-inner ${dark ? 'bg-indigo-950/40 text-indigo-400 ring-1 ring-indigo-800/50' : 'bg-indigo-50 text-indigo-600 ring-1 ring-indigo-200'
                   }`}
               >
-                <Users2 size={28} className={dark ? 'text-zinc-500' : 'text-zinc-400'} />
+                <Users2 size={32} />
               </div>
-              <p className={`text-[15px] font-semibold mb-1 ${dark ? 'text-white' : 'text-zinc-800'}`}>
-                Nothing here yet
+              <p className={`text-[16px] font-bold mb-1.5 ${dark ? 'text-white' : 'text-zinc-900'}`}>
+                No community posts yet
               </p>
-              <p className={`text-[13px] ${dark ? 'text-zinc-500' : 'text-zinc-400'}`}>
-                Be the first to post something to the dojo community!
+              <p className={`text-[13.5px] max-w-sm mx-auto font-medium ${dark ? 'text-zinc-400' : 'text-zinc-500'}`}>
+                Be the first to share an update, question, or study note with fellow students!
               </p>
             </div>
           ) : (
-            <div className={`rounded-xl border overflow-hidden shadow-sm divide-y ${dark ? 'bg-zinc-950/40 border-zinc-800 divide-zinc-800' : 'bg-white border-zinc-200 divide-zinc-200/80'
+            <div className={`rounded-2xl border overflow-hidden shadow-md divide-y transition-all duration-300 ${dark ? 'bg-zinc-950/40 border-zinc-800/80 divide-zinc-800/80 shadow-black/40' : 'bg-white border-zinc-200/80 divide-zinc-100 shadow-zinc-200/50'
               }`}>
               {posts.map((post) => (
                 <CommunityPostCard
@@ -322,21 +341,21 @@ export default function CommunityPage() {
                 />
               ))}
 
-              {/* Load More */}
+              {/* Load More Button */}
               {nextCursor && (
-                <div className="pt-4 pb-8 flex justify-center bg-white/50 dark:bg-zinc-950/10">
+                <div className="py-6 flex justify-center bg-white/40 dark:bg-zinc-950/20">
                   <button
                     onClick={handleLoadMore}
                     disabled={fetching}
-                    className={`px-6 py-2.5 rounded-xl border text-[13px] font-medium transition-all ${dark
-                        ? 'border-zinc-700 text-zinc-300 hover:bg-zinc-900 disabled:opacity-40'
-                        : 'border-zinc-300 text-zinc-700 hover:bg-white shadow-sm disabled:opacity-40'
+                    className={`px-7 py-2.5 rounded-full border text-[13px] font-bold transition-all duration-300 shadow-sm active:scale-95 ${dark
+                      ? 'border-zinc-700/80 bg-zinc-900/60 text-zinc-200 hover:bg-zinc-800 hover:border-zinc-600 disabled:opacity-40'
+                      : 'border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-50 disabled:opacity-40'
                       }`}
                   >
                     {fetching ? (
                       <span className="flex items-center gap-2">
-                        <span className="w-3.5 h-3.5 border-[1.5px] border-current border-t-transparent rounded-full animate-spin" />
-                        Loading…
+                        <span className="w-3.5 h-3.5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+                        Loading posts…
                       </span>
                     ) : (
                       'Load more posts'
@@ -346,9 +365,9 @@ export default function CommunityPage() {
               )}
 
               {!nextCursor && posts.length > 0 && (
-                <div className="py-6 bg-white/50 dark:bg-zinc-950/10">
-                  <p className={`text-center text-[12px] ${dark ? 'text-zinc-500' : 'text-zinc-400'}`}>
-                    You&apos;ve seen all the posts 🎉
+                <div className="py-6 bg-white/40 dark:bg-zinc-950/20">
+                  <p className={`text-center text-[12.5px] font-semibold tracking-wide ${dark ? 'text-zinc-500' : 'text-zinc-400'}`}>
+                    You&apos;ve reached the end of the feed 🎉
                   </p>
                 </div>
               )}
@@ -358,37 +377,40 @@ export default function CommunityPage() {
 
         {/* Desktop right column: Composer + Shared Inbox + Explore Communities */}
         {isAuthenticated ? (
-          <div className="hidden xl:block sticky top-[24px] space-y-4">
+          <div className="hidden xl:block sticky top-4 space-y-5">
             <CommunityPostComposer
               currentUser={{ id: userId, name: userName || 'You', avatarUrl }}
               dark={dark}
               onPostCreated={handlePostCreated}
             />
-            <div className={`rounded-xl border p-5 ${dark ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-zinc-200 shadow-sm'}`}>
+            <div className={`rounded-2xl border p-5 backdrop-blur-md transition-all duration-300 shadow-md ${dark ? 'bg-zinc-900/60 border-zinc-800/80 shadow-black/40' : 'bg-white/90 border-zinc-200/80 shadow-zinc-200/50'
+              }`}>
               <div className="flex items-center justify-between mb-4">
-                <h3 className={`text-[14px] font-bold ${dark ? 'text-white' : 'text-zinc-800'}`}>Communities</h3>
+                <div className="flex items-center gap-2">
+                  <div className={`w-2 h-2 rounded-full ${dark ? 'bg-indigo-400' : 'bg-indigo-600'}`} />
+                  <h3 className={`text-[15px] font-extrabold tracking-tight ${dark ? 'text-white' : 'text-zinc-900'}`}>My Groups</h3>
+                </div>
                 {myCommunities.length > 0 && (
                   <button
                     onClick={() => router.push('/community/groups')}
-                    className="group flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-500/10 dark:hover:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 transition-all duration-300 hover:scale-105 active:scale-95"
+                    className="group flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-500/15 dark:hover:bg-indigo-500/25 text-indigo-600 dark:text-indigo-300 transition-all duration-300 active:scale-95 border border-indigo-200/50 dark:border-indigo-500/30"
                   >
-                    <span className="text-[12px] font-semibold">Explore</span>
-                    <Orbit size={14} className="transition-transform duration-700 group-hover:rotate-[360deg] ease-in-out" />
+                    <span className="text-[12px] font-bold">Explore All</span>
+                    <Orbit size={13} className="transition-transform duration-700 group-hover:rotate-[360deg] ease-in-out" />
                   </button>
                 )}
               </div>
 
               {myCommunities.length > 0 ? (
-                <div className="flex flex-wrap gap-2 mb-3 max-h-[220px] overflow-y-auto pr-1 scrollbar-thin">
+                <div className="flex flex-wrap gap-2 mb-2 max-h-[220px] overflow-y-auto pr-1 scrollbar-thin">
                   {myCommunities.map((group) => (
                     <div
                       key={group.id}
                       onClick={() => router.push(`/community/groups/${group.slug}`)}
-                      className={`flex items-center gap-2 px-3 py-1.5 rounded-full cursor-pointer transition-all duration-300 border hover:-translate-y-0.5 hover:shadow-md ${
-                        dark
-                          ? 'bg-zinc-800/40 border-zinc-700 hover:bg-zinc-700/80 hover:border-zinc-600 active:bg-zinc-800'
-                          : 'bg-zinc-50 border-zinc-200 hover:bg-white hover:border-zinc-300 active:bg-zinc-100'
-                      }`}
+                      className={`group flex items-center gap-2 px-3 py-1.5 rounded-full cursor-pointer transition-all duration-300 border hover:-translate-y-0.5 hover:shadow-md ${dark
+                        ? 'bg-zinc-950/60 border-zinc-800/80 hover:bg-zinc-800/80 hover:border-indigo-500/40 text-zinc-200'
+                        : 'bg-zinc-50 border-zinc-200 hover:bg-white hover:border-indigo-300 text-zinc-800'
+                        }`}
                     >
                       {group.avatarUrl ? (
                         <img
@@ -397,40 +419,38 @@ export default function CommunityPage() {
                           className="w-5 h-5 rounded-full object-cover border border-zinc-200 dark:border-zinc-700"
                         />
                       ) : (
-                        <div className={`w-5 h-5 rounded-full flex items-center justify-center font-bold text-[10px] ${
-                          dark ? 'bg-indigo-950 text-indigo-400' : 'bg-indigo-50 text-indigo-600'
-                        }`}>
+                        <div className={`w-5 h-5 rounded-full flex items-center justify-center font-extrabold text-[9.5px] ${dark ? 'bg-indigo-950 text-indigo-400' : 'bg-indigo-100 text-indigo-700'
+                          }`}>
                           {group.name.slice(0, 2).toUpperCase()}
                         </div>
                       )}
-                      <span className={`text-[12.5px] font-medium truncate max-w-[120px] ${dark ? 'text-zinc-200' : 'text-zinc-800'}`}>
+                      <span className="text-[12.5px] font-semibold truncate max-w-[130px] group-hover:text-indigo-500 transition-colors">
                         {group.name}
                       </span>
                     </div>
                   ))}
                 </div>
               ) : myLoading ? (
-                <div className="space-y-3 mb-4">
+                <div className="space-y-2.5 mb-4">
                   {[1, 2].map((i) => (
                     <div key={i} className="flex items-center gap-3 p-2 animate-pulse">
-                      <div className={`w-8 h-8 rounded-lg ${dark ? 'bg-zinc-800' : 'bg-zinc-150'}`} />
+                      <div className={`w-8 h-8 rounded-full ${dark ? 'bg-zinc-800' : 'bg-zinc-200'}`} />
                       <div className="flex-1 space-y-1.5">
-                        <div className={`h-3 w-2/3 rounded ${dark ? 'bg-zinc-800' : 'bg-zinc-150'}`} />
-                        <div className={`h-2.5 w-1/3 rounded ${dark ? 'bg-zinc-800' : 'bg-zinc-150'}`} />
+                        <div className={`h-3 w-2/3 rounded-md ${dark ? 'bg-zinc-800' : 'bg-zinc-200'}`} />
                       </div>
                     </div>
                   ))}
                 </div>
               ) : (
-                <p className={`text-[12.5px] leading-relaxed mb-4 ${dark ? 'text-zinc-400' : 'text-zinc-500'}`}>
-                  Join specialized interest groups, post to specific communities, or moderate your own.
+                <p className={`text-[12.5px] leading-relaxed mb-4 font-medium ${dark ? 'text-zinc-400' : 'text-zinc-500'}`}>
+                  Join specialized study groups, post to targeted communities, or create your own study hub.
                 </p>
               )}
 
               {(myCommunities.length === 0 && !myLoading) && (
                 <button
                   onClick={() => router.push('/community/groups')}
-                  className="group relative w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white text-[13px] font-semibold transition-all duration-300 hover:shadow-lg hover:shadow-indigo-500/30 hover:-translate-y-0.5 active:translate-y-0 active:scale-95"
+                  className="group relative w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white text-[13px] font-bold transition-all duration-300 shadow-md shadow-indigo-600/25 hover:shadow-lg hover:shadow-indigo-500/35 active:scale-95"
                 >
                   <Orbit size={16} className="transition-transform group-hover:rotate-[360deg] duration-1000 ease-in-out" />
                   <span>Explore Communities</span>
@@ -446,11 +466,11 @@ export default function CommunityPage() {
               {/* DojoClass Themed Minimal SVG */}
               <div className="flex justify-center mb-4 mt-1">
                 <div className="relative group">
-                  <svg 
-                    width="96" 
-                    height="96" 
-                    viewBox="0 0 120 120" 
-                    fill="none" 
+                  <svg
+                    width="96"
+                    height="96"
+                    viewBox="0 0 120 120"
+                    fill="none"
                     xmlns="http://www.w3.org/2000/svg"
                     className="transform group-hover:scale-105 transition-transform duration-300"
                   >
@@ -462,7 +482,7 @@ export default function CommunityPage() {
                         <stop offset="70%" stopColor="#4f46e5" />
                         <stop offset="100%" stopColor="#3730a3" />
                       </linearGradient>
-                      
+
                       <linearGradient id="rocketBodyGradDark" x1="0%" y1="0%" x2="100%" y2="0%">
                         <stop offset="0%" stopColor="#27272a" />
                         <stop offset="35%" stopColor="#52525b" />
@@ -482,7 +502,7 @@ export default function CommunityPage() {
                         <stop offset="100%" stopColor="#312e81" />
                       </linearGradient>
                     </defs>
-                     <style>{`
+                    <style>{`
                       svg {
                         perspective: 300px;
                         transform-style: preserve-3d;
@@ -527,79 +547,79 @@ export default function CommunityPage() {
                     `}</style>
 
                     {/* Outer Dashed Zen Circle */}
-                    <circle 
-                      cx="60" 
-                      cy="60" 
-                      r="50" 
-                      className={dark ? 'stroke-indigo-500/20' : 'stroke-indigo-500/15'} 
-                      strokeWidth="1.5" 
-                      strokeDasharray="4 4" 
+                    <circle
+                      cx="60"
+                      cy="60"
+                      r="50"
+                      className={dark ? 'stroke-indigo-500/20' : 'stroke-indigo-500/15'}
+                      strokeWidth="1.5"
+                      strokeDasharray="4 4"
                     />
                     {/* Inner Glowing Glow */}
-                    <circle 
-                      cx="60" 
-                      cy="60" 
-                      r="42" 
-                      className={dark ? 'fill-indigo-500/5 stroke-indigo-500/10' : 'fill-indigo-500/5 stroke-indigo-500/5'} 
+                    <circle
+                      cx="60"
+                      cy="60"
+                      r="42"
+                      className={dark ? 'fill-indigo-500/5 stroke-indigo-500/10' : 'fill-indigo-500/5 stroke-indigo-500/5'}
                       strokeWidth="1"
                     />
 
                     {/* Animated Rocket Group - 3D Rendered & Enlarged */}
                     <g className="rocket-g">
                       {/* Flame Layer 1 (Outer Amber Plume) */}
-                      <path 
-                        d="M52 85 C49 98, 60 108, 60 108 C60 108, 71 98, 68 85 Z" 
+                      <path
+                        d="M52 85 C49 98, 60 108, 60 108 C60 108, 71 98, 68 85 Z"
                         fill="currentColor"
                         className="text-amber-500/90 rocket-flame-1"
                       />
                       {/* Flame Layer 2 (Inner Yellow Core) */}
-                      <path 
-                        d="M55 85 C54 94, 60 100, 60 100 C60 100, 66 94, 65 85 Z" 
+                      <path
+                        d="M55 85 C54 94, 60 100, 60 100 C60 100, 66 94, 65 85 Z"
                         fill="currentColor"
                         className="text-yellow-400 rocket-flame-2"
                       />
 
                       {/* Left Rocket Wing (3D shaded and larger) */}
-                      <path 
-                        d="M48 62 C26 67, 22 84, 31 88 C39 91, 45 82, 48 74 Z" 
+                      <path
+                        d="M48 62 C26 67, 22 84, 31 88 C39 91, 45 82, 48 74 Z"
                         fill="url(#wingLeftGrad)"
-                        stroke="currentColor" 
-                        strokeWidth="2" 
-                        strokeLinecap="round" 
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
                         strokeLinejoin="round"
                         className="dark:stroke-indigo-400"
                       />
                       {/* Wing Highlight Panel */}
-                      <path 
-                        d="M36 82 C42 80, 44 76, 46 70" 
-                        stroke="#a5b4fc" 
-                        strokeWidth="1.2" 
+                      <path
+                        d="M36 82 C42 80, 44 76, 46 70"
+                        stroke="#a5b4fc"
+                        strokeWidth="1.2"
                         strokeLinecap="round"
                         className="opacity-70"
                       />
 
                       {/* Right Rocket Wing (3D shaded and larger) */}
-                      <path 
-                        d="M72 62 C94 67, 98 84, 89 88 C81 91, 75 82, 72 74 Z" 
+                      <path
+                        d="M72 62 C94 67, 98 84, 89 88 C81 91, 75 82, 72 74 Z"
                         fill="url(#wingRightGrad)"
-                        stroke="currentColor" 
-                        strokeWidth="2" 
-                        strokeLinecap="round" 
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
                         strokeLinejoin="round"
                         className="dark:stroke-indigo-400"
                       />
                       {/* Wing Highlight Panel */}
-                      <path 
-                        d="M84 82 C78 80, 76 76, 74 70" 
-                        stroke="#a5b4fc" 
-                        strokeWidth="1.2" 
+                      <path
+                        d="M84 82 C78 80, 76 76, 74 70"
+                        stroke="#a5b4fc"
+                        strokeWidth="1.2"
                         strokeLinecap="round"
                         className="opacity-70"
                       />
 
                       {/* Rocket Engine Nozzle (3D curved base) */}
-                      <path 
-                        d="M52 85 C52 85, 54 90, 60 90 C66 90, 68 85, 68 85 Z" 
+                      <path
+                        d="M52 85 C52 85, 54 90, 60 90 C66 90, 68 85, 68 85 Z"
                         fill="currentColor"
                         className="text-zinc-600 dark:text-zinc-400"
                         stroke="currentColor"
@@ -607,33 +627,33 @@ export default function CommunityPage() {
                       />
 
                       {/* Rocket Body (sleek 3D capsule with horizontal shadow wrap) */}
-                      <path 
-                        d="M60 12 C72 28, 72 52, 72 85 H48 C48 52, 48 28, 60 12 Z" 
+                      <path
+                        d="M60 12 C72 28, 72 52, 72 85 H48 C48 52, 48 28, 60 12 Z"
                         fill={dark ? 'url(#rocketBodyGradDark)' : 'url(#rocketBodyGrad)'}
-                        stroke="currentColor" 
-                        strokeWidth="2.2" 
-                        strokeLinecap="round" 
+                        stroke="currentColor"
+                        strokeWidth="2.2"
+                        strokeLinecap="round"
                         strokeLinejoin="round"
-                        className="dark:stroke-zinc-700" 
+                        className="dark:stroke-zinc-700"
                       />
 
                       {/* 3D Specular Highlight Line along left side of rocket body */}
-                      <path 
-                        d="M52 24 C50.5 35, 50.5 52, 52 75" 
-                        stroke="#ffffff" 
-                        strokeWidth="1.5" 
-                        strokeLinecap="round" 
+                      <path
+                        d="M52 24 C50.5 35, 50.5 52, 52 75"
+                        stroke="#ffffff"
+                        strokeWidth="1.5"
+                        strokeLinecap="round"
                         className="opacity-45 pointer-events-none"
                       />
 
                       {/* Nose Cone colored tip with 3D gradient */}
-                      <path 
-                        d="M60 12 C64.5 18, 67.5 25, 68 31 H52 C52.5 25, 55.5 18, 60 12 Z" 
+                      <path
+                        d="M60 12 C64.5 18, 67.5 25, 68 31 H52 C52.5 25, 55.5 18, 60 12 Z"
                         fill="currentColor"
                         className="text-indigo-900 dark:text-indigo-300 opacity-20"
                       />
-                      <path 
-                        d="M60 12 C64.5 18, 67.5 25, 68 31 H52 C52.5 25, 55.5 18, 60 12 Z" 
+                      <path
+                        d="M60 12 C64.5 18, 67.5 25, 68 31 H52 C52.5 25, 55.5 18, 60 12 Z"
                         stroke="currentColor"
                         strokeWidth="2"
                         className="text-indigo-600 dark:text-indigo-400"
@@ -641,36 +661,36 @@ export default function CommunityPage() {
                       />
 
                       {/* Double Ring 3D Porthole Window */}
-                      <circle 
-                        cx="60" 
-                        cy="48" 
-                        r="8.5" 
-                        stroke="currentColor" 
-                        strokeWidth="2.2" 
+                      <circle
+                        cx="60"
+                        cy="48"
+                        r="8.5"
+                        stroke="currentColor"
+                        strokeWidth="2.2"
                         className="text-indigo-500 dark:text-indigo-400 fill-indigo-900/10"
                       />
-                      <circle 
-                        cx="60" 
-                        cy="48" 
-                        r="5.5" 
-                        stroke="currentColor" 
-                        strokeWidth="1.2" 
+                      <circle
+                        cx="60"
+                        cy="48"
+                        r="5.5"
+                        stroke="currentColor"
+                        strokeWidth="1.2"
                         className="text-indigo-400 dark:text-indigo-300 fill-zinc-50 dark:fill-zinc-900"
                       />
                       {/* Specular window reflection dot */}
-                      <circle 
-                        cx="57.5" 
-                        cy="45.5" 
-                        r="1.2" 
-                        fill="#ffffff" 
+                      <circle
+                        cx="57.5"
+                        cy="45.5"
+                        r="1.2"
+                        fill="#ffffff"
                         className="opacity-80"
                       />
-                      
+
                       {/* Body Panel line (vertical seam) */}
-                      <line 
-                        x1="60" y1="60" x2="60" y2="85" 
-                        stroke="currentColor" 
-                        strokeWidth="1.5" 
+                      <line
+                        x1="60" y1="60" x2="60" y2="85"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
                         className="text-indigo-500/30 dark:text-indigo-400/30"
                       />
                     </g>
@@ -679,10 +699,10 @@ export default function CommunityPage() {
                     <g className="star-orbit-group">
                       {/* Star 1 (Top Left) */}
                       <g className="star-spin-1">
-                        <path 
-                          d="M25 21 L26.2 23.5 L28.8 24 L27 25.8 L27.5 28.5 L25 27 L22.5 28.5 L23 25.8 L21.2 24 L23.8 23.5 Z" 
-                          fill="currentColor" 
-                          className="text-indigo-400" 
+                        <path
+                          d="M25 21 L26.2 23.5 L28.8 24 L27 25.8 L27.5 28.5 L25 27 L22.5 28.5 L23 25.8 L21.2 24 L23.8 23.5 Z"
+                          fill="currentColor"
+                          className="text-indigo-400"
                         />
                       </g>
                       {/* Star 2 (Right) */}
@@ -695,10 +715,10 @@ export default function CommunityPage() {
                       </g>
                       {/* Star 4 (Bottom Right) */}
                       <g className="star-spin-4">
-                        <path 
-                          d="M90 77 L91.2 79.5 L93.8 80 L92 81.8 L92.5 84.5 L90 83 L87.5 84.5 L88 81.8 L86.2 80 L88.8 79.5 Z" 
-                          fill="currentColor" 
-                          className="text-violet-400" 
+                        <path
+                          d="M90 77 L91.2 79.5 L93.8 80 L92 81.8 L92.5 84.5 L90 83 L87.5 84.5 L88 81.8 L86.2 80 L88.8 79.5 Z"
+                          fill="currentColor"
+                          className="text-violet-400"
                         />
                       </g>
                     </g>
@@ -736,8 +756,8 @@ export default function CommunityPage() {
           <button
             onClick={() => cameraFabInputRef.current?.click()}
             className={`w-12 h-12 rounded-full flex items-center justify-center shadow-lg border active:scale-95 transition-all ${dark
-                ? 'bg-zinc-900 border-zinc-800 text-zinc-300 hover:bg-zinc-800 hover:text-white'
-                : 'bg-white border-zinc-200 text-zinc-600 hover:bg-zinc-50 hover:text-zinc-900'
+              ? 'bg-zinc-900 border-zinc-800 text-zinc-300 hover:bg-zinc-800 hover:text-white'
+              : 'bg-white border-zinc-200 text-zinc-600 hover:bg-zinc-50 hover:text-zinc-900'
               }`}
             title="Snap a photo"
           >

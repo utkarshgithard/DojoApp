@@ -18,13 +18,20 @@ subjectRouter.get('/', verifyToken, async (req: AuthenticatedRequest, res: Respo
     const userId = req.userId!;
     const dayName = new Date(date).toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
 
-    // 1. Get subjects scheduled for that day
-    const subjects = await prisma.subject.findMany({
-      where: {
-        userId,
-        days: { has: dayName },
+    // ── FIX: Query through ScheduleEntries (same source of truth as the calendar) ──
+    // Previously we queried Subject.days[] directly, which could be stale after
+    // calendar deletions. ScheduleEntry is always authoritative.
+    const scheduleDoc = await prisma.schedule.findUnique({
+      where: { userId },
+      include: {
+        entries: {
+          where: { day: dayName },
+          include: { subject: true },
+        },
       },
     });
+
+    const subjects = scheduleDoc?.entries.map((e) => e.subject) ?? [];
 
     // 2. Get attendance records for that day
     const attendanceRecord = await prisma.attendanceRecord.findUnique({
@@ -44,6 +51,7 @@ subjectRouter.get('/', verifyToken, async (req: AuthenticatedRequest, res: Respo
       .map((subject) => ({
         id: subject.id,
         subject: subject.name,
+        subjectName: subject.name,
         time: subject.time,
       }));
 
@@ -53,6 +61,7 @@ subjectRouter.get('/', verifyToken, async (req: AuthenticatedRequest, res: Respo
     res.status(500).json({ message: 'Server Error' });
   }
 });
+
 
 // GET /api/subject/stats
 subjectRouter.get('/stats', verifyToken, async (req: AuthenticatedRequest, res: Response): Promise<void> => {

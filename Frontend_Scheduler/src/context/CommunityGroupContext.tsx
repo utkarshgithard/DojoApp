@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useCallback } from 'react';
+import React, { createContext, useContext, useState, useCallback, useRef } from 'react';
 import API from '@/lib/axios';
 
 export type CommunityVisibility = 'public' | 'private' | 'invite_only';
@@ -22,15 +22,30 @@ export interface CommunityGroup {
   myRole?: CommunityRole | null;
 }
 
+export interface CommunityInvite {
+  id: string;
+  community: CommunityGroup;
+  invitedBy: { id: string; name: string; avatarUrl?: string | null };
+}
+
 interface CommunityGroupContextType {
   communities: CommunityGroup[];
   myCommunities: CommunityGroup[];
   nextCursor: string | null;
   loading: boolean;
   myLoading: boolean;
+  error: string | null;
+  myError: string | null;
   hasFetched: boolean;
+  prefetchCommunityCategories: () => Promise<void>;
   fetchCommunities: (cursor?: string, search?: string, filter?: string, isSilent?: boolean) => Promise<void>;
   fetchMyCommunities: () => Promise<void>;
+  invites: CommunityInvite[];
+  invitesLoading: boolean;
+  invitesError: string | null;
+  fetchInvites: () => Promise<void>;
+  acceptInvite: (inviteId: string) => Promise<void>;
+  declineInvite: (inviteId: string) => Promise<void>;
   createCommunity: (data: {
     name: string;
     slug: string;
@@ -65,7 +80,15 @@ export const CommunityGroupProvider = ({ children }: { children: React.ReactNode
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [myLoading, setMyLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [myError, setMyError] = useState<string | null>(null);
+  const [invites, setInvites] = useState<CommunityInvite[]>([]);
+  const [invitesLoading, setInvitesLoading] = useState(false);
+  const [invitesError, setInvitesError] = useState<string | null>(null);
   const [hasFetched, setHasFetched] = useState(false);
+  const communitiesRequestRef = useRef(0);
+  const communitiesAbortRef = useRef<AbortController | null>(null);
+  const communityCategoryCacheRef = useRef(new Map<string, CommunityGroup[]>());
 
   // Selected active community detail state cache
   const [activeCommunity, setActiveCommunity] = useState<CommunityGroup | null>(null);
@@ -77,8 +100,21 @@ export const CommunityGroupProvider = ({ children }: { children: React.ReactNode
   const [activePostsError, setActivePostsError] = useState<string | null>(null);
 
   const fetchCommunities = useCallback(async (cursor?: string, search?: string, filter?: string, isSilent = false) => {
+    const requestId = ++communitiesRequestRef.current;
+    communitiesAbortRef.current?.abort();
+    const controller = new AbortController();
+    communitiesAbortRef.current = controller;
     if (!isSilent) {
       setLoading(true);
+      setError(null);
+    }
+    const categoryKey = filter || 'all';
+    if (!cursor && !search && communityCategoryCacheRef.current.has(categoryKey)) {
+      setCommunities(communityCategoryCacheRef.current.get(categoryKey) || []);
+      setNextCursor(null);
+      setHasFetched(true);
+      if (!isSilent) setLoading(false);
+      return;
     }
     try {
       const { data } = await API.get('/groups', {
@@ -87,7 +123,9 @@ export const CommunityGroupProvider = ({ children }: { children: React.ReactNode
           ...(search ? { search } : {}),
           ...(filter ? { filter } : {}),
         },
+        signal: controller.signal,
       });
+      if (requestId !== communitiesRequestRef.current) return;
       if (cursor) {
         setCommunities((prev) => {
           const existingIds = new Set(prev.map((c) => c.id));
@@ -95,28 +133,89 @@ export const CommunityGroupProvider = ({ children }: { children: React.ReactNode
         });
       } else {
         setCommunities(data.communities);
+        if (!search) communityCategoryCacheRef.current.set(categoryKey, data.communities);
       }
       setNextCursor(data.nextCursor);
       setHasFetched(true);
-    } catch {
-      // silent
+    } catch (err: any) {
+      if (requestId === communitiesRequestRef.current && !isSilent && !controller.signal.aborted) {
+        setError(err?.response?.data?.error || 'Failed to load communities');
+      }
     } finally {
-      if (!isSilent) {
+      if (requestId === communitiesRequestRef.current && !isSilent) {
         setLoading(false);
       }
     }
   }, []);
 
+  const prefetchCommunityCategories = useCallback(async () => {
+    const allCategory = '';
+    const backgroundCategories = ['joined', 'created'];
+    if (communityCategoryCacheRef.current.has('all')) {
+      setCommunities(communityCategoryCacheRef.current.get('all') || []);
+      setHasFetched(true);
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    try {
+      const { data } = await API.get('/groups');
+      communityCategoryCacheRef.current.set(allCategory || 'all', data.communities || []);
+      setCommunities(communityCategoryCacheRef.current.get('all') || []);
+      setNextCursor(null);
+      setHasFetched(true);
+    } catch (err: any) {
+      setError(err?.response?.data?.error || 'Failed to load communities');
+    } finally {
+      setLoading(false);
+    }
+
+    // Populate the other tabs without delaying the first visible list.
+    void Promise.all(
+      backgroundCategories.map(async (filter) => {
+        const { data } = await API.get('/groups', { params: { filter } });
+        communityCategoryCacheRef.current.set(filter, data.communities || []);
+      })
+    ).catch((err: any) => {
+      console.error('Failed to preload community categories:', err);
+    });
+  }, []);
+
   const fetchMyCommunities = useCallback(async () => {
     setMyLoading(true);
+    setMyError(null);
     try {
       const { data } = await API.get('/groups/my');
       setMyCommunities(data.communities);
-    } catch {
-      // silent
+    } catch (err: any) {
+      setMyError(err?.response?.data?.error || 'Failed to load your communities');
     } finally {
       setMyLoading(false);
     }
+  }, []);
+
+  const fetchInvites = useCallback(async () => {
+    setInvitesLoading(true);
+    setInvitesError(null);
+    try {
+      const { data } = await API.get('/groups/invites/mine');
+      setInvites(data.invites || []);
+    } catch (err: any) {
+      setInvitesError(err?.response?.data?.error || 'Failed to load invitations');
+    } finally {
+      setInvitesLoading(false);
+    }
+  }, []);
+
+  const acceptInvite = useCallback(async (inviteId: string) => {
+    await API.post(`/groups/invites/${inviteId}/accept`);
+    setInvites((prev) => prev.filter((invite) => invite.id !== inviteId));
+  }, []);
+
+  const declineInvite = useCallback(async (inviteId: string) => {
+    await API.delete(`/groups/invites/${inviteId}`);
+    setInvites((prev) => prev.filter((invite) => invite.id !== inviteId));
   }, []);
 
   const createCommunity = useCallback(async (formData: {
@@ -131,6 +230,7 @@ export const CommunityGroupProvider = ({ children }: { children: React.ReactNode
     const community = data.community as CommunityGroup;
     setCommunities((prev) => [community, ...prev]);
     setMyCommunities((prev) => [community, ...prev]);
+    communityCategoryCacheRef.current.clear();
     return community;
   }, []);
 
@@ -140,6 +240,7 @@ export const CommunityGroupProvider = ({ children }: { children: React.ReactNode
     setCommunities(fn);
     setMyCommunities(fn);
     setActiveCommunity((prev) => (prev && prev.slug === slug ? { ...prev, ...updates } : prev));
+    communityCategoryCacheRef.current.clear();
   }, []);
 
   const joinOrLeave = useCallback(async (slug: string): Promise<{ joined: boolean; memberCount: number }> => {
@@ -175,6 +276,7 @@ export const CommunityGroupProvider = ({ children }: { children: React.ReactNode
       }
       return prev;
     });
+    communityCategoryCacheRef.current.clear();
 
     return data;
   }, []);
@@ -183,6 +285,7 @@ export const CommunityGroupProvider = ({ children }: { children: React.ReactNode
     setCommunities((prev) => prev.filter((c) => c.slug !== slug));
     setMyCommunities((prev) => prev.filter((c) => c.slug !== slug));
     setActiveCommunity((prev) => (prev && prev.slug === slug ? null : prev));
+    communityCategoryCacheRef.current.clear();
   }, []);
 
   const fetchCommunityBySlug = useCallback(async (slug: string, isSilent = false) => {
@@ -256,9 +359,18 @@ export const CommunityGroupProvider = ({ children }: { children: React.ReactNode
         nextCursor,
         loading,
         myLoading,
+        error,
+        myError,
         hasFetched,
+        prefetchCommunityCategories,
         fetchCommunities,
         fetchMyCommunities,
+        invites,
+        invitesLoading,
+        invitesError,
+        fetchInvites,
+        acceptInvite,
+        declineInvite,
         createCommunity,
         joinOrLeave,
         updateCommunityLocal,

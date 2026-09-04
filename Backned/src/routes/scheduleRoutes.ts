@@ -4,7 +4,9 @@ import { verifyToken, AuthenticatedRequest } from '../middleware/authmiddleware.
 
 const scheduleRouter = express.Router();
 
-// POST /api/schedule
+
+
+// POST /api/schedule  ── Replace strategy: wipes old entries for submitted days first
 scheduleRouter.post('/', verifyToken, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const { weeklySchedule } = req.body as {
@@ -28,20 +30,52 @@ scheduleRouter.post('/', verifyToken, async (req: AuthenticatedRequest, res: Res
       schedule = await prisma.schedule.create({ data: { userId } });
     }
 
-    // Process each day
-    for (const day in weeklySchedule) {
+    const submittedDays = Object.keys(weeklySchedule);
+
+    // ── Step 1: Delete all existing schedule entries for the submitted days ──
+    // This ensures subjects that were removed from the form no longer appear.
+    await prisma.scheduleEntry.deleteMany({
+      where: {
+        scheduleId: schedule.id,
+        day: { in: submittedDays },
+      },
+    });
+
+    // ── Step 2: Remove submitted days from subjects that are no longer on them ──
+    for (const day of submittedDays) {
+      const subjectsOnDay = await prisma.subject.findMany({
+        where: { userId, days: { has: day } },
+      });
+
+      for (const subject of subjectsOnDay) {
+        const updatedDays = subject.days.filter((d) => d !== day);
+        if (updatedDays.length === 0) {
+          // No days left — delete the subject entirely
+          await prisma.subject.delete({ where: { id: subject.id } });
+        } else {
+          // Still has other days — just remove this day from it
+          await prisma.subject.update({
+            where: { id: subject.id },
+            data: { days: updatedDays },
+          });
+        }
+      }
+    }
+
+    // ── Step 3: Re-create subjects and entries from the incoming schedule ──
+    for (const day of submittedDays) {
       const subjects = weeklySchedule[day];
 
       for (const subjectData of subjects) {
-        const normalizedName = subjectData.subjectName.trim().toUpperCase();
+        const subjectName = subjectData.subjectName.trim();
 
-        // Find existing subject with same name and time for this user
+        // Find existing subject with same name (case-insensitive) and time for this user
         let existingSubject = await prisma.subject.findFirst({
-          where: { userId, name: normalizedName, time: subjectData.time },
+          where: { userId, name: { equals: subjectName, mode: 'insensitive' }, time: subjectData.time },
         });
 
         if (existingSubject) {
-          // Add the day if not already there
+          // Add the day back if not already there
           if (!existingSubject.days.includes(day)) {
             existingSubject = await prisma.subject.update({
               where: { id: existingSubject.id },
@@ -49,10 +83,10 @@ scheduleRouter.post('/', verifyToken, async (req: AuthenticatedRequest, res: Res
             });
           }
         } else {
-          // Create new subject
+          // Create new subject — store exactly as typed
           existingSubject = await prisma.subject.create({
             data: {
-              name: normalizedName,
+              name: subjectName,
               time: subjectData.time,
               days: [day],
               userId,
@@ -60,15 +94,10 @@ scheduleRouter.post('/', verifyToken, async (req: AuthenticatedRequest, res: Res
           });
         }
 
-        // Create schedule entry if it doesn't already exist
-        const existingEntry = await prisma.scheduleEntry.findFirst({
-          where: { scheduleId: schedule.id, subjectId: existingSubject.id, day },
+        // Create schedule entry (old ones were deleted above, so no duplicate check needed)
+        await prisma.scheduleEntry.create({
+          data: { scheduleId: schedule.id, subjectId: existingSubject.id, day },
         });
-        if (!existingEntry) {
-          await prisma.scheduleEntry.create({
-            data: { scheduleId: schedule.id, subjectId: existingSubject.id, day },
-          });
-        }
       }
     }
 
@@ -102,8 +131,8 @@ scheduleRouter.get('/calender', verifyToken, async (req: AuthenticatedRequest, r
       return;
     }
 
-    // Group entries by day to match the old Mongoose shape
-    const schedule: Record<string, typeof scheduleDoc.entries[0]['subject'][]> = {};
+    // Group entries by day; convert stored UPPERCASE name to Title Case for display
+    const schedule: Record<string, any[]> = {};
     days.forEach((d) => (schedule[d] = []));
 
     scheduleDoc.entries.forEach((entry) => {

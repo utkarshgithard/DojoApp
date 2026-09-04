@@ -17,6 +17,7 @@ import {
   getFollowers,
   getFollowing,
   getMyNetwork,
+  getSuggestedUsers,
   sharePost,
   getSharedWithMe,
   markShareAsViewed,
@@ -53,6 +54,7 @@ communityRouter.get('/users/:userId/follow-status', optionalVerifyToken, getFoll
 communityRouter.get('/users/:userId/followers', verifyToken, getFollowers);
 communityRouter.get('/users/:userId/following', verifyToken, getFollowing);
 communityRouter.get('/my-network', verifyToken, getMyNetwork);
+communityRouter.get('/suggested-users', verifyToken, getSuggestedUsers);
 
 // ── Media upload signing ──────────────────────────────────────────────────────
 communityRouter.post('/media/sign', verifyToken, getSignedUploadUrl);

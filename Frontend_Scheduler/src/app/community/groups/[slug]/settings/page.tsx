@@ -6,6 +6,7 @@ import { useAuth } from '@/context/authContext';
 import { useDarkMode } from '@/context/DarkModeContext';
 import { useCommunityGroups, CommunityGroup } from '@/context/CommunityGroupContext';
 import API from '@/lib/axios';
+import { compressCommunityAsset } from '@/lib/compressImage';
 import {
   ArrowLeft, Settings, Users, ShieldAlert, Trash2,
   Upload, Camera, Check, Shield, User, X, Loader2
@@ -156,9 +157,13 @@ export default function CommunitySettingsPage() {
   };
 
   const uploadSingleFile = async (file: File): Promise<string> => {
+    // Compress image before upload
+    const fileToUpload = await compressCommunityAsset(file);
+
     const { data } = await API.post('/community/media/sign', {
-      fileName: file.name,
-      mimeType: file.type,
+      fileName: fileToUpload.name,
+      mimeType: fileToUpload.type,
+      purpose: 'community-asset',
     });
     const { uploadUrl, publicUrl } = data as { uploadUrl: string; publicUrl: string };
 
@@ -170,8 +175,8 @@ export default function CommunitySettingsPage() {
       };
       xhr.onerror = () => reject(new Error('Network error'));
       xhr.open('PUT', uploadUrl);
-      xhr.setRequestHeader('Content-Type', file.type);
-      xhr.send(file);
+      xhr.setRequestHeader('Content-Type', fileToUpload.type);
+      xhr.send(fileToUpload);
     });
 
     return publicUrl;

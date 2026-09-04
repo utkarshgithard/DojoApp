@@ -36,8 +36,24 @@ pushRouter.post('/subscribe', verifyToken, async (req: AuthenticatedRequest, res
   }
 
   try {
+    // Verify the user exists in our DB before creating a push subscription.
+    // This can fail if Firebase auth succeeds but /auth/sync hasn't run yet
+    // (e.g. token issued before the user record was created).
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true },
+    });
+    if (!user) {
+      // Return a specific status so the client can re-run /auth/sync.
+      res.status(409).json({
+        error: 'User record not found. Please re-sync your account.',
+        code: 'USER_NOT_SYNCED',
+      });
+      return;
+    }
+
     await prisma.pushSubscription.upsert({
-      where:  { endpoint },
+      where: { endpoint },
       update: { userId, p256dh: keys.p256dh, auth: keys.auth },
       create: { userId, endpoint, p256dh: keys.p256dh, auth: keys.auth },
     });

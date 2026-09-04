@@ -31,12 +31,12 @@ userRouter.get('/userDetails', verifyToken, async (req: AuthenticatedRequest, re
         }
       } catch {
         // If JSON parsing fails, clear the corrupted cache
-        await cacheDel(cacheKey).catch(() => {});
+        await cacheDel(cacheKey).catch(() => { });
       }
     }
 
     if (forceRefresh) {
-      await cacheDel(cacheKey).catch(() => {});
+      await cacheDel(cacheKey).catch(() => { });
     }
 
     const user = await prisma.user.findUnique({
@@ -51,6 +51,8 @@ userRouter.get('/userDetails', verifyToken, async (req: AuthenticatedRequest, re
         bio: true,
         avatarUrl: true,
         role: true,
+        college: true,
+        collegeCode: true,
       },
     });
 
@@ -143,7 +145,7 @@ async function establishReferralFriendship(currentUserId: string, currentUserNam
 
 // POST /api/auth/sync
 userRouter.post('/sync', async (req: Request, res: Response): Promise<void> => {
-  const { name, email, inviteCode } = req.body;
+  const { name, email, inviteCode, college, collegeCode } = req.body;
   const authHeader = req.headers.authorization;
 
   if (!authHeader) {
@@ -158,7 +160,7 @@ userRouter.post('/sync', async (req: Request, res: Response): Promise<void> => {
     const uid = decodedToken.uid;
 
     const existing = await prisma.user.findUnique({ where: { email } });
-    
+
     if (existing) {
       // Sync avatar if it is missing or has changed in Firebase
       if (decodedToken.picture && existing.avatarUrl !== decodedToken.picture) {
@@ -174,7 +176,7 @@ userRouter.post('/sync', async (req: Request, res: Response): Promise<void> => {
         const io = req.app.get('io');
         await establishReferralFriendship(existing.id, existing.name, inviteCode, io);
       }
-      
+
       res.status(200).json({
         message: 'User synced successfully.',
         userId: existing.id
@@ -200,6 +202,8 @@ userRouter.post('/sync', async (req: Request, res: Response): Promise<void> => {
         verified: true, // Firebase handles verification
         friendCode: code,
         avatarUrl: decodedToken.picture || null, // Sync photo URL from Google
+        college: college || null,
+        collegeCode: collegeCode || null,
       },
     });
 
@@ -307,10 +311,78 @@ userRouter.post('/add', verifyToken, async (req: AuthenticatedRequest, res: Resp
   }
 });
 
+// POST /api/auth/add-by-id — add friend directly by user ID (used from suggestion cards)
+userRouter.post('/add-by-id', verifyToken, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const { targetUserId } = req.body;
+    const userId = req.userId!;
+
+    if (!targetUserId) {
+      res.status(400).json({ error: 'targetUserId is required' });
+      return;
+    }
+
+    const friend = await prisma.user.findUnique({
+      where: { id: targetUserId },
+      select: { id: true, name: true, friendCode: true },
+    });
+    if (!friend) {
+      res.status(404).json({ error: 'User not found' });
+      return;
+    }
+
+    if (friend.id === userId) {
+      res.status(400).json({ error: 'You cannot add yourself as a friend' });
+      return;
+    }
+
+    // Check already friends
+    const existing = await prisma.userFriend.findUnique({
+      where: { userId_friendId: { userId, friendId: friend.id } },
+    });
+    if (existing) {
+      res.status(400).json({ error: 'Already friends' });
+      return;
+    }
+
+    const io = req.app.get('io');
+
+    // Create mutual friendship and follow in both directions
+    await Promise.all([
+      prisma.userFriend.createMany({
+        data: [
+          { userId, friendId: friend.id },
+          { userId: friend.id, friendId: userId },
+        ],
+        skipDuplicates: true,
+      }),
+      prisma.userFollow.createMany({
+        data: [
+          { followerId: userId, followingId: friend.id },
+          { followerId: friend.id, followingId: userId },
+        ],
+        skipDuplicates: true,
+      }),
+    ]);
+
+    // Notify the added user
+    await createNotification(friend.id, userId, 'friendship_mutual', undefined, undefined, io);
+
+    res.json({
+      success: true,
+      message: `${friend.name} added as a friend`,
+      friend: { id: friend.id, name: friend.name, friendCode: friend.friendCode },
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // PUT /api/auth/profile — update user profile
 userRouter.put('/profile', verifyToken, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
-    const { name, bio, avatarUrl } = req.body;
+    const { name, bio, avatarUrl, college, collegeCode } = req.body;
     const userId = req.userId!;
 
     const updatedUser = await prisma.user.update({
@@ -319,6 +391,8 @@ userRouter.put('/profile', verifyToken, async (req: AuthenticatedRequest, res: R
         name: name !== undefined ? name : undefined,
         bio: bio !== undefined ? bio : undefined,
         avatarUrl: avatarUrl !== undefined ? avatarUrl : undefined,
+        college: college !== undefined ? college : undefined,
+        collegeCode: collegeCode !== undefined ? collegeCode : undefined,
       },
       select: {
         id: true,
@@ -328,16 +402,18 @@ userRouter.put('/profile', verifyToken, async (req: AuthenticatedRequest, res: R
         friendCode: true,
         bio: true,
         avatarUrl: true,
+        college: true,
+        collegeCode: true,
       }
     });
 
     // Invalidate profile cache
     await cacheDel(`profile:${userId}`);
 
-    res.json({ 
-      success: true, 
+    res.json({
+      success: true,
       message: 'Profile updated successfully',
-      user: updatedUser 
+      user: updatedUser
     });
   } catch (error) {
     console.error(error);
@@ -379,7 +455,7 @@ userRouter.get('/public-keys', verifyToken, async (req: AuthenticatedRequest, re
     }
     const ids = raw.split(',').map((id) => id.trim()).filter(Boolean).slice(0, 50); // cap at 50
     const rows = await prisma.userPublicKey.findMany({ where: { userId: { in: ids } } });
-    
+
     // Group public keys by userId
     const keys: Record<string, { deviceId: string; publicKey: string }[]> = {};
     for (const row of rows) {
