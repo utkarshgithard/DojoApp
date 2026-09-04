@@ -162,7 +162,7 @@ export default function CommunityPage() {
       className={`group min-h-screen pt-[50px] md:pt-0 transition-colors duration-300 ${dark ? 'bg-[#0a0a0a] text-white' : 'bg-[#f5f5f5] text-zinc-900'
         }`}
     >
-      <div className="max-w-[680px] xl:max-w-[1240px] w-full mx-auto px-4 relative xl:grid xl:grid-cols-[minmax(0,680px)_480px] xl:justify-center xl:gap-6 xl:items-start">
+      <div className="max-w-[680px] xl:max-w-[1240px] w-full mx-auto px-3 sm:px-4 relative xl:grid xl:grid-cols-[minmax(0,680px)_480px] xl:justify-center xl:gap-6 xl:items-start">
         <div className="w-full flex flex-col">
           {/* Page header sticky wrapper that masks scrolling posts cleanly */}
           <div
@@ -280,7 +280,7 @@ export default function CommunityPage() {
               {[1, 2, 3].map((i) => (
                 <div
                   key={i}
-                  className={`rounded-2xl border p-5 sm:p-6 animate-pulse transition-all ${dark ? 'bg-zinc-900/40 border-zinc-800/80' : 'bg-white border-zinc-200/80'
+                  className={`rounded-2xl border p-4 sm:p-6 animate-pulse transition-all ${dark ? 'bg-zinc-900/40 border-zinc-800/80' : 'bg-white border-zinc-200/80'
                     }`}
                 >
                   <div className="flex gap-3.5 mb-4">
@@ -787,8 +787,8 @@ export default function CommunityPage() {
 
       {/* Mobile Compose Modal */}
       {isComposeOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm transition-all duration-300 p-4">
-          <div className={`rounded-xl border p-5 max-w-lg w-full shadow-2xl relative animate-in fade-in zoom-in-95 duration-200 ${dark ? 'bg-black border-zinc-800 text-white' : 'bg-white border-zinc-200 text-zinc-900'
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm transition-all duration-300 p-2 sm:p-4">
+          <div className={`rounded-xl border p-4 sm:p-5 max-w-lg w-full shadow-2xl relative animate-in fade-in zoom-in-95 duration-200 ${dark ? 'bg-black border-zinc-800 text-white' : 'bg-white border-zinc-200 text-zinc-900'
             }`}>
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-[17px] font-semibold tracking-tight">Create Post</h3>

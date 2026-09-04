@@ -499,9 +499,29 @@ export default function CommunityPostComposer({
       );
 
       const fileToUpload = await compressPostImage(attachment.file);
-      const signed = await signUpload(fileToUpload.name, fileToUpload.type);
+      let publicUrl: string;
+      let signed: { uploadUrl: string; publicUrl: string; mediaType: string } | null = null;
 
-      await new Promise<void>((resolve, reject) => {
+      if (attachment.type === 'video') {
+        const formData = new FormData();
+        formData.append('video', fileToUpload, fileToUpload.name);
+        const { data } = await API.post('/community/media/video', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+          onUploadProgress: (event) => {
+            if (event.total) {
+              setAttachments((prev) =>
+                prev.map((a) => (a.id === attachment.id ? { ...a, progress: Math.round((event.loaded / event.total!) * 100) } : a))
+              );
+            }
+          },
+        });
+        publicUrl = data.publicUrl;
+      } else {
+        signed = await signUpload(fileToUpload.name, fileToUpload.type);
+        publicUrl = signed.publicUrl;
+      }
+
+      if (signed) await new Promise<void>((resolve, reject) => {
         const xhr = new XMLHttpRequest();
         xhr.upload.addEventListener('progress', (e) => {
           if (e.lengthComputable) {
@@ -529,7 +549,7 @@ export default function CommunityPostComposer({
       setAttachments((prev) =>
         prev.map((a) =>
           a.id === attachment.id
-            ? { ...a, uploading: false, progress: 100, publicUrl: signed.publicUrl, thumbnailUrl: thumbPublicUrl }
+            ? { ...a, uploading: false, progress: 100, publicUrl, thumbnailUrl: thumbPublicUrl }
             : a
         )
       );
@@ -662,7 +682,7 @@ export default function CommunityPostComposer({
   const charLeft = MAX_CHARS - charCount;
 
   return (
-    <div className={`relative z-30 rounded-2xl p-4 sm:p-5 mb-6 transition-all duration-300 border shadow-md focus-within:shadow-indigo-500/10 focus-within:ring-2 focus-within:ring-indigo-500/40 backdrop-blur-md ${dark
+    <div className={`relative z-30 rounded-2xl p-3 sm:p-5 mb-6 transition-all duration-300 border shadow-md focus-within:shadow-indigo-500/10 focus-within:ring-2 focus-within:ring-indigo-500/40 backdrop-blur-md ${dark
       ? 'bg-zinc-900/60 border-zinc-800/80 shadow-black/40'
       : 'bg-white/90 border-zinc-200 shadow-zinc-200/60'
       }`}>
@@ -880,9 +900,9 @@ export default function CommunityPostComposer({
           )}
 
           {/* Bottom Toolbar */}
-          <div className={`flex items-center justify-between pt-3 border-t transition-colors ${dark ? 'border-zinc-800/80' : 'border-zinc-100'
+          <div className={`flex flex-wrap items-center justify-between gap-y-2 pt-3 border-t transition-colors ${dark ? 'border-zinc-800/80' : 'border-zinc-100'
             }`}>
-            <div className="flex items-center gap-1 -ml-1 relative">
+            <div className="flex min-w-0 items-center gap-1 -ml-1 relative">
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
@@ -996,7 +1016,7 @@ export default function CommunityPostComposer({
               )}
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex shrink-0 items-center gap-2 sm:gap-3">
               {charCount > 0 && (
                 <div className="flex items-center gap-2">
                   <svg className="w-5 h-5 -rotate-90" viewBox="0 0 24 24">
@@ -1036,7 +1056,7 @@ export default function CommunityPostComposer({
               <button
                 onClick={handleSubmit}
                 disabled={!canSubmit}
-                className="group relative flex items-center gap-2 px-5 py-2 rounded-full text-[13.5px] font-bold bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 disabled:opacity-50 disabled:hover:from-indigo-600 disabled:hover:to-violet-600 text-white transition-all duration-300 shadow-md shadow-indigo-600/25 hover:shadow-lg hover:shadow-indigo-500/35 active:scale-95"
+                className="group relative flex shrink-0 items-center gap-2 px-4 sm:px-5 py-2 rounded-full text-[13.5px] font-bold bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 disabled:opacity-50 disabled:hover:from-indigo-600 disabled:hover:to-violet-600 text-white transition-all duration-300 shadow-md shadow-indigo-600/25 hover:shadow-lg hover:shadow-indigo-500/35 active:scale-95"
               >
                 {submitting || anyUploading ? (
                   <Loader2 size={15} className="animate-spin" />

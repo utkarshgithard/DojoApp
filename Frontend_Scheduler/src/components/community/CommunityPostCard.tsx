@@ -311,7 +311,7 @@ export default function CommunityPostCard({
   return (
     <>
       <article
-        className={`group/card relative transition-all duration-300 p-5 sm:p-6 ${
+        className={`group/card relative transition-all duration-300 p-4 sm:p-6 ${
           dark
             ? 'bg-zinc-900/40 hover:bg-zinc-900/70 text-white'
             : 'bg-white hover:bg-zinc-50/80 text-zinc-900'
@@ -474,14 +474,14 @@ export default function CommunityPostCard({
         )}
 
         {/* Interactive Action Bar */}
-        <div className={`flex items-center justify-between mt-4 pt-3.5 border-t transition-colors ${
+        <div className={`flex flex-wrap items-center justify-between gap-y-2 mt-4 pt-3.5 border-t transition-colors ${
           dark ? 'border-zinc-800/80' : 'border-zinc-100'
         }`}>
-          <div className="flex items-center gap-2 sm:gap-3">
+          <div className="flex min-w-0 items-center gap-1.5 sm:gap-3">
             {/* Like Button */}
             <button
               onClick={handleLike}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-[13px] font-semibold transition-all duration-300 group/like active:scale-90 ${
+              className={`flex items-center gap-1.5 px-2 sm:px-3 py-1.5 rounded-full text-[13px] font-semibold transition-all duration-300 group/like active:scale-90 ${
                 liked
                   ? 'bg-rose-500/10 text-rose-500 dark:bg-rose-500/15 dark:text-rose-400'
                   : dark
@@ -495,13 +495,14 @@ export default function CommunityPostCard({
                   liked ? 'fill-rose-500 text-rose-500' : 'fill-transparent'
                 }`}
               />
-              <span>{likeCount > 0 ? likeCount : 'Like'}</span>
+              <span className="sm:hidden">{likeCount > 0 ? likeCount : ''}</span>
+              <span className="hidden sm:inline">{likeCount > 0 ? likeCount : 'Like'}</span>
             </button>
 
             {/* Comment Button */}
             <button
               onClick={handleCommentToggle}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-[13px] font-semibold transition-all duration-300 group/comment active:scale-90 ${
+              className={`flex items-center gap-1.5 px-2 sm:px-3 py-1.5 rounded-full text-[13px] font-semibold transition-all duration-300 group/comment active:scale-90 ${
                 showComments
                   ? 'bg-indigo-500/10 text-indigo-600 dark:bg-indigo-500/15 dark:text-indigo-400'
                   : dark
@@ -515,7 +516,8 @@ export default function CommunityPostCard({
                   showComments ? 'fill-indigo-500/20' : 'fill-transparent'
                 }`}
               />
-              <span>{commentCount > 0 ? commentCount : 'Comment'}</span>
+              <span className="sm:hidden">{commentCount > 0 ? commentCount : ''}</span>
+              <span className="hidden sm:inline">{commentCount > 0 ? commentCount : 'Comment'}</span>
             </button>
           </div>
 
@@ -528,7 +530,7 @@ export default function CommunityPostCard({
                 setShowShareModal(true);
               }
             }}
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-[13px] font-semibold transition-all duration-300 group/share active:scale-90 ${
+            className={`flex shrink-0 items-center gap-1.5 px-2 sm:px-3 py-1.5 rounded-full text-[13px] font-semibold transition-all duration-300 group/share active:scale-90 ${
               dark
                 ? 'text-zinc-400 hover:text-emerald-400 hover:bg-emerald-500/10'
                 : 'text-zinc-500 hover:text-emerald-600 hover:bg-emerald-50'

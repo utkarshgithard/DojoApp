@@ -79,10 +79,9 @@ export default async function Image({ params }: Props) {
     }
   }
 
-  const authorCaption = `Read this post by ${authorName} on DojoClass`;
+  const authorCaption = `A post by ${authorName}`;
 
-  // Keep uploaded media in its own section instead of applying a branded
-  // background or placing the post text over the user's image.
+  // Keep the post private while presenting shared media in a branded card.
   if (mediaDataUrl) {
     console.info(`[opengraph-image] Rendering image preview for ${id}`);
     return new ImageResponse(
@@ -94,38 +93,66 @@ export default async function Image({ params }: Props) {
             display: 'flex',
             position: 'relative',
             fontFamily: 'sans-serif',
-            background: '#f4f4f5',
+            background: 'linear-gradient(135deg, #09090b 0%, #18122f 52%, #312e81 100%)',
+            padding: '34px 42px',
           }}
         >
           <div
             style={{
+              position: 'absolute',
+              top: 30,
+              left: 42,
+              right: 42,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="https://dojoclass.space/favicon.png"
+                style={{ width: 34, height: 34, objectFit: 'contain' }}
+              />
+              <span style={{ color: '#ffffff', fontSize: 23, fontWeight: 800 }}>DojoClass</span>
+            </div>
+            <span style={{ color: '#c4b5fd', fontSize: 16, fontWeight: 700 }}>COMMUNITY POST</span>
+          </div>
+
+          <div
+            style={{
               width: '100%',
-              height: '500px',
-              padding: '28px 48px 16px',
+              height: '454px',
+              marginTop: 54,
+              padding: 14,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
+              background: 'rgba(255,255,255,0.12)',
+              border: '1px solid rgba(255,255,255,0.28)',
+              borderRadius: 24,
+              boxShadow: '0 20px 50px rgba(0,0,0,0.32)',
             }}
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={mediaDataUrl}
-              style={{ width: '100%', height: '100%', objectFit: 'contain', borderRadius: 12 }}
+              style={{ width: '100%', height: '100%', objectFit: 'contain', borderRadius: 15 }}
             />
           </div>
 
-          {/* Video play button badge (top-right) */}
+          {/* Video play button badge */}
           {isVideo && (
             <div
               style={{
                 position: 'absolute',
-                top: 42,
-                right: 62,
-                width: 60,
-                height: 60,
+                top: 222,
+                left: 570,
+                width: 64,
+                height: 64,
                 borderRadius: '50%',
                 background: 'rgba(0,0,0,0.55)',
-                border: '2.5px solid rgba(255,255,255,0.7)',
+                border: '2px solid rgba(255,255,255,0.8)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -136,9 +163,9 @@ export default async function Image({ params }: Props) {
                 style={{
                   width: 0,
                   height: 0,
-                  borderTop: '11px solid transparent',
-                  borderBottom: '11px solid transparent',
-                  borderLeft: '18px solid rgba(255,255,255,0.85)',
+                  borderTop: '12px solid transparent',
+                  borderBottom: '12px solid transparent',
+                  borderLeft: '20px solid rgba(255,255,255,0.9)',
                   marginLeft: 4,
                 }}
               />
@@ -147,8 +174,8 @@ export default async function Image({ params }: Props) {
 
           <div
             style={{
-              height: '102px',
-              padding: '0 48px 24px',
+              height: '68px',
+              padding: '0 8px',
               display: 'flex',
               alignItems: 'center',
               gap: 14,
@@ -157,13 +184,13 @@ export default async function Image({ params }: Props) {
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src="https://dojoclass.space/favicon.png"
-              style={{ width: 36, height: 36, objectFit: 'contain', opacity: 0.9 }}
+              style={{ width: 32, height: 32, objectFit: 'contain', opacity: 0.9 }}
             />
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              <span style={{ color: '#18181b', fontSize: 24, fontWeight: 700 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+              <span style={{ color: '#ffffff', fontSize: 22, fontWeight: 800 }}>
                 {authorName}
               </span>
-              <span style={{ color: '#52525b', fontSize: 18 }}>
+              <span style={{ color: '#c4b5fd', fontSize: 16, fontWeight: 600 }}>
                 {authorCaption}
               </span>
             </div>
@@ -180,12 +207,12 @@ export default async function Image({ params }: Props) {
     (
       <div
         style={{
-          background: '#f4f4f5',
+          background: 'linear-gradient(135deg, #09090b 0%, #18122f 52%, #312e81 100%)',
           width: '100%',
           height: '100%',
           display: 'flex',
           flexDirection: 'column',
-          padding: '64px 72px',
+          padding: '54px 72px',
           fontFamily: 'sans-serif',
         }}
       >
@@ -196,7 +223,7 @@ export default async function Image({ params }: Props) {
             src="https://dojoclass.space/favicon.png"
             style={{ width: 44, height: 44, objectFit: 'contain' }}
           />
-          <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: 22, fontWeight: 600, letterSpacing: 0.5 }}>
+          <span style={{ color: '#ffffff', fontSize: 23, fontWeight: 800, letterSpacing: 0.5 }}>
             DojoClass
           </span>
         </div>
@@ -211,14 +238,14 @@ export default async function Image({ params }: Props) {
         >
           <p
             style={{
-              color: '#18181b',
+              color: '#ffffff',
               fontSize: 38,
               fontWeight: 500,
               lineHeight: 1.45,
               margin: 0,
               maxWidth: 950,
               // Decorative left accent line
-              borderLeft: '5px solid #a1a1aa',
+              borderLeft: '5px solid #a78bfa',
               paddingLeft: 32,
             }}
           >
@@ -249,7 +276,7 @@ export default async function Image({ params }: Props) {
             <span style={{ color: '#ffffff', fontSize: 20, fontWeight: 700 }}>
               {authorName}
             </span>
-            <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: 16 }}>
+            <span style={{             color: '#c4b5fd', fontSize: 16 }}>
               dojoclass.space
             </span>
           </div>

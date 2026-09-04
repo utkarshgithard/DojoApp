@@ -23,8 +23,17 @@ import {
   markShareAsViewed,
 } from '../controllers/communityController.js';
 import { getSignedUploadUrl } from '../controllers/mediaController.js';
+import { uploadCompressedVideo } from '../controllers/mediaController.js';
+import multer from 'multer';
 
 const communityRouter = express.Router();
+const videoUpload = multer({
+  dest: 'tmp/dojo-video-uploads',
+  limits: { fileSize: 100 * 1024 * 1024 },
+  fileFilter: (_req, file, callback) => {
+    callback(null, file.mimetype.startsWith('video/'));
+  },
+});
 
 // ── Posts ─────────────────────────────────────────────────────────────────────
 communityRouter.get('/posts', optionalVerifyToken, getPosts);
@@ -58,6 +67,6 @@ communityRouter.get('/suggested-users', verifyToken, getSuggestedUsers);
 
 // ── Media upload signing ──────────────────────────────────────────────────────
 communityRouter.post('/media/sign', verifyToken, getSignedUploadUrl);
+communityRouter.post('/media/video', verifyToken, videoUpload.single('video'), uploadCompressedVideo);
 
 export default communityRouter;
-
