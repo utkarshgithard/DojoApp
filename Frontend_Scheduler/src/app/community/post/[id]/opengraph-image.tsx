@@ -20,8 +20,8 @@ export default async function Image({ params }: Props) {
 
   // Fetch post data
   let authorName = 'DojoClass User';
-  let content = '';
   let mediaUrl: string | null = null;
+  let mediaDataUrl: string | null = null;
   let isVideo = false;
 
   try {
@@ -32,7 +32,6 @@ export default async function Image({ params }: Props) {
       const data = await res.json();
       const post = data.post;
       authorName = post?.author?.name ?? authorName;
-      content = post?.content ?? '';
       const firstMedia = post?.media?.[0];
       if (firstMedia?.type === 'image') {
         // Use image directly
@@ -48,12 +47,24 @@ export default async function Image({ params }: Props) {
     // Use defaults on failure
   }
 
-  // Truncate content for display
-  const displayContent =
-    content.length > 220 ? content.slice(0, 217) + '…' : content;
-
-  // If post has image or video thumbnail → use it as full-bleed background
+  // Embed storage media in the generated PNG. ImageResponse can otherwise
+  // omit remote images when the social crawler requests this route.
   if (mediaUrl) {
+    const mediaResponse = await fetch(mediaUrl, { cache: 'no-store' });
+    if (mediaResponse.ok) {
+      const contentType = mediaResponse.headers.get('content-type') || 'image/jpeg';
+      const mediaBuffer = Buffer.from(await mediaResponse.arrayBuffer());
+      mediaDataUrl = `data:${contentType};base64,${mediaBuffer.toString('base64')}`;
+    } else {
+      console.error(`[opengraph-image] Media fetch failed with ${mediaResponse.status}`);
+    }
+  }
+
+  const authorCaption = `See what ${authorName} is saying about this on DojoClass`;
+
+  // Keep uploaded media in its own section instead of applying a branded
+  // background or placing the post text over the user's image.
+  if (mediaDataUrl) {
     return new ImageResponse(
       (
         <div
@@ -63,36 +74,33 @@ export default async function Image({ params }: Props) {
             display: 'flex',
             position: 'relative',
             fontFamily: 'sans-serif',
-            background: '#000',
+            background: '#f4f4f5',
           }}
         >
-          {/* Full-bleed media (image or video thumbnail) */}
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={mediaUrl}
-            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-          />
-
-          {/* Dark gradient overlay at bottom for readability */}
           <div
             style={{
-              position: 'absolute',
-              bottom: 0,
-              left: 0,
-              right: 0,
-              height: '55%',
-              background: 'linear-gradient(to top, rgba(0,0,0,0.88) 0%, transparent 100%)',
+              width: '100%',
+              height: '500px',
+              padding: '28px 48px 16px',
               display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
             }}
-          />
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={mediaDataUrl}
+              style={{ width: '100%', height: '100%', objectFit: 'contain', borderRadius: 12 }}
+            />
+          </div>
 
           {/* Video play button badge (top-right) */}
           {isVideo && (
             <div
               style={{
                 position: 'absolute',
-                top: 28,
-                right: 36,
+                top: 42,
+                right: 62,
                 width: 60,
                 height: 60,
                 borderRadius: '50%',
@@ -117,33 +125,10 @@ export default async function Image({ params }: Props) {
             </div>
           )}
 
-          {/* Post description overlay so media shares retain context */}
-          {displayContent && (
-            <div
-              style={{
-                position: 'absolute',
-                bottom: 92,
-                left: 48,
-                right: 48,
-                color: 'rgba(255,255,255,0.96)',
-                fontSize: displayContent.length > 120 ? 25 : 31,
-                fontWeight: 600,
-                lineHeight: 1.25,
-                textShadow: '0 2px 8px rgba(0,0,0,0.65)',
-                display: 'flex',
-              }}
-            >
-              {displayContent}
-            </div>
-          )}
-
-          {/* Bottom: favicon + author name */}
           <div
             style={{
-              position: 'absolute',
-              bottom: 36,
-              left: 48,
-              right: 48,
+              height: '102px',
+              padding: '0 48px 24px',
               display: 'flex',
               alignItems: 'center',
               gap: 14,
@@ -154,12 +139,14 @@ export default async function Image({ params }: Props) {
               src={faviconBase64}
               style={{ width: 36, height: 36, objectFit: 'contain', opacity: 0.9 }}
             />
-            <span style={{ color: 'rgba(255,255,255,0.95)', fontSize: 24, fontWeight: 700 }}>
-              {authorName}
-            </span>
-            <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: 20, marginLeft: 4 }}>
-              · DojoClass
-            </span>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <span style={{ color: '#18181b', fontSize: 24, fontWeight: 700 }}>
+                {authorName}
+              </span>
+              <span style={{ color: '#52525b', fontSize: 18 }}>
+                {authorCaption}
+              </span>
+            </div>
           </div>
         </div>
       ),
@@ -167,12 +154,12 @@ export default async function Image({ params }: Props) {
     );
   }
 
-  // Text-only post → render a card with the post content
+  // Text-only post → keep the preview generic and do not expose post content.
   return new ImageResponse(
     (
       <div
         style={{
-          background: 'linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #16213e 100%)',
+          background: '#f4f4f5',
           width: '100%',
           height: '100%',
           display: 'flex',
@@ -203,18 +190,18 @@ export default async function Image({ params }: Props) {
         >
           <p
             style={{
-              color: '#ffffff',
-              fontSize: displayContent.length > 120 ? 34 : 44,
+              color: '#18181b',
+              fontSize: 38,
               fontWeight: 500,
               lineHeight: 1.45,
               margin: 0,
               maxWidth: 950,
               // Decorative left accent line
-              borderLeft: '5px solid #6366f1',
+              borderLeft: '5px solid #a1a1aa',
               paddingLeft: 32,
             }}
           >
-            {displayContent || ' '}
+            {authorCaption}
           </p>
         </div>
 
@@ -226,7 +213,7 @@ export default async function Image({ params }: Props) {
               width: 48,
               height: 48,
               borderRadius: '50%',
-              background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+              background: '#71717a',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
