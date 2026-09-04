@@ -28,8 +28,8 @@ export async function generateMetadata({
       : 'Post on DojoClass';
 
     const description = post?.author?.name
-      ? `See what ${post.author.name} is saying about this on DojoClass.`
-      : 'See what this user is saying about this on DojoClass.';
+      ? `Read this post by ${post.author.name} on DojoClass.`
+      : 'Read this post by this user on DojoClass.';
 
     // The generated card combines the post image with its text. This avoids
     // WhatsApp showing only the raw image and makes the preview consistent.
