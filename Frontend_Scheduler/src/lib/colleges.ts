@@ -158,7 +158,7 @@ export const COLLEGES: College[] = [
     { name: 'GEC Katihar', code: 'GECKT', state: 'Bihar', category: 'bihar-engineering' },
     { name: 'GEC West Champaran', code: 'GECWC', state: 'Bihar', category: 'bihar-engineering' },
     { name: 'GEC East Champaran', code: 'GECEC', state: 'Bihar', category: 'bihar-engineering' },
-    { name: 'GEC Madhepura', code: 'GECMP', state: 'Bihar', category: 'bihar-engineering' },
+    { name: 'BP Mandal College of Engineering, Madhepura', code: 'GECMP', state: 'Bihar', category: 'bihar-engineering' },
     { name: 'GEC Bhabua', code: 'GECBH', state: 'Bihar', category: 'bihar-engineering' },
 
     // ── State Colleges (Major State Universities & Engineering Colleges) ──

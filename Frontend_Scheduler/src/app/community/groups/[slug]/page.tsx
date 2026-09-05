@@ -10,8 +10,9 @@ import API from '@/lib/axios';
 import CommunityPostCard from '@/components/community/CommunityPostCard';
 import CommunityPostComposer from '@/components/community/CommunityPostComposer';
 import InviteFriendsModal from '@/components/community/InviteFriendsModal';
+import CommunityShareModal from '@/components/community/CommunityShareModal';
 import {
-  ArrowLeft, Users, Lock, Eye, Mail, Crown, Shield,
+  ArrowLeft, Users, Lock, Eye, Mail, Crown, Shield, Share2,
   Settings, RefreshCw, Loader2, Plus, X
 } from 'lucide-react';
 
@@ -75,6 +76,7 @@ export default function CommunityHomePage() {
   const [joining, setJoining] = useState(false);
   const [isComposeOpen, setIsComposeOpen] = useState(false);
   const [isInviteOpen, setIsInviteOpen] = useState(false);
+  const [isShareOpen, setIsShareOpen] = useState(false);
 
   useEffect(() => {
     if (!authLoading && slug) {
@@ -233,6 +235,16 @@ export default function CommunityHomePage() {
 
             {/* Desktop Join / Invite / Settings Toolbar */}
             <div className="hidden sm:flex items-center gap-2.5 shrink-0">
+              {community.visibility === 'public' && (
+                <button
+                  onClick={() => setIsShareOpen(true)}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-xl border text-[13px] font-bold transition-all duration-200 active:scale-95 shadow-sm ${
+                    dark ? 'border-zinc-700/80 text-zinc-200 bg-zinc-900/60 hover:bg-zinc-800' : 'border-zinc-300 text-zinc-700 bg-white hover:bg-zinc-50'
+                  }`}
+                >
+                  <Share2 size={15} className="text-indigo-500" /> Share
+                </button>
+              )}
               {(isMember || isCreator) && (
                 <button
                   onClick={() => setIsInviteOpen(true)}
@@ -275,6 +287,16 @@ export default function CommunityHomePage() {
 
           {/* Mobile Actions */}
           <div className="flex sm:hidden flex-col gap-2 mt-4 pt-3 border-t border-zinc-200/40 dark:border-zinc-800/60">
+            {community.visibility === 'public' && (
+              <button
+                onClick={() => setIsShareOpen(true)}
+                className={`w-full py-2.5 rounded-xl border text-[13.5px] font-bold transition-all duration-200 active:scale-95 flex items-center justify-center gap-2 ${
+                  dark ? 'border-zinc-800 bg-zinc-900/60 text-zinc-200 hover:bg-zinc-800' : 'border-zinc-200 bg-zinc-50 text-zinc-700 hover:bg-zinc-100'
+                }`}
+              >
+                <Share2 size={15} className="text-indigo-500" /> Share Community
+              </button>
+            )}
             {!isCreator && (
               <button
                 onClick={handleJoinToggle}
@@ -303,6 +325,15 @@ export default function CommunityHomePage() {
               </button>
             )}
           </div>
+          {isShareOpen && (
+            <CommunityShareModal
+              communityName={community.name}
+              communityDescription={community.description}
+              communitySlug={community.slug}
+              dark={dark}
+              onClose={() => setIsShareOpen(false)}
+            />
+          )}
         </div>
 
         {/* Main layout */}
