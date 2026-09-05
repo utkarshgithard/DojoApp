@@ -325,15 +325,6 @@ export default function CommunityHomePage() {
               </button>
             )}
           </div>
-          {isShareOpen && (
-            <CommunityShareModal
-              communityName={community.name}
-              communityDescription={community.description}
-              communitySlug={community.slug}
-              dark={dark}
-              onClose={() => setIsShareOpen(false)}
-            />
-          )}
         </div>
 
         {/* Main layout */}
@@ -569,6 +560,16 @@ export default function CommunityHomePage() {
           communityName={community.name}
           dark={dark}
           onClose={() => setIsInviteOpen(false)}
+        />
+      )}
+
+      {isShareOpen && (
+        <CommunityShareModal
+          communityName={community.name}
+          communityDescription={community.description}
+          communitySlug={community.slug}
+          dark={dark}
+          onClose={() => setIsShareOpen(false)}
         />
       )}
     </div>

@@ -61,7 +61,7 @@ export default function CommunityShareModal({
   const openSocialShare = (url: string) => window.open(url, '_blank', 'noopener,noreferrer,width=640,height=600');
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={(e) => e.target === e.currentTarget && onClose()}>
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className={`w-full max-w-md rounded-2xl border shadow-2xl ${dark ? 'bg-zinc-950 border-zinc-800 text-white' : 'bg-white border-zinc-200 text-zinc-900'}`}>
         <div className={`flex items-center justify-between p-4 border-b ${dark ? 'border-zinc-800' : 'border-zinc-100'}`}>
           <div>
