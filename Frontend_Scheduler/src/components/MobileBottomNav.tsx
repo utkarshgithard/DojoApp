@@ -1,24 +1,16 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Hash, MessageSquare, LayoutDashboard, BookOpen, Calendar } from 'lucide-react';
+import { Compass, Hash, Users, LayoutDashboard, UserRound } from 'lucide-react';
 import { useDarkMode } from '@/context/DarkModeContext';
-import { useChat } from '@/context/ChatContext';
+import { useNotifications } from '@/context/NotificationContext';
 
 export default function MobileBottomNav() {
   const { darkMode } = useDarkMode() as any;
   const pathname = usePathname();
-  const { unreadCounts } = useChat() as any;
-
-  // Calculate total unread chats
-  const [totalUnread, setTotalUnread] = useState(0);
-  useEffect(() => {
-    if (unreadCounts) {
-      setTotalUnread(Object.values(unreadCounts).reduce((a: any, b: any) => a + b, 0) as number);
-    }
-  }, [unreadCounts]);
+  const { unreadCount } = useNotifications();
 
   const dark = darkMode;
   
@@ -60,17 +52,17 @@ export default function MobileBottomNav() {
           <span className={`text-[10px] ${getLabelClass('/community')}`}>Community</span>
         </Link>
 
-        {/* Chat */}
-        <Link href="/chat" className="relative flex flex-col items-center justify-center w-[20%] gap-1">
+        {/* Friends */}
+        <Link href="/friends" className="relative flex flex-col items-center justify-center w-[20%] gap-1">
           <div className="relative">
-            <MessageSquare size={22} className={getIconClass('/chat')} strokeWidth={pathname.startsWith('/chat') ? 2.5 : 2} />
-            {totalUnread > 0 && (
+            <Users size={22} className={getIconClass('/friends')} strokeWidth={pathname.startsWith('/friends') ? 2.5 : 2} />
+            {unreadCount > 0 && (
               <span className="absolute -top-1.5 -right-2 min-w-[16px] h-[16px] rounded-full bg-[#FF5D5D] text-white text-[9px] font-bold flex items-center justify-center px-1 shadow-sm border-[1.5px] border-white dark:border-black">
-                {totalUnread > 99 ? '99+' : totalUnread}
+                {unreadCount > 99 ? '99+' : unreadCount}
               </span>
             )}
           </div>
-          <span className={`text-[10px] ${getLabelClass('/chat')}`}>Chat</span>
+          <span className={`text-[10px] ${getLabelClass('/friends')}`}>Friends</span>
         </Link>
 
         {/* Dashboard (Center FAB) */}
@@ -93,16 +85,16 @@ export default function MobileBottomNav() {
           </Link>
         </div>
 
-        {/* Exam Prep */}
-        <Link href="/exam-prep" className="flex flex-col items-center justify-center w-[20%] gap-1">
-          <BookOpen size={22} className={getIconClass('/exam-prep')} strokeWidth={pathname.startsWith('/exam-prep') ? 2.5 : 2} />
-          <span className={`text-[10px] ${getLabelClass('/exam-prep')}`}>Exams</span>
+        {/* Discover communities */}
+        <Link href="/community/groups" className="flex flex-col items-center justify-center w-[20%] gap-1">
+          <Compass size={22} className={getIconClass('/community/groups')} strokeWidth={pathname.startsWith('/community/groups') ? 2.5 : 2} />
+          <span className={`text-[10px] ${getLabelClass('/community/groups')}`}>Discover</span>
         </Link>
 
-        {/* Calendar / Your Class */}
-        <Link href="/calendar" className="flex flex-col items-center justify-center w-[20%] gap-1">
-          <Calendar size={22} className={getIconClass('/calendar')} strokeWidth={pathname.startsWith('/calendar') ? 2.5 : 2} />
-          <span className={`text-[10px] ${getLabelClass('/calendar')}`}>Class</span>
+        {/* Class and Exam */}
+        <Link href="/me" className="flex flex-col items-center justify-center w-[20%] gap-1">
+          <UserRound size={22} className={getIconClass('/me')} strokeWidth={pathname.startsWith('/me') ? 2.5 : 2} />
+          <span className={`text-[10px] ${getLabelClass('/me')}`}>Me</span>
         </Link>
 
       </div>

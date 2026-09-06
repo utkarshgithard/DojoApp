@@ -1,13 +1,13 @@
 'use client';
 
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/authContext';
 import { useDarkMode } from '@/context/DarkModeContext';
 import { useCommunityGroups } from '@/context/CommunityGroupContext';
 import CommunityGroupCard from '@/components/community/CommunityGroupCard';
 import CreateCommunityModal from '@/components/community/CreateCommunityModal';
-import { Users2, Search, Plus, ArrowLeft, Compass, MailOpen, Check, Trash2 } from 'lucide-react';
+import { Users2, Search, Plus, ArrowLeft, Compass, MailOpen, Check, Trash2, X, Loader2 } from 'lucide-react';
 
 export default function DiscoverCommunitiesPage() {
   const router = useRouter();
@@ -35,6 +35,15 @@ export default function DiscoverCommunitiesPage() {
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [filter, setFilter] = useState<'' | 'joined' | 'created'>('');
   const [showCreate, setShowCreate] = useState(false);
+
+  const normalizedSearch = search.trim().toLowerCase();
+  const locallyMatchedCommunities = useMemo(() => {
+    if (!normalizedSearch) return communities;
+    return communities.filter((community) =>
+      [community.name, community.slug, community.description || '']
+        .some((value) => value.toLowerCase().includes(normalizedSearch))
+    );
+  }, [communities, normalizedSearch]);
 
   // Scroll detection to sync with global Navbar
   const [showNavbar, setShowNavbar] = useState(true);
@@ -84,27 +93,29 @@ export default function DiscoverCommunitiesPage() {
     }
   };
 
-  // Debounce search input
+  // Keep search responsive while preventing a request for every keystroke.
   useEffect(() => {
-    const t = setTimeout(() => setDebouncedSearch(search), 200);
+    const t = setTimeout(() => setDebouncedSearch(search.trim()), 120);
     return () => clearTimeout(t);
   }, [search]);
 
   useEffect(() => {
-    if (!loading) {
-      const queryKey = `${debouncedSearch}\u0000${filter}`;
-      const hasLoadedCommunities = hasLoadedCommunitiesRef.current;
-      const isSilent = hasLoadedCommunities && lastCommunityQueryRef.current === queryKey;
-      lastCommunityQueryRef.current = queryKey;
-      if (!debouncedSearch && !hasLoadedCommunities) {
-        hasLoadedCommunitiesRef.current = true;
-        prefetchCommunityCategories();
-      } else {
-        hasLoadedCommunitiesRef.current = true;
-        fetchCommunities(undefined, debouncedSearch || undefined, filter || undefined, isSilent);
-      }
+    if (loading) return;
+    const queryKey = `${debouncedSearch}\u0000${filter}`;
+    const hasLoadedCommunities = hasLoadedCommunitiesRef.current;
+    const isSilent = hasLoadedCommunities && lastCommunityQueryRef.current === queryKey;
+    lastCommunityQueryRef.current = queryKey;
+    // Render matches from the already-loaded page immediately. Only search the
+    // server when the local page cannot satisfy the query.
+    if (debouncedSearch && locallyMatchedCommunities.length > 0) return;
+    if (!debouncedSearch && !hasLoadedCommunities) {
+      hasLoadedCommunitiesRef.current = true;
+      prefetchCommunityCategories();
+    } else {
+      hasLoadedCommunitiesRef.current = true;
+      fetchCommunities(undefined, debouncedSearch || undefined, filter || undefined, isSilent);
     }
-  }, [loading, debouncedSearch, filter, fetchCommunities, prefetchCommunityCategories]);
+  }, [loading, debouncedSearch, filter, locallyMatchedCommunities.length, fetchCommunities, prefetchCommunityCategories]);
 
   const handleJoinToggle = useCallback(async (slug: string) => {
     try {
@@ -167,13 +178,28 @@ export default function DiscoverCommunitiesPage() {
             <div className={`flex-1 min-w-[180px] flex items-center gap-2 px-3.5 py-2 rounded-xl border transition-all focus-within:ring-2 focus-within:ring-indigo-500/20 focus-within:border-indigo-500 ${
               dark ? 'bg-zinc-900 border-zinc-800' : 'bg-zinc-50 border-zinc-200'
             }`}>
-              <Search size={15} className={dark ? 'text-zinc-500' : 'text-zinc-400'} />
+              {fetching && debouncedSearch ? (
+                <Loader2 size={15} className="animate-spin text-indigo-500" />
+              ) : (
+                <Search size={15} className={dark ? 'text-zinc-500' : 'text-zinc-400'} />
+              )}
               <input
+                type="search"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search communities…"
                 className={`flex-1 bg-transparent text-[13.5px] outline-none ${dark ? 'text-white placeholder:text-zinc-600' : 'text-zinc-900 placeholder:text-zinc-400'}`}
               />
+              {search && (
+                <button
+                  type="button"
+                  onClick={() => setSearch('')}
+                  aria-label="Clear community search"
+                  className={dark ? 'text-zinc-500 hover:text-white' : 'text-zinc-400 hover:text-zinc-700'}
+                >
+                  <X size={15} />
+                </button>
+              )}
             </div>
 
             {isAuthenticated && (
@@ -266,7 +292,7 @@ export default function DiscoverCommunitiesPage() {
         )}
 
         {/* Grid */}
-        {fetching && communities.length === 0 ? (
+        {fetching && locallyMatchedCommunities.length === 0 ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {[1, 2, 3, 4, 5, 6].map((i) => (
               <div key={i} className={`rounded-2xl border animate-pulse ${dark ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-zinc-200'}`}>
@@ -286,7 +312,7 @@ export default function DiscoverCommunitiesPage() {
               Try again
             </button>
           </div>
-        ) : communities.length === 0 ? (
+        ) : locallyMatchedCommunities.length === 0 ? (
           <div className={`rounded-2xl border p-16 text-center ${dark ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-zinc-200'}`}>
             <div className={`w-16 h-16 rounded-2xl mx-auto mb-4 flex items-center justify-center ${dark ? 'bg-zinc-800' : 'bg-zinc-100'}`}>
               <Users2 size={28} className={dark ? 'text-zinc-500' : 'text-zinc-400'} />
@@ -309,7 +335,7 @@ export default function DiscoverCommunitiesPage() {
         ) : (
           <>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {communities.map((community) => (
+              {locallyMatchedCommunities.map((community) => (
                 <CommunityGroupCard
                   key={community.id}
                   community={community}

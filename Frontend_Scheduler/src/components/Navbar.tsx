@@ -3,11 +3,11 @@
 import React, { useState, useContext, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
-import { Moon, Sun, Menu, X, LogOut, LayoutDashboard, Calendar, Clock, Settings, User, Users, UserPlus, Bell, Coffee, Hash, BookOpen, MessageSquare } from 'lucide-react';
+import { Moon, Sun, Menu, X, LogOut, LayoutDashboard, Calendar, Clock, Settings, User, Bell, Coffee, Hash, BookOpen, MessageSquare } from 'lucide-react';
 import { useDarkMode } from '@/context/DarkModeContext';
 import { AuthContext } from '@/context/authContext';
 import { useAttendance } from '@/context/AttendanceContext';
-import { useNotifications } from '@/context/NotificationContext';
+import { useChat } from '@/context/ChatContext';
 import { auth } from '@/lib/firebase';
 
 const Navbar = () => {
@@ -16,7 +16,8 @@ const Navbar = () => {
   const router = useRouter();
   const pathname = usePathname();
 
-  const { unreadCount } = useNotifications();
+  const { unreadCounts } = useChat();
+  const totalUnreadChats = Object.values(unreadCounts).reduce((total, count) => total + count, 0);
 
   const [isOpen, setIsOpen] = useState(false);
   const [showNavbar, setShowNavbar] = useState(true);
@@ -184,8 +185,26 @@ const Navbar = () => {
             {dark ? <Sun size={14} /> : <Moon size={14} />}
           </button>
 
-          {/* Mobile top nav controls (Friends & Notifications) */}
+          {/* Mobile top nav controls (Chat & Notifications) */}
           <div className="flex md:hidden items-center gap-2">
+            {/* Chat */}
+            <div className="relative">
+              <Link
+                href="/chat"
+                className={`flex p-1.5 rounded border transition-colors ${
+                  dark ? 'border-gray-800 text-white hover:bg-gray-900' : 'border-gray-200 text-gray-900 hover:bg-gray-50'
+                }`}
+                aria-label="Chat"
+              >
+                <MessageSquare size={16} />
+              </Link>
+              {totalUnreadChats > 0 && (
+                <span className="absolute -top-1 -right-1 min-w-[10px] h-2.5 px-0.5 rounded-full bg-red-500 text-white text-[7px] font-bold flex items-center justify-center border border-white dark:border-black">
+                  {totalUnreadChats > 99 ? '99+' : totalUnreadChats}
+                </span>
+              )}
+            </div>
+
             {/* Notifications */}
             <div className="relative">
               <Link
@@ -199,24 +218,6 @@ const Navbar = () => {
               </Link>
             </div>
 
-            {/* Friends */}
-            <div className="relative">
-              <Link
-                href="/friends"
-                className={`flex p-1.5 rounded border transition-colors ${
-                  dark ? 'border-gray-800 text-white hover:bg-gray-900' : 'border-gray-200 text-gray-900 hover:bg-gray-50'
-                }`}
-                aria-label="Friends"
-              >
-                <Users size={16} />
-              </Link>
-              {unreadCount > 0 && (
-                <>
-                  <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-red-500 border border-white dark:border-black animate-ping" />
-                  <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-red-500 border border-white dark:border-black" />
-                </>
-              )}
-            </div>
           </div>
 
           {isMounted && isAuthenticated && (

@@ -48,8 +48,8 @@ interface Post {
 }
 
 const parseMarkdownTokens = (text: string, dark: boolean): React.ReactNode[] => {
-  // Regex to match **bold**, *italic*, ~~strike~~, `code`, #hashtag, [link](url)
-  const regex = /(\*\*[^*]+\*\*|\*[^*]+\*|~~[^~]+~~|`[^`]+`|#[a-zA-Z0-9_]+|\[[^\]]+\]\([^)]+\))/g;
+  // Match formatting, markdown links, hashtags, and plain URLs.
+  const regex = /(\*\*[^*]+\*\*|\*[^*]+\*|~~[^~]+~~|`[^`]+`|#[a-zA-Z0-9_]+|\[[^\]]+\]\([^)]+\)|https?:\/\/[^\s<]+|www\.[^\s<]+)/g;
   const parts = text.split(regex);
 
   return parts.map((part, idx) => {
@@ -93,6 +93,24 @@ const parseMarkdownTokens = (text: string, dark: boolean): React.ReactNode[] => 
         >
           <ExternalLink size={13} className="shrink-0" />
           <span>{title}</span>
+        </a>
+      );
+    }
+    if (/^(https?:\/\/|www\.)/i.test(part)) {
+      const trailing = part.match(/[.,!?;:)\]]+$/)?.[0] || '';
+      const linkText = trailing ? part.slice(0, -trailing.length) : part;
+      const url = linkText.startsWith('www.') ? `https://${linkText}` : linkText;
+      return (
+        <a
+          key={idx}
+          href={url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-blue-600 dark:text-blue-400 underline font-medium hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {linkText}
+          {trailing}
         </a>
       );
     }

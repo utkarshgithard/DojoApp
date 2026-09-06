@@ -147,9 +147,9 @@ export const CommunityProvider = ({ children }: { children: React.ReactNode }) =
       } else {
         const currentPosts = postsRef.current;
         if (isSilent && currentPosts.length > 0) {
-          const currentFirstId = currentPosts[0]?.id;
-          const newFirstId = data.posts[0]?.id;
-          if (newFirstId && newFirstId !== currentFirstId) {
+          const currentPostIds = new Set(currentPosts.map((post) => post.id));
+          const hasUnseenPost = data.posts.some((post: Post) => !currentPostIds.has(post.id));
+          if (hasUnseenPost) {
             setPendingPosts(data.posts);
             setHasNewPosts(true);
           } else {

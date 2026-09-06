@@ -215,10 +215,13 @@ export default function CommunityPostComposer({
   const [linkUrl, setLinkUrl] = useState('');
 
   const editorRef = useRef<HTMLDivElement>(null);
+  const savedSelectionRef = useRef<Range | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const MAX_CHARS = 500;
   const MAX_FILES = 5;
+  const MAX_IMAGE_SIZE = 10 * 1024 * 1024;
+  const MAX_VIDEO_SIZE = 50 * 1024 * 1024;
 
   const handleEditorChange = () => {
     if (!editorRef.current) return;
@@ -233,6 +236,22 @@ export default function CommunityPostComposer({
     setIsEditorEmpty(trimmedText === '' && editorRef.current.querySelector('img') === null);
   };
 
+  const saveSelection = () => {
+    const selection = window.getSelection();
+    if (selection && selection.rangeCount > 0 && editorRef.current?.contains(selection.anchorNode)) {
+      savedSelectionRef.current = selection.getRangeAt(0).cloneRange();
+    }
+  };
+
+  const restoreSelection = () => {
+    const selection = window.getSelection();
+    const saved = savedSelectionRef.current;
+    if (!selection || !saved || !editorRef.current?.contains(saved.startContainer)) return false;
+    selection.removeAllRanges();
+    selection.addRange(saved);
+    return true;
+  };
+
   const handlePaste = (e: React.ClipboardEvent) => {
     e.preventDefault();
     const text = e.clipboardData.getData('text/plain');
@@ -242,20 +261,123 @@ export default function CommunityPostComposer({
 
     const range = selection.getRangeAt(0);
     range.deleteContents();
-    const textNode = document.createTextNode(text);
-    range.insertNode(textNode);
+    const urlPattern = /^(https?:\/\/|www\.)[^\s]+$/i;
+    const pastedUrl = urlPattern.test(text.trim()) ? text.trim() : null;
+    const insertedNode = pastedUrl
+      ? (() => {
+          const link = document.createElement('a');
+          const href = pastedUrl.startsWith('www.') ? `https://${pastedUrl}` : pastedUrl;
+          link.href = href;
+          link.target = '_blank';
+          link.rel = 'noopener noreferrer';
+          link.textContent = pastedUrl;
+          return link;
+        })()
+      : document.createTextNode(text);
+    range.insertNode(insertedNode);
 
-    range.setStartAfter(textNode);
+    range.setStartAfter(insertedNode);
     range.collapse(true);
     selection.removeAllRanges();
     selection.addRange(range);
 
     handleEditorChange();
+    saveSelection();
+  };
+
+  const autoLinkUrlBeforeCaret = () => {
+    const selection = window.getSelection();
+    if (!editorRef.current || !selection || selection.rangeCount === 0 || !selection.isCollapsed) return;
+
+    const range = selection.getRangeAt(0);
+    const node = range.startContainer;
+    if (node.nodeType !== Node.TEXT_NODE || !editorRef.current.contains(node)) return;
+    if ((node.parentElement?.closest('a'))) return;
+
+    const textBeforeCaret = node.textContent?.slice(0, range.startOffset) || '';
+    const match = textBeforeCaret.match(/(?:https?:\/\/|www\.)[^\s<]+$/i);
+    if (!match) return;
+
+    const rawUrl = match[0];
+    const trailingPunctuation = rawUrl.match(/[.,!?;:)\]]+$/)?.[0] || '';
+    const urlText = trailingPunctuation ? rawUrl.slice(0, -trailingPunctuation.length) : rawUrl;
+    if (!urlText) return;
+
+    const start = range.startOffset - rawUrl.length;
+    const linkRange = document.createRange();
+    linkRange.setStart(node, start);
+    linkRange.setEnd(node, start + urlText.length);
+
+    const link = document.createElement('a');
+    link.href = urlText.startsWith('www.') ? `https://${urlText}` : urlText;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    link.className = 'text-indigo-500 underline font-semibold';
+    link.textContent = urlText;
+    linkRange.deleteContents();
+    linkRange.insertNode(link);
+
+    const caret = document.createRange();
+    caret.setStartAfter(link);
+    caret.collapse(true);
+    selection.removeAllRanges();
+    selection.addRange(caret);
+    handleEditorChange();
+  };
+
+  const autoLinkWhileTyping = () => {
+    const selection = window.getSelection();
+    if (!editorRef.current || !selection || selection.rangeCount === 0 || !selection.isCollapsed) return;
+
+    const range = selection.getRangeAt(0);
+    const currentElement = range.startContainer.parentElement;
+    const activeLink = currentElement?.closest('a');
+    if (activeLink && editorRef.current.contains(activeLink)) {
+      const linkText = activeLink.textContent?.trim() || '';
+      if (/^(https?:\/\/|www\.)[^\s]+$/i.test(linkText)) {
+        activeLink.setAttribute('href', linkText.startsWith('www.') ? `https://${linkText}` : linkText);
+      }
+      return;
+    }
+
+    if (range.startContainer.nodeType !== Node.TEXT_NODE) return;
+    const textNode = range.startContainer;
+    const textBeforeCaret = textNode.textContent?.slice(0, range.startOffset) || '';
+    const match = textBeforeCaret.match(/(?:https?:\/\/|www\.)[^\s<]+/i);
+    if (!match || !/\.[a-z]{2,}(?:[/?#]|$)/i.test(match[0])) return;
+
+    const start = range.startOffset - match[0].length;
+    const link = document.createElement('a');
+    link.href = match[0].startsWith('www.') ? `https://${match[0]}` : match[0];
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    link.className = 'text-indigo-500 underline font-semibold';
+    link.textContent = match[0];
+
+    const linkRange = document.createRange();
+    linkRange.setStart(textNode, start);
+    linkRange.setEnd(textNode, range.startOffset);
+    linkRange.deleteContents();
+    linkRange.insertNode(link);
+    const caret = document.createRange();
+    caret.setStartAfter(link);
+    caret.collapse(true);
+    selection.removeAllRanges();
+    selection.addRange(caret);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    if ((e.key === ' ' || e.key === 'Enter') && !e.shiftKey) {
+      autoLinkUrlBeforeCaret();
+    }
+
     // Keyboard shortcuts: Ctrl+B (Bold), Ctrl+I (Italic)
     if (e.ctrlKey || e.metaKey) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        void handleSubmit();
+        return;
+      }
       if (e.key === 'b' || e.key === 'B') {
         e.preventDefault();
         toggleBold();
@@ -393,6 +515,7 @@ export default function CommunityPostComposer({
   };
 
   const handleOpenLinkModal = () => {
+    restoreSelection();
     const selection = window.getSelection();
     const selectedText = selection && editorRef.current?.contains(selection.anchorNode)
       ? selection.toString()
@@ -445,7 +568,9 @@ export default function CommunityPostComposer({
 
   const insertTextAtCursor = (text: string) => {
     if (!editorRef.current) return;
+    const hadSavedSelection = restoreSelection();
     editorRef.current.focus();
+    if (hadSavedSelection) restoreSelection();
 
     const selection = window.getSelection();
     if (!selection || selection.rangeCount === 0) {
@@ -466,6 +591,7 @@ export default function CommunityPostComposer({
     selection.addRange(range);
 
     handleEditorChange();
+    saveSelection();
   };
 
   const insertEmoji = (emoji: string) => {
@@ -604,7 +730,22 @@ export default function CommunityPostComposer({
       if (files.length > remaining) {
         toast.error(`Maximum ${MAX_FILES} media attachments allowed`);
       }
-      const toAdd = files.slice(0, remaining);
+      const toAdd = files
+        .filter((file) => {
+          const isImage = file.type.startsWith('image/');
+          const isVideo = file.type.startsWith('video/');
+          const maxSize = isVideo ? MAX_VIDEO_SIZE : MAX_IMAGE_SIZE;
+          if (!isImage && !isVideo) {
+            toast.error(`${file.name} is not a supported image or video`);
+            return false;
+          }
+          if (file.size > maxSize) {
+            toast.error(`${file.name} is too large (max ${isVideo ? '50 MB' : '10 MB'})`);
+            return false;
+          }
+          return true;
+        })
+        .slice(0, remaining);
 
       const newAttachments: MediaAttachment[] = await Promise.all(
         toAdd.map(async (file) => {
@@ -631,7 +772,10 @@ export default function CommunityPostComposer({
   const removeAttachment = (id: string) => {
     setAttachments((prev) => {
       const target = prev.find((a) => a.id === id);
-      if (target) URL.revokeObjectURL(target.localUrl);
+      if (target) {
+        URL.revokeObjectURL(target.localUrl);
+        if (target.thumbnailUrl?.startsWith('blob:')) URL.revokeObjectURL(target.thumbnailUrl);
+      }
       return prev.filter((a) => a.id !== id);
     });
   };
@@ -674,8 +818,8 @@ export default function CommunityPostComposer({
       setIsEditorEmpty(true);
       setAttachments([]);
       setShowEmojiPicker(false);
-    } catch {
-      // silent
+    } catch (err: any) {
+      toast.error(err?.response?.data?.error || 'Failed to publish your post. Please try again.');
     } finally {
       setSubmitting(false);
     }
@@ -817,11 +961,25 @@ export default function CommunityPostComposer({
             <div
               ref={editorRef}
               contentEditable
-              onInput={handleEditorChange}
+              onInput={() => {
+                autoLinkWhileTyping();
+                handleEditorChange();
+                saveSelection();
+              }}
               onKeyDown={handleKeyDown}
-              onKeyUp={checkSelection}
-              onMouseUp={checkSelection}
-              onFocus={checkSelection}
+              onKeyUp={() => {
+                checkSelection();
+                saveSelection();
+              }}
+              onMouseUp={() => {
+                checkSelection();
+                saveSelection();
+              }}
+              onFocus={() => {
+                checkSelection();
+                saveSelection();
+              }}
+              onBlur={saveSelection}
               onPaste={handlePaste}
               className={`w-full min-h-[90px] outline-none text-[15px] leading-relaxed bg-transparent font-normal break-words ${dark ? 'text-zinc-100' : 'text-zinc-900'
                 }`}
@@ -861,7 +1019,13 @@ export default function CommunityPostComposer({
                   {/* Error overlay */}
                   {att.error && (
                     <div className="absolute inset-0 bg-rose-600/90 flex items-center justify-center backdrop-blur-[2px]">
-                      <span className="text-white text-[10px] font-bold tracking-wide">Failed</span>
+                      <button
+                        type="button"
+                        onClick={() => uploadFile({ ...att, error: undefined, publicUrl: undefined })}
+                        className="text-white text-[10px] font-bold tracking-wide underline underline-offset-2 hover:no-underline"
+                      >
+                        Retry
+                      </button>
                     </div>
                   )}
 
@@ -951,6 +1115,7 @@ export default function CommunityPostComposer({
               {/* Emoji Picker Trigger */}
               <button
                 type="button"
+                onMouseDown={saveSelection}
                 onClick={() => setShowEmojiPicker((v) => !v)}
                 title="Insert Emojis"
                 className={`p-2 rounded-xl transition-all duration-200 ${showEmojiPicker

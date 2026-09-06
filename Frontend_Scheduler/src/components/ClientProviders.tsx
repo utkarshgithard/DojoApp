@@ -51,7 +51,7 @@ function ClientProvidersInner({ children }: { children: React.ReactNode }) {
     && !pathname.startsWith('/session/')
     && !isMobileChatActive;
 
-  const sidebarRoutes = ['/dashboard', '/friends', '/community', '/setup-schedule', '/calendar', '/exam-prep', '/settings', '/notifications', '/chat'];
+  const sidebarRoutes = ['/dashboard', '/friends', '/community', '/setup-schedule', '/calendar', '/exam-prep', '/me', '/settings', '/notifications', '/chat'];
   const showSidebar = isAuthenticated && sidebarRoutes.some(route => pathname === route || pathname.startsWith(route + '/'));
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
