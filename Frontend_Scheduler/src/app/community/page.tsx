@@ -32,6 +32,7 @@ export default function CommunityPage() {
   // Preselected file (e.g. from camera quick action)
   const [preselectedFile, setPreselectedFile] = useState<File | null>(null);
   const cameraFabInputRef = useRef<HTMLInputElement>(null);
+  const initialFeedRequestedRef = useRef(false);
 
   const handleCloseCompose = () => {
     setIsComposeOpen(false);
@@ -88,14 +89,9 @@ export default function CommunityPage() {
 
   // Initial load or silent revalidation
   useEffect(() => {
-    if (!loading) {
-      if (posts.length === 0) {
-        fetchPosts();
-      } else {
-        // Silent revalidation in the background
-        fetchPosts(undefined, true);
-      }
-    }
+    if (loading || initialFeedRequestedRef.current) return;
+    initialFeedRequestedRef.current = true;
+    fetchPosts(undefined, posts.length > 0);
   }, [loading, fetchPosts, posts.length]);
 
   // Fetch followed communities on mount / auth change
@@ -290,7 +286,7 @@ export default function CommunityPage() {
                 </div>
               ))}
             </div>
-          ) : error ? (
+          ) : error && posts.length === 0 ? (
             <div
               className={`rounded-2xl border p-10 text-center shadow-md ${dark ? 'bg-zinc-900/60 border-zinc-800/80' : 'bg-white border-zinc-200'
                 }`}

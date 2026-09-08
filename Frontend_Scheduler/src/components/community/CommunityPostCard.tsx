@@ -6,7 +6,7 @@ import { Heart, MessageCircle, Trash2, MoreHorizontal, Share2, UserPlus, UserChe
 import { formatDistanceToNowStrict } from 'date-fns';
 import { useRouter } from 'next/navigation';
 import CommunityMediaGrid from './CommunityMediaGrid';
-import CommunityCommentSection from './CommunityCommentSection';
+import CommunityCommentSection, { prefetchComments } from './CommunityCommentSection';
 import ShareModal from './ShareModal';
 import { auth } from '@/lib/firebase';
 import { useAuth } from '@/context/authContext';
@@ -48,8 +48,8 @@ interface Post {
 }
 
 const parseMarkdownTokens = (text: string, dark: boolean): React.ReactNode[] => {
-  // Match formatting, markdown links, hashtags, and plain URLs.
-  const regex = /(\*\*[^*]+\*\*|\*[^*]+\*|~~[^~]+~~|`[^`]+`|#[a-zA-Z0-9_]+|\[[^\]]+\]\([^)]+\)|https?:\/\/[^\s<]+|www\.[^\s<]+)/g;
+  // Match formatting, markdown links, hashtags, mentions, and plain URLs.
+  const regex = /(\*\*[^*]+\*\*|\*[^*]+\*|~~[^~]+~~|`[^`]+`|#[a-zA-Z0-9_]+|@[a-zA-Z0-9_\s.-]+|\[[^\]]+\]\([^)]+\)|https?:\/\/[^\s<]+|www\.[^\s<]+)/g;
   const parts = text.split(regex);
 
   return parts.map((part, idx) => {
@@ -74,6 +74,13 @@ const parseMarkdownTokens = (text: string, dark: boolean): React.ReactNode[] => 
     if (part.startsWith('#')) {
       return (
         <span key={idx} className="font-bold text-indigo-500 hover:underline cursor-pointer">
+          {part}
+        </span>
+      );
+    }
+    if (part.startsWith('@')) {
+      return (
+        <span key={idx} className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-[13px] font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-500/20 mx-0.5 font-sans hover:underline cursor-pointer">
           {part}
         </span>
       );
@@ -204,10 +211,26 @@ export default function CommunityPostCard({
   const [editContent, setEditContent] = useState(post.content);
   const [savingEdit, setSavingEdit] = useState(false);
   const [currentPostContent, setCurrentPostContent] = useState(post.content);
+  const cardRef = React.useRef<HTMLElement>(null);
 
   const router = useRouter();
   const isOwnPost = post.author?.id === currentUserId;
   const isAdmin = userDetails?.role === 'admin';
+
+  React.useEffect(() => {
+    const card = cardRef.current;
+    if (!card) return;
+
+    const observer = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting) {
+        prefetchComments(post.id);
+        observer.disconnect();
+      }
+    }, { rootMargin: '300px' });
+
+    observer.observe(card);
+    return () => observer.disconnect();
+  }, [post.id]);
 
   const handleUserClick = () => {
     if (onUserClick) {
@@ -329,6 +352,7 @@ export default function CommunityPostCard({
   return (
     <>
       <article
+        ref={cardRef}
         className={`group/card relative transition-all duration-300 p-4 sm:p-6 ${
           dark
             ? 'bg-zinc-900/40 hover:bg-zinc-900/70 text-white'
@@ -520,6 +544,7 @@ export default function CommunityPostCard({
             {/* Comment Button */}
             <button
               onClick={handleCommentToggle}
+              onMouseEnter={() => prefetchComments(post.id)}
               className={`flex items-center gap-1.5 px-2 sm:px-3 py-1.5 rounded-full text-[13px] font-semibold transition-all duration-300 group/comment active:scale-90 ${
                 showComments
                   ? 'bg-indigo-500/10 text-indigo-600 dark:bg-indigo-500/15 dark:text-indigo-400'

@@ -82,6 +82,27 @@ interface CommunityContextType {
 }
 
 const CommunityContext = createContext<CommunityContextType | undefined>(undefined);
+const POST_CACHE_KEY = 'dojo_community_posts_cache';
+const POST_CACHE_MAX_AGE_MS = 5 * 60 * 1000;
+const SILENT_REFRESH_COOLDOWN_MS = 30 * 1000;
+
+const isValidPost = (value: unknown): value is Post => {
+  if (!value || typeof value !== 'object') return false;
+  const post = value as Partial<Post>;
+  return Boolean(
+    typeof post.id === 'string' &&
+    typeof post.content === 'string' &&
+    post.author &&
+    typeof post.author.id === 'string' &&
+    Array.isArray(post.media)
+  );
+};
+
+const dedupePosts = (posts: Post[]): Post[] => {
+  const byId = new Map<string, Post>();
+  for (const post of posts) byId.set(post.id, post);
+  return [...byId.values()];
+};
 
 export const CommunityProvider = ({ children }: { children: React.ReactNode }) => {
   const [posts, setPosts] = useState<Post[]>([]);
@@ -95,20 +116,26 @@ export const CommunityProvider = ({ children }: { children: React.ReactNode }) =
 
   const postsRef = React.useRef<Post[]>([]);
   const fetchingRef = React.useRef(false);
+  const lastSilentRefreshRef = React.useRef(0);
 
   // Load from cache after mount to prevent hydration errors
   React.useEffect(() => {
     if (typeof window !== 'undefined') {
-      const cached = localStorage.getItem('dojo_community_posts_cache');
+      const cached = localStorage.getItem(POST_CACHE_KEY);
       if (cached) {
         try {
-          const parsed = JSON.parse(cached);
-          if (parsed && parsed.length > 0) {
-            setPosts(parsed);
+          const parsed = JSON.parse(cached) as { savedAt?: number; posts?: unknown[] } | unknown[];
+          const cachedPosts = Array.isArray(parsed) ? parsed : parsed.posts;
+          const savedAt = Array.isArray(parsed) ? 0 : parsed.savedAt || 0;
+          if (Array.isArray(cachedPosts) && cachedPosts.length > 0 &&
+            (!savedAt || Date.now() - savedAt <= POST_CACHE_MAX_AGE_MS)) {
+            setPosts(dedupePosts(cachedPosts.filter(isValidPost)));
             setInitialLoading(false);
+          } else if (savedAt && Date.now() - savedAt > POST_CACHE_MAX_AGE_MS) {
+            localStorage.removeItem(POST_CACHE_KEY);
           }
-        } catch (e) {
-          // Ignore parse errors
+        } catch {
+          localStorage.removeItem(POST_CACHE_KEY);
         }
       }
     }
@@ -116,9 +143,11 @@ export const CommunityProvider = ({ children }: { children: React.ReactNode }) =
 
   React.useEffect(() => {
     postsRef.current = posts;
-    // Keep local storage cache perfectly in sync with the live feed (first page only)
     if (typeof window !== 'undefined' && posts.length > 0) {
-      localStorage.setItem('dojo_community_posts_cache', JSON.stringify(posts.slice(0, 20)));
+      localStorage.setItem(POST_CACHE_KEY, JSON.stringify({
+        savedAt: Date.now(),
+        posts: posts.slice(0, 20),
+      }));
     }
   }, [posts]);
 
@@ -128,6 +157,8 @@ export const CommunityProvider = ({ children }: { children: React.ReactNode }) =
 
   const fetchPosts = useCallback(async (cursor?: string, isSilent = false) => {
     if (fetchingRef.current) return;
+    if (isSilent && Date.now() - lastSilentRefreshRef.current < SILENT_REFRESH_COOLDOWN_MS) return;
+    if (isSilent) lastSilentRefreshRef.current = Date.now();
     fetchingRef.current = true;
     setFetching(true);
     setError(null);
@@ -138,35 +169,37 @@ export const CommunityProvider = ({ children }: { children: React.ReactNode }) =
       const { data } = await API.get('/community/posts', {
         params: cursor ? { cursor } : {},
       });
+      const incomingPosts = Array.isArray(data?.posts) ? data.posts.filter(isValidPost) : [];
+      const incomingCursor = typeof data?.nextCursor === 'string' ? data.nextCursor : null;
       if (cursor) {
         setPosts((prev) => {
           const existingIds = new Set(prev.map((p) => p.id));
-          const filteredNew = data.posts.filter((p: Post) => !existingIds.has(p.id));
-          return [...prev, ...filteredNew];
+          const filteredNew = incomingPosts.filter((p: Post) => !existingIds.has(p.id));
+          return dedupePosts([...prev, ...filteredNew]);
         });
       } else {
         const currentPosts = postsRef.current;
         if (isSilent && currentPosts.length > 0) {
           const currentPostIds = new Set(currentPosts.map((post) => post.id));
-          const hasUnseenPost = data.posts.some((post: Post) => !currentPostIds.has(post.id));
+          const hasUnseenPost = incomingPosts.some((post: Post) => !currentPostIds.has(post.id));
           if (hasUnseenPost) {
-            setPendingPosts(data.posts);
+            setPendingPosts(incomingPosts);
             setHasNewPosts(true);
           } else {
             // No new posts at the top, but update existing posts with fresh data (likes, comments)
             setPosts((prev) => {
               const freshMap = new Map<string, Post>();
-              data.posts.forEach((p: Post) => freshMap.set(p.id, p));
+              incomingPosts.forEach((p: Post) => freshMap.set(p.id, p));
               return prev.map((p) => (freshMap.has(p.id) ? freshMap.get(p.id)! : p));
             });
           }
         } else {
-          setPosts(data.posts);
+          setPosts(dedupePosts(incomingPosts));
           setHasNewPosts(false);
           setPendingPosts([]);
         }
       }
-      setNextCursor(data.nextCursor);
+      setNextCursor(incomingCursor);
     } catch (err: any) {
       setError('Failed to load posts. Please try again.');
     } finally {
@@ -177,7 +210,8 @@ export const CommunityProvider = ({ children }: { children: React.ReactNode }) =
   }, []);
 
   const handlePostCreated = useCallback((newPost: Post) => {
-    setPosts((prev) => [newPost, ...prev]);
+    if (!isValidPost(newPost)) return;
+    setPosts((prev) => dedupePosts([newPost, ...prev]));
   }, []);
 
   const handlePostDeleted = useCallback((postId: string) => {
@@ -192,6 +226,7 @@ export const CommunityProvider = ({ children }: { children: React.ReactNode }) =
     setFetching(false);
     setHasNewPosts(false);
     setPendingPosts([]);
+    lastSilentRefreshRef.current = 0;
   }, []);
 
   const [shares, setShares] = useState<SharedPost[]>([]);
@@ -259,7 +294,7 @@ export const CommunityProvider = ({ children }: { children: React.ReactNode }) =
 
   const applyNewPosts = useCallback(() => {
     if (pendingPosts.length > 0) {
-      setPosts(pendingPosts);
+      setPosts(dedupePosts(pendingPosts.filter(isValidPost)));
       setPendingPosts([]);
       setHasNewPosts(false);
     }

@@ -71,10 +71,10 @@ function ReasonBadge({ reason, dark }: { reason: string; dark: boolean }) {
     : isCollege
       ? dark ? 'bg-blue-500/15 text-blue-300 border-blue-500/25' : 'bg-blue-50 text-blue-700 border-blue-100'
       : isCommunity
-      ? dark ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/25' : 'bg-emerald-50 text-emerald-700 border-emerald-100'
-      : isNew
-        ? dark ? 'bg-amber-500/15 text-amber-300 border-amber-500/25' : 'bg-amber-50 text-amber-700 border-amber-100'
-        : dark ? 'bg-zinc-800/80 text-zinc-400 border-zinc-700' : 'bg-zinc-100 text-zinc-600 border-zinc-200';
+        ? dark ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/25' : 'bg-emerald-50 text-emerald-700 border-emerald-100'
+        : isNew
+          ? dark ? 'bg-amber-500/15 text-amber-300 border-amber-500/25' : 'bg-amber-50 text-amber-700 border-amber-100'
+          : dark ? 'bg-zinc-800/80 text-zinc-400 border-zinc-700' : 'bg-zinc-100 text-zinc-600 border-zinc-200';
 
   return (
     <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium border whitespace-nowrap ${color}`}>
@@ -495,39 +495,6 @@ export default function FriendsPage() {
             loadingMore={contextSuggestionsLoading}
           />
         </div>
-
-        {/* ── Sleek Share Invite Link Banner ───────────────────────── */}
-        {userDetails?.friendCode && (
-          <div className={`p-4 sm:p-4.5 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-all ${dark
-            ? 'bg-gradient-to-r from-indigo-950/40 to-zinc-950 border-indigo-900/30'
-            : 'bg-gradient-to-r from-indigo-50/70 to-purple-50/40 border-indigo-100'
-            }`}>
-            <div className="flex items-center gap-3">
-              <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${dark ? 'bg-indigo-500/20 text-indigo-300' : 'bg-indigo-600 text-white shadow-sm'}`}>
-                <LinkIcon size={16} />
-              </div>
-              <div>
-                <p className={`text-[13.5px] font-semibold ${dark ? 'text-zinc-100' : 'text-zinc-900'}`}>
-                  Invite study partners to connect
-                </p>
-                <p className={`text-[11.5px] ${muted}`}>
-                  Anyone who registers with your link will automatically become your friend
-                </p>
-              </div>
-            </div>
-
-            <button
-              onClick={handleShareInviteLink}
-              className={`flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl text-[12.5px] font-semibold transition-all shrink-0 ${dark
-                ? 'bg-white text-black hover:bg-zinc-200 shadow-sm'
-                : 'bg-zinc-900 text-white hover:bg-black shadow-sm'
-                }`}
-            >
-              {copiedLink ? <Check size={13} className="text-emerald-500" /> : <Copy size={13} />}
-              <span>{copiedLink ? 'Copied Link' : 'Copy Invite Link'}</span>
-            </button>
-          </div>
-        )}
 
         {/* ── Main Friends Section ──────────────────────────────────── */}
         <div className="space-y-3">

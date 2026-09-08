@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, Check, CheckCheck, Loader2, Send, Wifi, WifiOff, Phone, Video, Paperclip, Smile, MoreVertical, Mic, Square, FileText, Download, Play, Pause, Trash2, X, CornerUpRight } from "lucide-react";
+import { ArrowLeft, Check, CheckCheck, Loader2, Send, Wifi, WifiOff, Phone, Video, Paperclip, Smile, MoreVertical, Mic, Square, FileText, Download, Play, Pause, Trash2, X } from "lucide-react";
 import API from "@/lib/axios";
 import ChatAvatar from "@/components/chat/ChatAvatar";
 import { useAuth } from "@/context/authContext";
@@ -132,7 +132,12 @@ function MessageContent({ text, isOwn, dark, onImageClick }: { text: string; isO
     );
   }
   if (text.startsWith("__E2EE_ERR__")) {
-    return <span className="italic opacity-75">This message was deleted</span>;
+    return (
+      <span className="italic opacity-75 flex items-center gap-1.5">
+        <span>🔒</span>
+        <span>Unable to decrypt this message on this device</span>
+      </span>
+    );
   }
   if (text.startsWith("AUDIO::")) {
     try {
@@ -195,7 +200,6 @@ export default function FriendChatPage() {
     setMessagesForChat,
     appendMessageToChat,
     updateMessageInChat,
-    removeMessageFromChat,
     setFriendForChat,
     setLoadingMessagesForChat,
     setLoadingFriendForChat,
@@ -203,7 +207,6 @@ export default function FriendChatPage() {
     globalOnlineUsers,
     globalTypingUsers,
     setUnreadCounts,
-    setForwardingMessages,
   } = useChat();
 
   const chatState = chats[chatId] || {
@@ -222,7 +225,6 @@ export default function FriendChatPage() {
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const shareButtonRef = useRef<HTMLButtonElement | null>(null);
 
   // Audio Recording State
   const [isRecording, setIsRecording] = useState(false);
@@ -244,7 +246,7 @@ export default function FriendChatPage() {
   const [showThemeModal, setShowThemeModal] = useState(false);
   const [isHydrated, setIsHydrated] = useState(false);
 
-  // Multi-select & Forward state
+  // Multi-select state
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
@@ -403,8 +405,13 @@ export default function FriendChatPage() {
 
       nextMessages = await Promise.all(nextMessages.map(async (m) => ({
         ...m,
+        status: m.status || "delivered",
         text: m.text === "$$DELETED$$" ? "$$DELETED$$" : await decrypt(m),
       })));
+
+      // Sort by timestamp to guarantee FIFO ordering
+      nextMessages.sort((a, b) => new Date(a.ts).getTime() - new Date(b.ts).getTime());
+
       setMessagesForChat(chatId, nextMessages);
       if (nextMessages.length > 0) {
         persistRecentActivity(nextMessages[nextMessages.length - 1]);
@@ -412,13 +419,21 @@ export default function FriendChatPage() {
       setTimeout(() => scrollToBottom(false), 0);
     };
 
+    // Track processed message IDs so reconnects cannot append the same message twice.
+    const processedMessageIds = new Set<string>();
+
     const handleNewMessage = async (message: Message) => {
       if (message.chatId !== chatId) return;
+
+      // Deduplicate: skip if we've already processed this server message id
+      if (processedMessageIds.has(message.id)) return;
+      processedMessageIds.add(message.id);
+
       const decryptedText = await decrypt(message);
       const normalizedMessage = {
         ...message,
         text: decryptedText,
-        status: String(message.userId) === String(currentUserId) ? "delivered" : "received",
+        status: message.status || "delivered",
       } as Message;
 
       updateMessageInChat(chatId, normalizedMessage);
@@ -466,6 +481,22 @@ export default function FriendChatPage() {
       setMessagesForChat(chatId, next);
     };
 
+    const handleMessageDelivered = (data: { chatId?: string; messageId?: string }) => {
+      if (data.chatId !== chatId || !data.messageId) return;
+      const message = messagesRef.current.find((entry) => entry.id === data.messageId);
+      if (message && String(message.userId) === String(currentUserId) && message.status === "sent") {
+        updateMessageInChat(chatId, { ...message, status: "delivered" });
+      }
+    };
+
+    const handleMessageAccepted = (data: { chatId?: string; id?: string; clientId?: string }) => {
+      if (data.chatId !== chatId || !data.id || !data.clientId) return;
+      const message = messagesRef.current.find((entry) => entry.clientId === data.clientId);
+      if (message) {
+        updateMessageInChat(chatId, { ...message, id: data.id, status: "sent" });
+      }
+    };
+
     const joinRoom = () => {
       if (chatId) {
         socket.emit("joinFriendChat", { chatId });
@@ -480,6 +511,8 @@ export default function FriendChatPage() {
     socket.on("chatMessages", handleHistory);
     socket.on("newChatMessage", handleNewMessage);
     socket.on("messagesRead", handleMessagesRead);
+    socket.on("messageDelivered", handleMessageDelivered);
+    socket.on("messageAccepted", handleMessageAccepted);
     socket.on("messageDeleted", handleMessageDeleted);
     socket.on("chatError", handleError);
 
@@ -494,6 +527,8 @@ export default function FriendChatPage() {
       socket.off("chatMessages", handleHistory);
       socket.off("newChatMessage", handleNewMessage);
       socket.off("messagesRead", handleMessagesRead);
+      socket.off("messageDelivered", handleMessageDelivered);
+      socket.off("messageAccepted", handleMessageAccepted);
       socket.off("messageDeleted", handleMessageDeleted);
       socket.off("chatError", handleError);
       if (chatId) {
@@ -697,7 +732,7 @@ export default function FriendChatPage() {
     setShowHeaderMenu(false);
   };
 
-  // ─── Multi-select & Forward handlers ──────────────────────────────────────
+  // ─── Multi-select handlers ──────────────────────────────────────
   const enterSelectionMode = (id: string) => {
     setSelectionMode(true);
     setSelectedIds(new Set([id]));
@@ -752,21 +787,6 @@ export default function FriendChatPage() {
     exitSelectionMode();
   };
 
-
-  // Store selected texts in context and let the sidebar list of chats handle targets selection (both desktop & mobile)
-  const handleShareClick = () => {
-    if (selectedIds.size === 0) return;
-    const msgsToForward = messages.filter(m =>
-      selectedIds.has(m.id) &&
-      m.text !== '$$DELETED$$'
-    );
-    if (msgsToForward.length > 0) setForwardingMessages(msgsToForward);
-    exitSelectionMode();
-    const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
-    if (isMobile) {
-      router.push('/chat');
-    }
-  };
 
   // Select All visible messages (Toggles select all / unselect all)
   const handleSelectAll = () => {
@@ -941,15 +961,6 @@ export default function FriendChatPage() {
                 className={`flex items-center px-2.5 py-1.5 rounded-lg text-[11px] font-bold transition-all ${dark ? 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300' : 'bg-[#F3F1FA] hover:bg-[#ECE9F8] text-zinc-500'}`}
               >
                 All
-              </button>
-              {/* Forward / Share */}
-              <button
-                ref={shareButtonRef}
-                onClick={handleShareClick}
-                disabled={selectedIds.size === 0}
-                className={`w-[34px] h-[34px] rounded-lg flex items-center justify-center transition-colors disabled:opacity-40 ${dark ? 'hover:bg-zinc-800 bg-zinc-900 text-white' : 'hover:bg-[#ECE9F8] bg-[#F3F1FA] text-[#15131F]'}`}
-              >
-                <CornerUpRight size={15} />
               </button>
               {/* Delete */}
               <button

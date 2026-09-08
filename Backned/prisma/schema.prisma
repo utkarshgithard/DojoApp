@@ -15,6 +15,8 @@ model User {
   password              String
   verified              Boolean            @default(false)
   friendCode            String             @unique
+  /// Public handle shown as @username. Unique, immutable casing (lowercase), optional for legacy users.
+  username              String?            @unique
   verificationToken     String?
   bio                   String?
   college               String?
@@ -204,6 +206,7 @@ model PostComment {
   author        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([postId, createdAt])
+  @@index([postId, parentId, createdAt])
 }
 
 model UserFollow {

@@ -99,13 +99,14 @@ export function E2EEProvider({ children }: { children: React.ReactNode }) {
       try {
         const kp = await e2ee.loadOrGenerateKeyPair();
         const pubB64 = await e2ee.exportPublicKey(kp.publicKey);
-        const rk = await e2ee.generateRoomKey();
 
         if (cancelled) return;
 
         keyPairRef.current = kp;
         publicKeyB64Ref.current = pubB64;
-        roomKeyRef.current = rk;
+        // The first device creates the room key when it sends. Other devices
+        // must receive the existing room key package instead of replacing it.
+        roomKeyRef.current = null;
 
         setIsReady(true);
 
@@ -135,7 +136,7 @@ export function E2EEProvider({ children }: { children: React.ReactNode }) {
     const onMemberJoined = async (data: {
       userId: string;
       publicKey: string;
-      sessionId: string;
+      chatId: string;
       deviceId: string;
     }) => {
       if (data.userId === userId) return; // ignore our own announce
@@ -154,7 +155,7 @@ export function E2EEProvider({ children }: { children: React.ReactNode }) {
         if (roomKeyRef.current && socket) {
           const wrapped = await e2ee.encryptRoomKeyForMember(roomKeyRef.current, memberPubKey);
           socket.emit('e2ee:keyPackage', {
-            sessionId: data.sessionId,
+                chatId: data.chatId,
             toUserId: data.userId,
             toDeviceId: data.deviceId,
             encryptedRoomKey: wrapped,
@@ -185,10 +186,8 @@ export function E2EEProvider({ children }: { children: React.ReactNode }) {
           data.encryptedRoomKey,
           keyPairRef.current.privateKey,
         );
-        // Accept the first valid room key we receive
-        if (!roomKeyRef.current) {
-          roomKeyRef.current = rk;
-        }
+        // Use the room key created by the existing device.
+        roomKeyRef.current = rk;
       } catch (err) {
         console.warn('[E2EE] Room key decryption failed from', data.fromUserId, ':', err);
       }
@@ -210,7 +209,7 @@ export function E2EEProvider({ children }: { children: React.ReactNode }) {
       if (!socket || !publicKeyB64Ref.current) return;
       const deviceId = getOrCreateDeviceId();
       socket.emit('e2ee:announce', {
-        sessionId,
+        chatId: sessionId,
         publicKey: publicKeyB64Ref.current,
         deviceId,
       });
@@ -220,17 +219,18 @@ export function E2EEProvider({ children }: { children: React.ReactNode }) {
 
   const encrypt = useCallback(
     async (text: string, memberIds: string[]): Promise<EncryptedPayload | null> => {
-      if (!roomKeyRef.current) return null;
+      if (!roomKeyRef.current) {
+        roomKeyRef.current = await e2ee.generateRoomKey();
+      }
 
       // Encrypt the message body
       const { iv, ciphertext } = await e2ee.encryptMessage(text, roomKeyRef.current);
 
       // Check which members we are missing device public keys for
-      const missingIds = memberIds.filter((id) => {
-        if (id === userId) return false;
-        const devs = memberDevicesRef.current.get(id);
-        return !devs || devs.length === 0;
-      });
+      // Refresh every recipient's registered devices so a message sent from
+      // one device also includes keys for newly registered phone/desktop
+      // devices that were offline when the conversation was opened.
+      const missingIds = [...new Set(memberIds.filter(Boolean))];
 
       if (missingIds.length > 0) {
         try {
@@ -255,19 +255,37 @@ export function E2EEProvider({ children }: { children: React.ReactNode }) {
 
       // Wrap room key for each active device of each member (+ ourselves so we can decrypt our own history)
       const encryptedKeys: Record<string, string> = {};
-      const allIds = [...new Set([...memberIds, userId])].filter(Boolean);
+      const allIds = [...new Set([...memberIds, userId].filter(Boolean))];
       const myDeviceId = getOrCreateDeviceId();
 
+      // Always package the room key for this browser directly. Do not depend
+      // on the authenticated user id matching the member list: the local
+      // device must be able to decrypt its own messages immediately.
+      if (keyPairRef.current) {
+        encryptedKeys[myDeviceId] = await e2ee.encryptRoomKeyForMember(
+          roomKeyRef.current,
+          keyPairRef.current.publicKey,
+        );
+      }
+
       for (const memberId of allIds) {
-        if (memberId === userId) {
-          if (keyPairRef.current) {
+        if (String(memberId) === String(userId)) {
+          const ownDeviceIds = [...new Set([
+            myDeviceId,
+            ...(memberDevicesRef.current.get(userId) || []),
+          ])];
+          for (const devId of ownDeviceIds) {
+            const devicePubKey = devId === myDeviceId
+              ? keyPairRef.current?.publicKey
+              : memberKeysRef.current.get(devId);
+            if (!devicePubKey) continue;
             try {
-              encryptedKeys[myDeviceId] = await e2ee.encryptRoomKeyForMember(
+              encryptedKeys[devId] = await e2ee.encryptRoomKeyForMember(
                 roomKeyRef.current,
-                keyPairRef.current.publicKey,
+                devicePubKey,
               );
             } catch (err) {
-              console.warn('[E2EE] Failed to wrap key for self:', err);
+              console.warn('[E2EE] Failed to wrap key for self device', devId, ':', err);
             }
           }
         } else {
@@ -314,30 +332,37 @@ export function E2EEProvider({ children }: { children: React.ReactNode }) {
       }
 
       const myDeviceId = getOrCreateDeviceId();
-      // Try to find key packaged for this device session first; fall back to userId for legacy messages
-      const myWrappedKey = encryptedKeys[myDeviceId] || encryptedKeys[userId];
+      // Prefer the current device/user entries, then try legacy entries. This
+      // keeps messages readable when a deviceId was regenerated or an older
+      // client stored the wrapped key under a different identifier.
+      const preferredKeys = [encryptedKeys[myDeviceId], encryptedKeys[userId]]
+        .filter((value): value is string => Boolean(value));
+      const candidateKeys = [
+        ...preferredKeys,
+        ...Object.entries(encryptedKeys)
+          .filter(([key, value]) => key !== myDeviceId && key !== userId && Boolean(value))
+          .map(([, value]) => value),
+      ];
 
-      if (!myWrappedKey) {
-        // console.warn(
-        //   '[E2EE][decrypt] No wrapped key found for current device/user.\n',
-        //   '  My deviceId:', myDeviceId, '\n',
-        //   '  My userId:', userId, '\n',
-        //   '  Keys in message:', Object.keys(encryptedKeys),
-        // );
+      if (candidateKeys.length === 0) {
         return '__E2EE_ERR__NOT_RECIPIENT';
       }
 
-      try {
-        const rk = await e2ee.decryptRoomKey(myWrappedKey, keyPairRef.current.privateKey);
-        return await e2ee.decryptMessage(msg.iv, msg.ciphertext, rk);
-      } catch (err) {
-        console.error(
-          '[E2EE][decrypt] Crypto error — private key does not match the public key\n',
-          '  msg.id:', msg.id, '\n',
-          '  err:', err,
-        );
-        return '__E2EE_ERR__KEY_MISMATCH';
+      let lastError: unknown;
+      for (const wrappedKey of candidateKeys) {
+        try {
+          const rk = await e2ee.decryptRoomKey(wrappedKey, keyPairRef.current.privateKey);
+          return await e2ee.decryptMessage(msg.iv, msg.ciphertext, rk);
+        } catch (err) {
+          lastError = err;
+        }
       }
+
+      console.error(
+        '[E2EE][decrypt] No wrapped key could be opened with this device key',
+        { messageId: msg.id, candidateCount: candidateKeys.length, error: lastError },
+      );
+      return '__E2EE_ERR__KEY_MISMATCH';
     },
     [userId],
   );

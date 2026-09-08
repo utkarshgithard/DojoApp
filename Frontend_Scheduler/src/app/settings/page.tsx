@@ -78,7 +78,33 @@ export default function SettingsPage() {
     email: '',
     bio: '',
     avatarUrl: '',
+    username: '',
   });
+
+  // ── Username availability state ────────────────────────────────────────────
+  const [usernameStatus, setUsernameStatus] = useState<
+    { checking: boolean; available: boolean | null; message: string | null }
+  >({ checking: false, available: null, message: null });
+  const usernameCheckTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const checkUsernameAvailability = useCallback(async (value: string) => {
+    const sanitized = value.trim().toLowerCase().replace(/^@+/, '');
+    if (!sanitized || sanitized === (details.username || '')) {
+      setUsernameStatus({ checking: false, available: null, message: null });
+      return;
+    }
+    setUsernameStatus((prev) => ({ ...prev, checking: true }));
+    try {
+      const res = await API.get(`/auth/username-available?username=${encodeURIComponent(sanitized)}`);
+      setUsernameStatus({
+        checking: false,
+        available: !!res.data.available,
+        message: res.data.available ? 'Username available!' : res.data.error || 'That username is taken.',
+      });
+    } catch {
+      setUsernameStatus({ checking: false, available: null, message: null });
+    }
+  }, [details.username]);
 
   const filteredColleges = React.useMemo(() => {
     const query = collegeQuery.toLowerCase().trim();
@@ -94,6 +120,7 @@ export default function SettingsPage() {
         email: userDetails.email || '',
         bio: userDetails.bio || '',
         avatarUrl: userDetails.avatarUrl || auth.currentUser?.photoURL || '',
+        username: userDetails.username || '',
       });
       const currentCollege = userDetails.collegeCode
         ? COLLEGES.find((college) => college.code === userDetails.collegeCode)
@@ -135,6 +162,12 @@ export default function SettingsPage() {
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setUserData(prev => ({ ...prev, [name]: value }));
+
+    // Debounced username availability check
+    if (name === 'username') {
+      if (usernameCheckTimer.current) clearTimeout(usernameCheckTimer.current);
+      usernameCheckTimer.current = setTimeout(() => checkUsernameAvailability(value), 450);
+    }
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -179,6 +212,7 @@ export default function SettingsPage() {
         name: userData.name,
         bio: userData.bio,
         avatarUrl: userData.avatarUrl,
+        username: userData.username.trim().toLowerCase().replace(/^@+/, ''),
         college: selectedCollege ? selectedCollege.name : (details.college || null),
         collegeCode: selectedCollege ? (selectedCollege.code || null) : (details.collegeCode || null),
       });
@@ -426,6 +460,37 @@ export default function SettingsPage() {
                         </div>
                       </div>
 
+                      {/* Username input */}
+                      <div>
+                        <label className={labelClass}>Username</label>
+                        <div className="relative">
+                          <span className={`absolute left-3.5 top-2 text-sm ${muted}`}>@</span>
+                          <input
+                            type="text"
+                            name="username"
+                            value={userData.username}
+                            onChange={(e) => {
+                              // Restrict to valid username characters as they type
+                              const cleaned = e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '_').slice(0, 20);
+                              setUserData(prev => ({ ...prev, username: cleaned }));
+                              if (usernameCheckTimer.current) clearTimeout(usernameCheckTimer.current);
+                              usernameCheckTimer.current = setTimeout(() => checkUsernameAvailability(cleaned), 450);
+                            }}
+                            placeholder="your_handle"
+                            className={`${inputClass} pl-8 mb-2`}
+                          />
+                          {usernameStatus.checking && (
+                            <p className={`text-[11px] mb-1 ${muted}`}>Checking availability…</p>
+                          )}
+                          {!usernameStatus.checking && usernameStatus.available === true && (
+                            <p className="text-[11px] mb-1 text-emerald-500">✓ {usernameStatus.message}</p>
+                          )}
+                          {!usernameStatus.checking && usernameStatus.available === false && (
+                            <p className="text-[11px] mb-1 text-red-500">✗ {usernameStatus.message}</p>
+                          )}
+                        </div>
+                      </div>
+
                       {/* College selector */}
                       <div ref={collegeDropdownRef} className="relative">
                         <label className={labelClass}>College</label>
@@ -507,10 +572,11 @@ export default function SettingsPage() {
                       <button
                         type="button"
                         onClick={handleSave}
-                        disabled={saving || (
+                        disabled={saving || usernameStatus.available === false || (
                           userData.name === (details.name || '') &&
                           userData.bio === (details.bio || '') &&
                           userData.avatarUrl === (details.avatarUrl || auth.currentUser?.photoURL || '') &&
+                          userData.username === (details.username || '') &&
                           (selectedCollege?.name || null) === (details.college || null) &&
                           (selectedCollege?.code || null) === (details.collegeCode || null)
                         )}

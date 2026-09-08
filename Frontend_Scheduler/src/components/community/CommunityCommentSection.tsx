@@ -2,12 +2,21 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import API from '@/lib/axios';
-import { Send, Trash2, X, Edit2, Save } from 'lucide-react';
+import { Send, Trash2, X, Edit2, Save, MessageCircle } from 'lucide-react';
 import { formatDistanceToNowStrict } from 'date-fns';
 import { useRouter } from 'next/navigation';
 import { auth } from '@/lib/firebase';
 import { useAuth } from '@/context/authContext';
 import { toast } from 'sonner';
+import useSWR, { preload } from 'swr';
+
+const COMMENTS_LIMIT = 10;
+const commentsKey = (postId: string) => `/community/posts/${postId}/comments?limit=${COMMENTS_LIMIT}`;
+const fetchComments = async (url: string) => (await API.get(url)).data;
+
+export const prefetchComments = (postId: string) => {
+  preload(commentsKey(postId), fetchComments);
+};
 
 interface Comment {
   id: string;
@@ -41,10 +50,18 @@ export default function CommunityCommentSection({
   onUserClick,
 }: CommunityCommentSectionProps) {
   const { userDetails } = useAuth() as any;
-  const [comments, setComments] = useState<Comment[]>(initialComments);
+  const { data, mutate, isValidating } = useSWR<{ comments: Comment[]; nextCursor: string | null }>(
+    commentsKey(postId),
+    fetchComments,
+    {
+      fallbackData: initialComments.length > 0 ? { comments: initialComments, nextCursor: null } : undefined,
+      revalidateOnMount: true,
+    },
+  );
+  const [additionalComments, setAdditionalComments] = useState<Comment[]>([]);
   const [text, setText] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const [loadingComments, setLoadingComments] = useState(initialComments.length === 0);
+  const [loadingComments, setLoadingComments] = useState(initialComments.length === 0 && !data);
   const [loadingMore, setLoadingMore] = useState(false);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [replyingTo, setReplyingTo] = useState<{ id: string; name: string; parentId: string } | null>(null);
@@ -54,6 +71,9 @@ export default function CommunityCommentSection({
   
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const router = useRouter();
+  const comments = [...(data?.comments || []), ...additionalComments].filter(
+    (comment, index, all) => all.findIndex((item) => item.id === comment.id) === index,
+  );
 
   const handleUserClick = (authorId: string) => {
     if (onUserClick) {
@@ -63,23 +83,16 @@ export default function CommunityCommentSection({
     }
   };
 
-  // Fetch comments when first opened
   useEffect(() => {
-    if (initialComments.length > 0) return; // already seeded
-    API.get(`/community/posts/${postId}/comments?limit=10`)
-      .then(({ data }) => {
-        setComments(data.comments || []);
-        setNextCursor(data.nextCursor || null);
-      })
-      .catch(() => {})
-      .finally(() => setLoadingComments(false));
-  }, [postId, initialComments.length]);
+    setLoadingComments(!data && initialComments.length === 0);
+    if (data) setNextCursor(data.nextCursor || null);
+  }, [data, initialComments.length]);
 
   const loadMore = async () => {
     if (!nextCursor || loadingMore) return;
     setLoadingMore(true);
     try {
-      const { data } = await API.get(`/community/posts/${postId}/comments?limit=10&cursor=${nextCursor}`);
+      const page = await fetchComments(`${commentsKey(postId)}&cursor=${encodeURIComponent(nextCursor)}`);
       
       // Because we sort ascending, new (older) comments fetched from cursor should be prepended
       // so they appear at the top, since they are older than what we currently have on screen.
@@ -87,16 +100,14 @@ export default function CommunityCommentSection({
       // If we page through it, we get older and older comments.
       // The API returns the chunk sorted `asc` (oldest in the chunk first, newest in the chunk last).
       // So if we prepend the new chunk, the very oldest comments will be at the very top.
-      setComments((prev) => {
-        // Merge without duplicates just in case
-        const existingIds = new Set(prev.map(c => c.id));
-        const newComments = data.comments.filter((c: Comment) => !existingIds.has(c.id));
-        // Sort the combined array `asc` based on createdAt
+      setAdditionalComments((prev) => {
+        const existingIds = new Set([...comments, ...prev].map(c => c.id));
+        const newComments = page.comments.filter((c: Comment) => !existingIds.has(c.id));
         const combined = [...prev, ...newComments];
         combined.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
         return combined;
       });
-      setNextCursor(data.nextCursor || null);
+      setNextCursor(page.nextCursor || null);
     } catch {
       toast.error('Failed to load more comments');
     } finally {
@@ -110,11 +121,15 @@ export default function CommunityCommentSection({
     setSubmitting(true);
     try {
       const parentId = replyingTo?.parentId || null;
-      const { data } = await API.post(`/community/posts/${postId}/comments`, { 
+      const { data: response } = await API.post(`/community/posts/${postId}/comments`, {
         content: text.trim(),
         parentId
       });
-      setComments((prev) => [...prev, data.comment]);
+      const newComment = response.comment as Comment;
+      await mutate((current) => ({
+        comments: [...(current?.comments || []), newComment],
+        nextCursor: current?.nextCursor || null,
+      }), false);
       setText('');
       setReplyingTo(null);
       onCommentAdded?.();
@@ -136,9 +151,17 @@ export default function CommunityCommentSection({
         // Deleting top-level comment means all of its replies are cascade deleted
         const repliesToDelete = comments.filter((c) => c.parentId === commentId);
         countDeleted += repliesToDelete.length;
-        setComments((prev) => prev.filter((c) => c.id !== commentId && c.parentId !== commentId));
+        await mutate((current) => ({
+          comments: (current?.comments || []).filter((c) => c.id !== commentId && c.parentId !== commentId),
+          nextCursor: current?.nextCursor || null,
+        }), false);
+        setAdditionalComments((prev) => prev.filter((c) => c.id !== commentId && c.parentId !== commentId));
       } else {
-        setComments((prev) => prev.filter((c) => c.id !== commentId));
+        await mutate((current) => ({
+          comments: (current?.comments || []).filter((c) => c.id !== commentId),
+          nextCursor: current?.nextCursor || null,
+        }), false);
+        setAdditionalComments((prev) => prev.filter((c) => c.id !== commentId));
       }
       
       onCommentDeleted?.(countDeleted);
@@ -153,7 +176,11 @@ export default function CommunityCommentSection({
     setSavingEdit(true);
     try {
       const { data } = await API.put(`/community/comments/${commentId}`, { content: editCommentText.trim() });
-      setComments((prev) => prev.map((c) => c.id === commentId ? { ...c, content: data.comment.content } : c));
+      await mutate((current) => ({
+        comments: (current?.comments || []).map((c) => c.id === commentId ? { ...c, content: data.comment.content } : c),
+        nextCursor: current?.nextCursor || null,
+      }), false);
+      setAdditionalComments((prev) => prev.map((c) => c.id === commentId ? { ...c, content: data.comment.content } : c));
       setEditingCommentId(null);
       setEditCommentText('');
       toast.success('Comment edited successfully');
@@ -233,16 +260,50 @@ export default function CommunityCommentSection({
   const replies = comments.filter((c) => c.parentId);
 
   return (
-    <div className={`mt-3 pt-3 border-t ${dark ? 'border-zinc-800' : 'border-zinc-100'}`}>
+    <div className={`mt-4 overflow-hidden rounded-2xl border ${
+      dark ? 'border-zinc-800/80 bg-zinc-950/30' : 'border-zinc-200/80 bg-zinc-50/50'
+    }`}>
+      <div className={`flex items-center justify-between px-4 py-3 border-b ${
+        dark ? 'border-zinc-800/80' : 'border-zinc-200/80'
+      }`}>
+        <div>
+          <h3 className={`text-sm font-bold ${dark ? 'text-zinc-100' : 'text-zinc-900'}`}>Comments</h3>
+          <p className={`text-[11px] mt-0.5 ${dark ? 'text-zinc-500' : 'text-zinc-500'}`}>
+            {comments.length ? `${comments.length} ${comments.length === 1 ? 'thought' : 'thoughts'}` : 'Join the conversation'}
+          </p>
+        </div>
+        {isValidating && (
+          <span className={`inline-flex items-center gap-1.5 text-[10px] font-medium ${
+            dark ? 'text-zinc-500' : 'text-zinc-400'
+          }`}>
+            <span className="h-1.5 w-1.5 rounded-full bg-indigo-500 animate-pulse" />
+            Updating
+          </span>
+        )}
+      </div>
+
       {/* Comment list */}
-      <div className="space-y-4 mb-3">
+      <div className="space-y-4 px-4 py-4">
         {loadingComments ? (
-          <div className="flex items-center gap-2 py-2">
-            <span className={`w-4 h-4 border-[1.5px] border-current border-t-transparent rounded-full animate-spin ${dark ? 'text-zinc-600' : 'text-zinc-300'}`} />
-            <span className={`text-[12px] ${dark ? 'text-zinc-600' : 'text-zinc-400'}`}>Loading comments…</span>
+          <div className="space-y-3">
+            {[1, 2, 3].map((item) => (
+              <div key={item} className="flex gap-2.5 animate-pulse">
+                <span className={`h-8 w-8 shrink-0 rounded-full ${dark ? 'bg-zinc-800' : 'bg-zinc-200'}`} />
+                <div className="flex-1 space-y-2">
+                  <span className={`block h-3 w-24 rounded ${dark ? 'bg-zinc-800' : 'bg-zinc-200'}`} />
+                  <span className={`block h-10 w-full rounded-2xl ${dark ? 'bg-zinc-900' : 'bg-zinc-100'}`} />
+                </div>
+              </div>
+            ))}
           </div>
         ) : comments.length === 0 ? (
-          <p className={`text-[12px] ${dark ? 'text-zinc-500' : 'text-zinc-400'}`}>No comments yet. Be the first!</p>
+          <div className={`rounded-xl border border-dashed px-4 py-7 text-center ${
+            dark ? 'border-zinc-800 text-zinc-500' : 'border-zinc-200 text-zinc-400'
+          }`}>
+            <MessageCircle className="mx-auto mb-2 h-5 w-5 opacity-60" />
+            <p className="text-sm font-medium">No comments yet</p>
+            <p className="mt-1 text-[11px]">Be the first to share your thoughts.</p>
+          </div>
         ) : (
           <>
             {nextCursor && (
@@ -250,10 +311,10 @@ export default function CommunityCommentSection({
                 <button
                   onClick={loadMore}
                   disabled={loadingMore}
-                  className={`text-[11px] font-semibold px-3 py-1.5 rounded-full border transition-colors ${
+                  className={`text-[11px] font-semibold px-4 py-2 rounded-full border transition-all hover:-translate-y-0.5 ${
                     dark 
-                      ? 'border-zinc-700 text-zinc-300 hover:bg-zinc-800 disabled:opacity-50' 
-                      : 'border-zinc-200 text-zinc-600 hover:bg-zinc-100 disabled:opacity-50'
+                      ? 'border-zinc-700 bg-zinc-900 text-zinc-300 hover:bg-zinc-800 disabled:opacity-50'
+                      : 'border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-100 disabled:opacity-50'
                   }`}
                 >
                   {loadingMore ? 'Loading...' : 'View previous comments'}
@@ -269,7 +330,9 @@ export default function CommunityCommentSection({
                   <button onClick={() => handleUserClick(c.author.id)} className="focus:outline-none text-left shrink-0">
                     {getAvatar(c.author.name, c.author.avatarUrl, 'w-7 h-7', c.author.id)}
                   </button>
-                  <div className="flex-1 min-w-0">
+                  <div className={`flex-1 min-w-0 rounded-2xl px-3 py-2 ${
+                    dark ? 'bg-zinc-900/80' : 'bg-white shadow-sm shadow-zinc-200/40'
+                  }`}>
                     <div className="flex items-center gap-2">
                       <button 
                         onClick={() => handleUserClick(c.author.id)} 
@@ -313,10 +376,10 @@ export default function CommunityCommentSection({
                       </div>
                     ) : (
                       <>
-                        <p className={`text-[13px] leading-relaxed mt-0.5 ${dark ? 'text-zinc-300' : 'text-zinc-700'}`}>
+                        <p className={`text-[13px] leading-relaxed mt-1 ${dark ? 'text-zinc-300' : 'text-zinc-700'}`}>
                           {c.content}
                         </p>
-                        <div className="flex items-center gap-2 mt-1">
+                        <div className="flex items-center gap-3 mt-2">
                           <button
                             onClick={() => {
                               if (!currentUserId) {
@@ -381,7 +444,9 @@ export default function CommunityCommentSection({
                           {getAvatar(reply.author.name, reply.author.avatarUrl, 'w-6 h-6', reply.author.id)}
                         </button>
                         
-                        <div className="flex-1 min-w-0">
+                        <div className={`flex-1 min-w-0 rounded-2xl px-3 py-2 ${
+                          dark ? 'bg-zinc-900/60' : 'bg-white/80'
+                        }`}>
                           <div className="flex items-center gap-2">
                             <button 
                               onClick={() => handleUserClick(reply.author.id)} 
@@ -428,7 +493,7 @@ export default function CommunityCommentSection({
                               <p className={`text-[13px] leading-relaxed mt-0.5 ${dark ? 'text-zinc-300' : 'text-zinc-700'}`}>
                                 {renderCommentContent(reply.content)}
                               </p>
-                              <div className="flex items-center gap-2 mt-1">
+                              <div className="flex items-center gap-3 mt-2">
                                 <button
                                   onClick={() => {
                                     if (!currentUserId) {
@@ -480,15 +545,15 @@ export default function CommunityCommentSection({
 
       {/* Comment input area */}
       {!currentUserId ? (
-        <div className={`mt-3 p-4 rounded-xl border text-center text-[13px] ${
+        <div className={`border-t px-4 py-4 text-center text-[13px] ${
           dark ? 'bg-zinc-900/50 border-zinc-800 text-zinc-400' : 'bg-zinc-50 border-zinc-200 text-zinc-500'
         }`}>
           Please <button onClick={() => window.dispatchEvent(new CustomEvent('open-auth-modal'))} className="text-indigo-500 hover:underline font-semibold">log in</button> or <button onClick={() => window.dispatchEvent(new CustomEvent('open-auth-modal'))} className="text-indigo-500 hover:underline font-semibold">sign up</button> to write comments or replies.
         </div>
       ) : (
-        <div className="flex flex-col mt-2">
+        <div className={`border-t px-4 py-3 ${dark ? 'border-zinc-800/80' : 'border-zinc-200/80'}`}>
           {replyingTo && (
-            <div className={`flex items-center justify-between px-3 py-1.5 rounded-t-xl text-[11.5px] border-x border-t
+            <div className={`flex items-center justify-between px-3 py-2 rounded-t-2xl text-[11px] border-x border-t
               ${dark 
                 ? 'bg-zinc-900/50 border-zinc-700 text-zinc-300' 
                 : 'bg-zinc-100 border-zinc-200 text-zinc-600'
@@ -514,18 +579,18 @@ export default function CommunityCommentSection({
               onKeyDown={handleKey}
               rows={1}
               placeholder={replyingTo ? "Write a reply…" : "Write a comment… (Enter to send)"}
-              className={`flex-1 resize-none text-[13px] leading-relaxed rounded-xl px-3 py-2.5 border outline-none transition-colors
+              className={`flex-1 resize-none text-[13px] leading-relaxed rounded-2xl px-3.5 py-2.5 border outline-none transition-all
                 ${replyingTo ? 'rounded-t-none' : ''}
                 ${dark
-                  ? 'bg-zinc-800 border-zinc-700 text-white placeholder:text-zinc-500 focus:border-zinc-500'
-                  : 'bg-zinc-50 border-zinc-200 text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-400'
+                  ? 'bg-zinc-900 border-zinc-700 text-white placeholder:text-zinc-500 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/15'
+                  : 'bg-white border-zinc-200 text-zinc-900 placeholder:text-zinc-400 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/15'
                 }`}
               style={{ minHeight: '38px', maxHeight: '100px', overflow: 'auto' }}
             />
             <button
               type="submit"
               disabled={!text.trim() || submitting}
-              className="shrink-0 w-9 h-9 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white flex items-center justify-center transition-all active:scale-95"
+              className="shrink-0 w-10 h-10 rounded-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white flex items-center justify-center shadow-lg shadow-indigo-500/20 transition-all hover:-translate-y-0.5 active:scale-95"
             >
               {submitting
                 ? <span className="w-3.5 h-3.5 border-[1.5px] border-white border-t-transparent rounded-full animate-spin" />

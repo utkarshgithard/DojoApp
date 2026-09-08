@@ -12,6 +12,7 @@ export interface AuthRequest extends Request {
     email: string;
     verified: boolean;
     friendCode: string;
+    username?: string | null;
     createdAt: Date;
   };
 }

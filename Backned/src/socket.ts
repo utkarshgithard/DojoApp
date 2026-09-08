@@ -1,8 +1,7 @@
 import { Server, Socket } from 'socket.io';
 import prisma from './lib/prisma.js';
 import { verifySocketTokenAsync } from './middleware/authmiddleware.js';
-import { sendPushToUser } from './utils/pushService.js';
-import { cacheDel, chatMessagePush, chatMessageGetAll, chatMessagesDel, chatMessageMarkDeleted } from './lib/redis.js';
+import { cacheDel, chatMessagePush, chatMessagesDel, chatMessageMarkDeleted } from './lib/redis.js';
 import { randomUUID } from 'crypto';
 
 // Shared DB readiness flag â€” set to true by server.ts once DB is connected
@@ -290,37 +289,30 @@ function registerChatHandlers(io: Server, socket: Socket, user: UserPayload) {
       participantCount: activeChats.get(canonicalId)!.participants.size,
     });
 
-    let chatHistory = chatMessages.get(canonicalId);
-    if (!chatHistory || chatHistory.length === 0) {
-      const redisMessages = await chatMessageGetAll(canonicalId);
-      if (redisMessages.length > 0) {
-        chatHistory = redisMessages;
-        chatMessages.set(canonicalId, chatHistory);
-      } else {
-        const dbMessages = await prisma.message.findMany({
-          where: { chatId: canonicalId },
-          include: { user: { select: { avatarUrl: true } } },
-          orderBy: { ts: 'asc' },
-          take: MAX_MESSAGES_PER_SESSION,
-        });
-        chatHistory = dbMessages.map((m) => ({
-          id: m.id,
-          chatId: m.chatId,
-          userId: m.userId,
-          name: m.name,
-          text: m.text,
-          ts: m.ts.toISOString(),
-          avatarUrl: m.user?.avatarUrl ?? undefined,
-          ciphertext: m.ciphertext ?? undefined,
-          iv: m.iv ?? undefined,
-          encryptedKeys: m.encryptedKeys ? JSON.parse(m.encryptedKeys) : undefined,
-        }));
-        if (chatHistory.length > 0) {
-          chatMessages.set(canonicalId, chatHistory);
-          for (const msg of chatHistory) chatMessagePush(canonicalId, msg);
-        }
-      }
-    }
+    // The database is authoritative across devices and server instances.
+    // Do not merge Redis/L1 entries here: those caches can outlive a database
+    // deletion and would make removed messages appear again.
+    const dbMessages = await prisma.message.findMany({
+      where: { chatId: canonicalId },
+      include: { user: { select: { avatarUrl: true } } },
+      orderBy: { ts: 'asc' },
+      take: MAX_MESSAGES_PER_SESSION,
+    });
+    const dbHistory = dbMessages.map((m) => ({
+      id: m.id,
+      chatId: m.chatId,
+      userId: m.userId,
+      name: m.name,
+      text: m.text,
+      ts: m.ts.toISOString(),
+      avatarUrl: m.user?.avatarUrl ?? undefined,
+      status: m.isRead ? 'read' : 'delivered',
+      ciphertext: m.ciphertext ?? undefined,
+      iv: m.iv ?? undefined,
+      encryptedKeys: m.encryptedKeys ? JSON.parse(m.encryptedKeys) : undefined,
+    }));
+    const chatHistory = dbHistory;
+    chatMessages.set(canonicalId, chatHistory);
     socket.emit('chatMessages', { chatId: canonicalId, messages: chatHistory ?? [] });
   });
 
@@ -379,7 +371,7 @@ function registerChatHandlers(io: Server, socket: Socket, user: UserPayload) {
         return socket.emit('chatError', { msg: 'Not authorized to send messages' });
       }
 
-      // Build the message immediately with a UUID so we can broadcast instantly
+      // Build the message immediately with a UUID for the delivery acknowledgement.
       const messageId = randomUUID();
       const message: any = {
         id: messageId,
@@ -421,17 +413,9 @@ function registerChatHandlers(io: Server, socket: Socket, user: UserPayload) {
         ? (parts[1] === user.id ? parts[2] : parts[1])
         : null;
 
-      // ─── Broadcast instantly — no waiting for DB ───
-      io.to(`chat_${canonicalId}`).emit('newChatMessage', message);
-      if (otherUserId) {
-        io.to(otherUserId).emit('newChatMessage', message);
-      }
-
-      // ─── Persist to Redis (L2) and DB in the background — fire and forget ───
-      // Redis: appends to the list so future rehydrations skip Postgres
-      chatMessagePush(canonicalId, message);
-
-      prisma.message.create({
+      // Persist before delivery so the recipient's acknowledgement can always
+      // be validated and relayed back to the sender.
+      await prisma.message.create({
         data: {
           id: messageId,
           chatId: canonicalId,
@@ -444,12 +428,45 @@ function registerChatHandlers(io: Server, socket: Socket, user: UserPayload) {
             encryptedKeys: JSON.stringify(encryptedKeys),
           }),
         },
-      }).catch((err) => {
-        console.error('Failed to persist message to DB:', err);
       });
+
+      // Redis: appends to the list so future rehydrations skip Postgres.
+      await chatMessagePush(canonicalId, message);
+      socket.emit('messageAccepted', {
+        chatId: canonicalId,
+        id: message.id,
+        clientId: message.clientId,
+      });
+
+      // Deliver only to the other participant. The sender starts at "sent" and
+      // advances to "delivered" only after that participant acknowledges receipt.
+      if (otherUserId && (io.sockets.adapter.rooms.get(otherUserId)?.size || 0) > 0) {
+        io.to(otherUserId).emit('newChatMessage', message);
+      }
+
     } catch (error) {
       console.error('sendChatMessage error:', error);
       socket.emit('chatError', { msg: 'Failed to send message' });
+    }
+  });
+
+  socket.on('messageDelivered', async ({ chatId, messageId }: { chatId: string; messageId: string }) => {
+    if (!chatId || !messageId) return;
+    const canonicalId = canonicalizeChatId(chatId);
+
+    try {
+      const message = await prisma.message.findUnique({
+        where: { id: messageId },
+        select: { id: true, chatId: true, userId: true },
+      });
+      if (!message || message.chatId !== canonicalId || message.userId === user.id) return;
+
+      io.to(message.userId).emit('messageDelivered', {
+        chatId: canonicalId,
+        messageId: message.id,
+      });
+    } catch (err) {
+      console.error('Failed to acknowledge message delivery:', err);
     }
   });
 
@@ -496,7 +513,6 @@ function registerChatHandlers(io: Server, socket: Socket, user: UserPayload) {
         ? (parts[1] === user.id ? parts[2] : parts[1])
         : null;
 
-      io.to(`chat_${canonicalId}`).emit('messageDeleted', { chatId: canonicalId, messageId });
       if (otherUserId) {
         io.to(otherUserId).emit('messageDeleted', { chatId: canonicalId, messageId });
       }
@@ -517,37 +533,26 @@ function registerChatHandlers(io: Server, socket: Socket, user: UserPayload) {
       if (!isFriend) return;
 
       // Load from cache (tiered: L1 → L2 Redis → DB)
-      let chatHistory = chatMessages.get(canonicalId);
-      if (!chatHistory || chatHistory.length === 0) {
-        const redisMessages = await chatMessageGetAll(canonicalId);
-        if (redisMessages.length > 0) {
-          chatHistory = redisMessages;
-          chatMessages.set(canonicalId, chatHistory);
-        } else {
-          const dbMessages = await prisma.message.findMany({
-            where: { chatId: canonicalId },
-            include: { user: { select: { avatarUrl: true } } },
-            orderBy: { ts: 'asc' },
-            take: MAX_MESSAGES_PER_SESSION,
-          });
-          chatHistory = dbMessages.map((m) => ({
-            id: m.id,
-            chatId: m.chatId,
-            userId: m.userId,
-            name: m.name,
-            text: m.text,
-            ts: m.ts.toISOString(),
-            avatarUrl: m.user?.avatarUrl ?? undefined,
-            ciphertext: m.ciphertext ?? undefined,
-            iv: m.iv ?? undefined,
-            encryptedKeys: m.encryptedKeys ? JSON.parse(m.encryptedKeys) : undefined,
-          }));
-          if (chatHistory.length > 0) {
-            chatMessages.set(canonicalId, chatHistory);
-            for (const msg of chatHistory) chatMessagePush(canonicalId, msg);
-          }
-        }
-      }
+      const dbMessages = await prisma.message.findMany({
+        where: { chatId: canonicalId },
+        include: { user: { select: { avatarUrl: true } } },
+        orderBy: { ts: 'asc' },
+        take: MAX_MESSAGES_PER_SESSION,
+      });
+      const chatHistory = dbMessages.map((m) => ({
+        id: m.id,
+        chatId: m.chatId,
+        userId: m.userId,
+        name: m.name,
+        text: m.text,
+        ts: m.ts.toISOString(),
+        avatarUrl: m.user?.avatarUrl ?? undefined,
+        status: m.isRead ? 'read' : 'delivered',
+        ciphertext: m.ciphertext ?? undefined,
+        iv: m.iv ?? undefined,
+        encryptedKeys: m.encryptedKeys ? JSON.parse(m.encryptedKeys) : undefined,
+      }));
+      chatMessages.set(canonicalId, chatHistory);
       socket.emit('chatMessages', { chatId: canonicalId, messages: chatHistory ?? [] });
     } catch (error) {
       console.error('getSessionMessages error:', error);
@@ -679,9 +684,10 @@ function registerE2EEHandlers(io: Server, socket: Socket, user: UserPayload) {
    * A client announces their ECDH public key when joining a session.
    * Server relays to all existing members so they can distribute the room key.
    */
-  socket.on('e2ee:announce', ({ chatId, publicKey, deviceId }: { chatId: string; publicKey: string; deviceId: string }) => {
-    if (!chatId || !publicKey || !deviceId) return;
-    const canonicalId = canonicalizeChatId(chatId);
+  socket.on('e2ee:announce', ({ chatId, sessionId, publicKey, deviceId }: { chatId?: string; sessionId?: string; publicKey: string; deviceId: string }) => {
+    const targetChatId = chatId || sessionId;
+    if (!targetChatId || !publicKey || !deviceId) return;
+    const canonicalId = canonicalizeChatId(targetChatId);
     socket.to(`chat_${canonicalId}`).emit('e2ee:memberJoined', {
       userId: user.id,
       publicKey,
@@ -695,8 +701,9 @@ function registerE2EEHandlers(io: Server, socket: Socket, user: UserPayload) {
    * Server relays directly to the target user's personal socket room (user.id).
    * The server never decrypts the encryptedRoomKey blob.
    */
-  socket.on('e2ee:keyPackage', ({ chatId, toUserId, toDeviceId, encryptedRoomKey }: {
-    chatId: string;
+  socket.on('e2ee:keyPackage', ({ chatId, sessionId, toUserId, toDeviceId, encryptedRoomKey }: {
+    chatId?: string;
+    sessionId?: string;
     toUserId: string;
     toDeviceId: string;
     encryptedRoomKey: string;

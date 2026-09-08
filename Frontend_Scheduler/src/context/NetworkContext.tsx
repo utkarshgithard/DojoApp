@@ -15,6 +15,7 @@ export interface NetworkUser {
   name: string;
   avatarUrl?: string | null;
   friendCode?: string;
+  username?: string | null;
   followsBack?: boolean;
   since?: string;
   // Mutual connection fields (friends list)
@@ -210,7 +211,12 @@ export const NetworkProvider = ({ children }: { children: React.ReactNode }) => 
 
   const addFriend = useCallback(async (friendCode: string) => {
     try {
-      const res = await API.post('/auth/add', { friendCode: friendCode.trim() });
+      const value = friendCode.trim();
+      // If the input looks like an @handle, send it as a username; else as a friend code.
+      const body = value.startsWith('@')
+        ? { username: value.replace(/^@+/, '') }
+        : { friendCode: value };
+      const res = await API.post('/auth/add', body);
       await silentRefresh();
       return { success: true, message: res.data.message };
     } catch (err: any) {

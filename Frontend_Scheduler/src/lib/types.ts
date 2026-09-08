@@ -8,6 +8,7 @@ export interface User {
   email: string;
   verified: boolean;
   friendCode: string;
+  username?: string | null;
   createdAt: string;
   bio?: string;
   avatarUrl?: string;
@@ -21,6 +22,7 @@ export interface Friend {
   name: string;
   email: string;
   friendCode: string;
+  username?: string | null;
   avatarUrl?: string;
 }
 

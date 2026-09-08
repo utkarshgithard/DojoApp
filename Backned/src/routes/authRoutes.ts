@@ -7,6 +7,13 @@ import { cacheGet, cacheSet, cacheDel } from '../lib/redis.js';
 import { checkAndSyncAvatar } from '../utils/avatarSync.js';
 import { calculateDailyPerformanceScore } from '../utils/performanceIndex.js';
 import { createNotification } from '../utils/notificationHelper.js';
+import {
+  sanitizeUsername,
+  usernameValidationError,
+  generateUsernameFromName,
+  ensureUserHasUsername,
+  isUsernameAvailable,
+} from '../utils/username.js';
 
 const userRouter = express.Router();
 
@@ -47,6 +54,7 @@ userRouter.get('/userDetails', verifyToken, async (req: AuthenticatedRequest, re
         email: true,
         verified: true,
         friendCode: true,
+        username: true,
         createdAt: true,
         bio: true,
         avatarUrl: true,
@@ -79,6 +87,7 @@ userRouter.get('/users/:id', optionalVerifyToken, async (req: AuthenticatedReque
       select: {
         id: true,
         name: true,
+        username: true,
         avatarUrl: true,
         bio: true,
         role: true,
@@ -162,6 +171,13 @@ userRouter.post('/sync', async (req: Request, res: Response): Promise<void> => {
     const existing = await prisma.user.findUnique({ where: { email } });
 
     if (existing) {
+      // Backfill username for users created before the username feature
+      if (!existing.username) {
+        await ensureUserHasUsername(existing.id).catch((err) =>
+          console.error('Failed to backfill username on sync:', err)
+        );
+      }
+
       // Sync avatar if it is missing or has changed in Firebase
       if (decodedToken.picture && existing.avatarUrl !== decodedToken.picture) {
         await prisma.user.update({
@@ -193,6 +209,15 @@ userRouter.post('/sync', async (req: Request, res: Response): Promise<void> => {
     // Fallback name if missing
     const displayName = name || decodedToken.name || email.split('@')[0];
 
+    // Username: use the provided one if valid + free, else generate from name
+    let username: string;
+    const requestedUsername = sanitizeUsername(String(req.body.username ?? ''));
+    if (requestedUsername && !usernameValidationError(requestedUsername) && (await isUsernameAvailable(requestedUsername))) {
+      username = requestedUsername;
+    } else {
+      username = await generateUsernameFromName(displayName);
+    }
+
     const user = await prisma.user.create({
       data: {
         id: uid,
@@ -201,6 +226,7 @@ userRouter.post('/sync', async (req: Request, res: Response): Promise<void> => {
         password: '', // Password is not used anymore
         verified: true, // Firebase handles verification
         friendCode: code,
+        username,
         avatarUrl: decodedToken.picture || null, // Sync photo URL from Google
         college: college || null,
         collegeCode: collegeCode || null,
@@ -232,7 +258,7 @@ userRouter.get('/friends-List', verifyToken, async (req: AuthenticatedRequest, r
         friends: {
           include: {
             friend: {
-              select: { id: true, name: true, friendCode: true, email: true, avatarUrl: true },
+              select: { id: true, name: true, username: true, friendCode: true, email: true, avatarUrl: true },
             },
           },
         },
@@ -256,20 +282,31 @@ userRouter.get('/friends-List', verifyToken, async (req: AuthenticatedRequest, r
   }
 });
 
-// POST /api/auth/add  — add friend by code
+// POST /api/auth/add  — add friend by friend code OR username
 userRouter.post('/add', verifyToken, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
-    const { friendCode } = req.body;
+    const { friendCode, username } = req.body;
     const userId = req.userId!;
 
-    if (!friendCode) {
-      res.status(400).json({ error: 'Friend code is required' });
+    if (!friendCode && !username) {
+      res.status(400).json({ error: 'Friend code or username is required' });
       return;
     }
 
-    const friend = await prisma.user.findUnique({ where: { friendCode } });
+    // Prefer username lookup when provided; fall back to legacy friend code.
+    let friend = null as Awaited<ReturnType<typeof prisma.user.findFirst>> | null;
+    if (username) {
+      const sanitized = sanitizeUsername(String(username));
+      if (sanitized) {
+        friend = await prisma.user.findUnique({ where: { username: sanitized } });
+      }
+    }
+    if (!friend && friendCode) {
+      friend = await prisma.user.findUnique({ where: { friendCode: String(friendCode) } });
+    }
+
     if (!friend) {
-      res.status(404).json({ error: 'User with this code not found' });
+      res.status(404).json({ error: 'User with this username or code not found' });
       return;
     }
 
@@ -302,6 +339,7 @@ userRouter.post('/add', verifyToken, async (req: AuthenticatedRequest, res: Resp
       friend: {
         id: friend.id,
         name: friend.name,
+        username: friend.username,
         friendCode: friend.friendCode,
       },
     });
@@ -324,7 +362,7 @@ userRouter.post('/add-by-id', verifyToken, async (req: AuthenticatedRequest, res
 
     const friend = await prisma.user.findUnique({
       where: { id: targetUserId },
-      select: { id: true, name: true, friendCode: true },
+      select: { id: true, name: true, username: true, friendCode: true },
     });
     if (!friend) {
       res.status(404).json({ error: 'User not found' });
@@ -371,7 +409,7 @@ userRouter.post('/add-by-id', verifyToken, async (req: AuthenticatedRequest, res
     res.json({
       success: true,
       message: `${friend.name} added as a friend`,
-      friend: { id: friend.id, name: friend.name, friendCode: friend.friendCode },
+      friend: { id: friend.id, name: friend.name, username: friend.username, friendCode: friend.friendCode },
     });
   } catch (error) {
     console.error(error);
@@ -382,8 +420,42 @@ userRouter.post('/add-by-id', verifyToken, async (req: AuthenticatedRequest, res
 // PUT /api/auth/profile — update user profile
 userRouter.put('/profile', verifyToken, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
-    const { name, bio, avatarUrl, college, collegeCode } = req.body;
+    const { name, bio, avatarUrl, college, collegeCode, username } = req.body;
     const userId = req.userId!;
+
+    // Username update: normalize + validate + ensure uniqueness
+    let usernameUpdate: string | undefined = undefined;
+    if (username !== undefined) {
+      const current = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { username: true },
+      });
+
+      if (username === null || username === '') {
+        // Empty value: regenerate automatically from display name
+        const currentName = typeof name === 'string' && name.trim() ? name.trim() : undefined;
+        const userRow = currentName
+          ? null
+          : await prisma.user.findUnique({ where: { id: userId }, select: { name: true } });
+        usernameUpdate = await generateUsernameFromName(currentName || userRow?.name || 'user');
+      } else {
+        const sanitized = sanitizeUsername(String(username));
+        if (!sanitized) {
+          res.status(400).json({ error: 'Username cannot be empty.' });
+          return;
+        }
+        const validationError = usernameValidationError(sanitized);
+        if (validationError) {
+          res.status(400).json({ error: validationError });
+          return;
+        }
+        if (sanitized !== current?.username && !(await isUsernameAvailable(sanitized, userId))) {
+          res.status(409).json({ error: 'That username is already taken.' });
+          return;
+        }
+        usernameUpdate = sanitized;
+      }
+    }
 
     const updatedUser = await prisma.user.update({
       where: { id: userId },
@@ -393,6 +465,7 @@ userRouter.put('/profile', verifyToken, async (req: AuthenticatedRequest, res: R
         avatarUrl: avatarUrl !== undefined ? avatarUrl : undefined,
         college: college !== undefined ? college : undefined,
         collegeCode: collegeCode !== undefined ? collegeCode : undefined,
+        username: usernameUpdate,
       },
       select: {
         id: true,
@@ -400,6 +473,7 @@ userRouter.put('/profile', verifyToken, async (req: AuthenticatedRequest, res: R
         email: true,
         verified: true,
         friendCode: true,
+        username: true,
         bio: true,
         avatarUrl: true,
         college: true,
@@ -415,9 +489,34 @@ userRouter.put('/profile', verifyToken, async (req: AuthenticatedRequest, res: R
       message: 'Profile updated successfully',
       user: updatedUser
     });
-  } catch (error) {
+  } catch (error: any) {
+    if (error?.code === 'P2002') {
+      res.status(409).json({ error: 'That username is already taken.' });
+      return;
+    }
     console.error(error);
     res.status(500).json({ error: 'Failed to update profile' });
+  }
+});
+
+// GET /api/auth/username-available?username=xyz — check username availability
+userRouter.get('/username-available', verifyToken, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const sanitized = sanitizeUsername(String(req.query.username ?? ''));
+    if (!sanitized) {
+      res.json({ available: false, error: 'Enter a username.' });
+      return;
+    }
+    const validationError = usernameValidationError(sanitized);
+    if (validationError) {
+      res.json({ available: false, error: validationError });
+      return;
+    }
+    const available = await isUsernameAvailable(sanitized, req.userId!);
+    res.json({ available, username: sanitized });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to check username availability' });
   }
 });
 

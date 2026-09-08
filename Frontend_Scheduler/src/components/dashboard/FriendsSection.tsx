@@ -207,17 +207,17 @@ export default function FriendsSection({
             <div className="space-y-3">
               <div>
                 <label className={`block text-[10px] uppercase tracking-wider font-semibold mb-1.5 ${muted}`}>
-                  6-Digit Friend Code
+                  Username or Friend Code
                 </label>
                 <input
                   autoFocus
                   type="text"
-                  placeholder="e.g. AB12CD"
+                  placeholder="e.g. @john_doe or AB12CD"
                   value={friendCode}
-                  onChange={(e) => setFriendCode(e.target.value.toUpperCase())}
+                  onChange={(e) => setFriendCode(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && friendCode && handleAddFriend()}
-                  className={`${inputClass} tracking-widest text-[15px] font-mono text-center placeholder-gray-400`}
-                  maxLength={6}
+                  className={`${inputClass} tracking-wide text-[15px] font-mono text-center placeholder-gray-400`}
+                  maxLength={20}
                 />
               </div>
 
@@ -241,7 +241,7 @@ export default function FriendsSection({
                 </button>
                 <button
                   onClick={handleAddFriend}
-                  disabled={!friendCode || friendCode.length < 6}
+                  disabled={!friendCode || friendCode.trim().length < 3}
                   className={`flex-1 py-2 rounded-lg text-[13px] font-semibold transition-all active:scale-95
                     ${dark ? 'bg-white hover:bg-zinc-100 text-black' : 'bg-black hover:bg-zinc-800 text-white'}
                     disabled:opacity-40 disabled:pointer-events-none`}

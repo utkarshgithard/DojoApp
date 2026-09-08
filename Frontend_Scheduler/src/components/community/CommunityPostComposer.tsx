@@ -4,7 +4,8 @@ import { Theme, EmojiStyle, EmojiClickData } from 'emoji-picker-react';
 import API from '@/lib/axios';
 import {
   Image as ImageIcon, Video, X, Send, Loader2, Plus, Camera,
-  Bold, Italic, Strikethrough, Code, List, Smile, Link as LinkIcon
+  Bold, Italic, Strikethrough, Code, List, Smile, Link as LinkIcon,
+  AtSign, Hash, UploadCloud, Sparkles
 } from 'lucide-react';
 import { auth } from '@/lib/firebase';
 import { toast } from 'sonner';
@@ -19,7 +20,6 @@ const EmojiPicker = dynamic(() => import('emoji-picker-react'), {
     </div>
   ),
 });
-
 
 interface MediaAttachment {
   id: string;
@@ -52,6 +52,15 @@ interface Post {
   } | null;
 }
 
+interface FriendUser {
+  id: string;
+  name: string;
+  avatarUrl?: string | null;
+  email?: string;
+  friendCode?: string;
+  username?: string | null;
+}
+
 interface CommunityPostComposerProps {
   currentUser: { id: string; name: string; avatarUrl?: string | null };
   dark: boolean;
@@ -60,6 +69,8 @@ interface CommunityPostComposerProps {
   communityId?: string;
 }
 
+// Popular hashtag suggestions
+const POPULAR_HASHTAGS = ['dojo', 'study', 'notes', 'project', 'exam', 'code', 'react', 'nextjs', 'focus'];
 
 // Generate video thumbnail using canvas
 const generateVideoThumbnail = (file: File): Promise<string> =>
@@ -139,8 +150,14 @@ const htmlToMarkdown = (html: string): string => {
     if (node.nodeType === Node.ELEMENT_NODE) {
       const element = node as HTMLElement;
       const tagName = element.tagName.toLowerCase();
-      let childrenContent = '';
 
+      // Special mention badge tag handling
+      if (element.hasAttribute('data-mention')) {
+        const handle = element.getAttribute('data-mention') || element.textContent || '';
+        return handle.startsWith('@') ? handle : `@${handle}`;
+      }
+
+      let childrenContent = '';
       for (let i = 0; i < element.childNodes.length; i++) {
         childrenContent += convertNode(element.childNodes[i]);
       }
@@ -200,6 +217,7 @@ export default function CommunityPostComposer({
   const [submitting, setSubmitting] = useState(false);
   const [isProcessingFiles, setIsProcessingFiles] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
 
   // Formatting active states for the toolbar
   const [isBold, setIsBold] = useState(false);
@@ -208,6 +226,16 @@ export default function CommunityPostComposer({
   const [isCodeActive, setIsCodeActive] = useState(false);
   const [isListActive, setIsListActive] = useState(false);
   const [isLinkActive, setIsLinkActive] = useState(false);
+
+  // Smart Autocomplete Popover States
+  const [friendsList, setFriendsList] = useState<FriendUser[]>([]);
+  const [showMentionPopover, setShowMentionPopover] = useState(false);
+  const [mentionQuery, setMentionQuery] = useState('');
+  const [mentionIndex, setMentionIndex] = useState(0);
+
+  const [showHashtagPopover, setShowHashtagPopover] = useState(false);
+  const [hashtagQuery, setHashtagQuery] = useState('');
+  const [hashtagIndex, setHashtagIndex] = useState(0);
 
   // Link dialog states
   const [showLinkModal, setShowLinkModal] = useState(false);
@@ -218,41 +246,235 @@ export default function CommunityPostComposer({
   const savedSelectionRef = useRef<Range | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
+  const DRAFT_KEY = `dojo_post_draft_${communityId || 'global'}`;
+
   const MAX_CHARS = 500;
   const MAX_FILES = 5;
   const MAX_IMAGE_SIZE = 10 * 1024 * 1024;
   const MAX_VIDEO_SIZE = 50 * 1024 * 1024;
 
-  const handleEditorChange = () => {
+  // Load user friends for @ mention suggestions
+  useEffect(() => {
+    const fetchFriends = async () => {
+      try {
+        const res = await API.get('/auth/friends-List');
+        if (res.data?.friends) {
+          setFriendsList(res.data.friends);
+        }
+      } catch (err) {
+        // Fallback silently if unavailable
+      }
+    };
+    fetchFriends();
+  }, []);
+
+  // Restore draft on mount
+  useEffect(() => {
+    try {
+      const savedDraft = localStorage.getItem(DRAFT_KEY);
+      if (savedDraft && editorRef.current && !editorRef.current.innerHTML.trim()) {
+        editorRef.current.innerHTML = savedDraft;
+        handleEditorChange();
+      }
+    } catch {
+      // Ignore localStorage errors
+    }
+  }, [DRAFT_KEY]);
+
+  const handleEditorChange = useCallback(() => {
     if (!editorRef.current) return;
     const text = editorRef.current.innerText || '';
     const html = editorRef.current.innerHTML || '';
 
     setCharCount(text.length);
-    setContent(htmlToMarkdown(html));
+    const markdown = htmlToMarkdown(html);
+    setContent(markdown);
 
-    // Check if the editor is completely empty
     const trimmedText = text.trim();
-    setIsEditorEmpty(trimmedText === '' && editorRef.current.querySelector('img') === null);
-  };
+    const isEmpty = trimmedText === '' && editorRef.current.querySelector('img') === null;
+    setIsEditorEmpty(isEmpty);
 
-  const saveSelection = () => {
+    // Save draft
+    try {
+      if (isEmpty) {
+        localStorage.removeItem(DRAFT_KEY);
+      } else {
+        localStorage.setItem(DRAFT_KEY, html);
+      }
+    } catch {
+      // Ignore localStorage errors
+    }
+
+    // Check for @mention or #hashtag trigger near caret
+    detectTriggers();
+  }, [DRAFT_KEY]);
+
+  const saveSelection = useCallback(() => {
     const selection = window.getSelection();
     if (selection && selection.rangeCount > 0 && editorRef.current?.contains(selection.anchorNode)) {
       savedSelectionRef.current = selection.getRangeAt(0).cloneRange();
     }
-  };
+  }, []);
 
-  const restoreSelection = () => {
+  const restoreSelection = useCallback(() => {
     const selection = window.getSelection();
     const saved = savedSelectionRef.current;
     if (!selection || !saved || !editorRef.current?.contains(saved.startContainer)) return false;
     selection.removeAllRanges();
     selection.addRange(saved);
     return true;
+  }, []);
+
+  // Detect triggers (@ or #) at current caret position
+  const detectTriggers = () => {
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0 || !editorRef.current) return;
+
+    const range = selection.getRangeAt(0);
+    const node = range.startContainer;
+
+    if (node.nodeType !== Node.TEXT_NODE || !editorRef.current.contains(node)) {
+      setShowMentionPopover(false);
+      setShowHashtagPopover(false);
+      return;
+    }
+
+    const textBeforeCaret = node.textContent?.slice(0, range.startOffset) || '';
+
+    // Check mention trigger (@)
+    const mentionMatch = textBeforeCaret.match(/@([a-zA-Z0-9_\s]{0,20})$/);
+    if (mentionMatch) {
+      setMentionQuery(mentionMatch[1].toLowerCase());
+      setMentionIndex(0);
+      setShowMentionPopover(true);
+      setShowHashtagPopover(false);
+      return;
+    } else {
+      setShowMentionPopover(false);
+    }
+
+    // Check hashtag trigger (#)
+    const hashtagMatch = textBeforeCaret.match(/#([a-zA-Z0-9_]{0,20})$/);
+    if (hashtagMatch) {
+      setHashtagQuery(hashtagMatch[1].toLowerCase());
+      setHashtagIndex(0);
+      setShowHashtagPopover(true);
+      return;
+    } else {
+      setShowHashtagPopover(false);
+    }
+  };
+
+  // Filtered lists
+  const filteredFriends = friendsList.filter((f) =>
+    f.name.toLowerCase().includes(mentionQuery) || (f.username && f.username.toLowerCase().includes(mentionQuery))
+  );
+
+  const filteredHashtags = POPULAR_HASHTAGS.filter((h) =>
+    h.toLowerCase().includes(hashtagQuery)
+  );
+
+  // Insert Mention into Editor
+  const insertMention = (friend: FriendUser) => {
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0 || !editorRef.current) return;
+
+    const range = selection.getRangeAt(0);
+    const node = range.startContainer;
+
+    if (node.nodeType === Node.TEXT_NODE) {
+      const textBeforeCaret = node.textContent?.slice(0, range.startOffset) || '';
+      const mentionStart = textBeforeCaret.lastIndexOf('@');
+
+      if (mentionStart !== -1) {
+        const textNode = node as Text;
+        const textAfterCaret = textNode.textContent?.slice(range.startOffset) || '';
+
+        // Replace trigger text with mention badge element
+        const mentionSpan = document.createElement('span');
+        mentionSpan.contentEditable = 'false';
+        mentionSpan.setAttribute('data-mention', `@${friend.name}`);
+        mentionSpan.className = 'inline-flex items-center gap-0.5 px-2 py-0.5 rounded-md text-[13px] font-bold bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 border border-indigo-500/25 mx-0.5 select-none font-sans cursor-pointer hover:bg-indigo-500/25 transition-colors';
+        mentionSpan.textContent = `@${friend.name}`;
+
+        const spaceNode = document.createTextNode('\u00A0'); // Non-breaking space
+
+        const newRange = document.createRange();
+        newRange.setStart(textNode, mentionStart);
+        newRange.setEnd(textNode, range.startOffset);
+        newRange.deleteContents();
+
+        newRange.insertNode(spaceNode);
+        newRange.insertNode(mentionSpan);
+
+        // Move caret after space
+        const caretRange = document.createRange();
+        caretRange.setStartAfter(spaceNode);
+        caretRange.collapse(true);
+        selection.removeAllRanges();
+        selection.addRange(caretRange);
+      }
+    }
+
+    setShowMentionPopover(false);
+    handleEditorChange();
+    saveSelection();
+  };
+
+  // Insert Hashtag into Editor
+  const insertHashtag = (tag: string) => {
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0 || !editorRef.current) return;
+
+    const range = selection.getRangeAt(0);
+    const node = range.startContainer;
+
+    if (node.nodeType === Node.TEXT_NODE) {
+      const textBeforeCaret = node.textContent?.slice(0, range.startOffset) || '';
+      const hashStart = textBeforeCaret.lastIndexOf('#');
+
+      if (hashStart !== -1) {
+        const textNode = node as Text;
+        const hashtagSpan = document.createElement('span');
+        hashtagSpan.contentEditable = 'false';
+        hashtagSpan.className = 'inline-flex items-center px-1.5 py-0.5 rounded-md text-[12px] font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-500/10 mx-0.5 select-none font-sans';
+        hashtagSpan.textContent = `#${tag}`;
+
+        const spaceNode = document.createTextNode('\u00A0');
+
+        const newRange = document.createRange();
+        newRange.setStart(textNode, hashStart);
+        newRange.setEnd(textNode, range.startOffset);
+        newRange.deleteContents();
+
+        newRange.insertNode(spaceNode);
+        newRange.insertNode(hashtagSpan);
+
+        const caretRange = document.createRange();
+        caretRange.setStartAfter(spaceNode);
+        caretRange.collapse(true);
+        selection.removeAllRanges();
+        selection.addRange(caretRange);
+      }
+    }
+
+    setShowHashtagPopover(false);
+    handleEditorChange();
+    saveSelection();
   };
 
   const handlePaste = (e: React.ClipboardEvent) => {
+    // Check if image files are pasted
+    if (e.clipboardData.files && e.clipboardData.files.length > 0) {
+      const files = Array.from(e.clipboardData.files);
+      const mediaFiles = files.filter((f) => f.type.startsWith('image/') || f.type.startsWith('video/'));
+      if (mediaFiles.length > 0) {
+        e.preventDefault();
+        processSelectedFiles(mediaFiles);
+        return;
+      }
+    }
+
     e.preventDefault();
     const text = e.clipboardData.getData('text/plain');
 
@@ -261,22 +483,11 @@ export default function CommunityPostComposer({
 
     const range = selection.getRangeAt(0);
     range.deleteContents();
-    const urlPattern = /^(https?:\/\/|www\.)[^\s]+$/i;
-    const pastedUrl = urlPattern.test(text.trim()) ? text.trim() : null;
-    const insertedNode = pastedUrl
-      ? (() => {
-          const link = document.createElement('a');
-          const href = pastedUrl.startsWith('www.') ? `https://${pastedUrl}` : pastedUrl;
-          link.href = href;
-          link.target = '_blank';
-          link.rel = 'noopener noreferrer';
-          link.textContent = pastedUrl;
-          return link;
-        })()
-      : document.createTextNode(text);
-    range.insertNode(insertedNode);
 
-    range.setStartAfter(insertedNode);
+    const textNode = document.createTextNode(text);
+    range.insertNode(textNode);
+
+    range.setStartAfter(textNode);
     range.collapse(true);
     selection.removeAllRanges();
     selection.addRange(range);
@@ -285,93 +496,54 @@ export default function CommunityPostComposer({
     saveSelection();
   };
 
-  const autoLinkUrlBeforeCaret = () => {
-    const selection = window.getSelection();
-    if (!editorRef.current || !selection || selection.rangeCount === 0 || !selection.isCollapsed) return;
-
-    const range = selection.getRangeAt(0);
-    const node = range.startContainer;
-    if (node.nodeType !== Node.TEXT_NODE || !editorRef.current.contains(node)) return;
-    if ((node.parentElement?.closest('a'))) return;
-
-    const textBeforeCaret = node.textContent?.slice(0, range.startOffset) || '';
-    const match = textBeforeCaret.match(/(?:https?:\/\/|www\.)[^\s<]+$/i);
-    if (!match) return;
-
-    const rawUrl = match[0];
-    const trailingPunctuation = rawUrl.match(/[.,!?;:)\]]+$/)?.[0] || '';
-    const urlText = trailingPunctuation ? rawUrl.slice(0, -trailingPunctuation.length) : rawUrl;
-    if (!urlText) return;
-
-    const start = range.startOffset - rawUrl.length;
-    const linkRange = document.createRange();
-    linkRange.setStart(node, start);
-    linkRange.setEnd(node, start + urlText.length);
-
-    const link = document.createElement('a');
-    link.href = urlText.startsWith('www.') ? `https://${urlText}` : urlText;
-    link.target = '_blank';
-    link.rel = 'noopener noreferrer';
-    link.className = 'text-indigo-500 underline font-semibold';
-    link.textContent = urlText;
-    linkRange.deleteContents();
-    linkRange.insertNode(link);
-
-    const caret = document.createRange();
-    caret.setStartAfter(link);
-    caret.collapse(true);
-    selection.removeAllRanges();
-    selection.addRange(caret);
-    handleEditorChange();
-  };
-
-  const autoLinkWhileTyping = () => {
-    const selection = window.getSelection();
-    if (!editorRef.current || !selection || selection.rangeCount === 0 || !selection.isCollapsed) return;
-
-    const range = selection.getRangeAt(0);
-    const currentElement = range.startContainer.parentElement;
-    const activeLink = currentElement?.closest('a');
-    if (activeLink && editorRef.current.contains(activeLink)) {
-      const linkText = activeLink.textContent?.trim() || '';
-      if (/^(https?:\/\/|www\.)[^\s]+$/i.test(linkText)) {
-        activeLink.setAttribute('href', linkText.startsWith('www.') ? `https://${linkText}` : linkText);
-      }
-      return;
-    }
-
-    if (range.startContainer.nodeType !== Node.TEXT_NODE) return;
-    const textNode = range.startContainer;
-    const textBeforeCaret = textNode.textContent?.slice(0, range.startOffset) || '';
-    const match = textBeforeCaret.match(/(?:https?:\/\/|www\.)[^\s<]+/i);
-    if (!match || !/\.[a-z]{2,}(?:[/?#]|$)/i.test(match[0])) return;
-
-    const start = range.startOffset - match[0].length;
-    const link = document.createElement('a');
-    link.href = match[0].startsWith('www.') ? `https://${match[0]}` : match[0];
-    link.target = '_blank';
-    link.rel = 'noopener noreferrer';
-    link.className = 'text-indigo-500 underline font-semibold';
-    link.textContent = match[0];
-
-    const linkRange = document.createRange();
-    linkRange.setStart(textNode, start);
-    linkRange.setEnd(textNode, range.startOffset);
-    linkRange.deleteContents();
-    linkRange.insertNode(link);
-    const caret = document.createRange();
-    caret.setStartAfter(link);
-    caret.collapse(true);
-    selection.removeAllRanges();
-    selection.addRange(caret);
-  };
-
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if ((e.key === ' ' || e.key === 'Enter') && !e.shiftKey) {
-      autoLinkUrlBeforeCaret();
+    // Keyboard navigation for Mention Popover
+    if (showMentionPopover && filteredFriends.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setMentionIndex((prev) => (prev + 1) % filteredFriends.length);
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setMentionIndex((prev) => (prev - 1 + filteredFriends.length) % filteredFriends.length);
+        return;
+      }
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault();
+        insertMention(filteredFriends[mentionIndex]);
+        return;
+      }
+      if (e.key === 'Escape') {
+        setShowMentionPopover(false);
+        return;
+      }
     }
 
-    // Keyboard shortcuts: Ctrl+B (Bold), Ctrl+I (Italic)
+    // Keyboard navigation for Hashtag Popover
+    if (showHashtagPopover && filteredHashtags.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setHashtagIndex((prev) => (prev + 1) % filteredHashtags.length);
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setHashtagIndex((prev) => (prev - 1 + filteredHashtags.length) % filteredHashtags.length);
+        return;
+      }
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault();
+        insertHashtag(filteredHashtags[hashtagIndex]);
+        return;
+      }
+      if (e.key === 'Escape') {
+        setShowHashtagPopover(false);
+        return;
+      }
+    }
+
+    // Command shortcuts (Ctrl+Enter to post, Ctrl+B, Ctrl+I)
     if (e.ctrlKey || e.metaKey) {
       if (e.key === 'Enter') {
         e.preventDefault();
@@ -421,26 +593,32 @@ export default function CommunityPostComposer({
   const toggleBold = () => {
     document.execCommand('bold', false);
     checkSelection();
+    handleEditorChange();
   };
 
   const toggleItalic = () => {
     document.execCommand('italic', false);
     checkSelection();
+    handleEditorChange();
   };
 
   const toggleStrike = () => {
     document.execCommand('strikeThrough', false);
     checkSelection();
+    handleEditorChange();
   };
 
   const toggleList = () => {
     document.execCommand('insertUnorderedList', false);
     checkSelection();
+    handleEditorChange();
   };
 
   const toggleCode = () => {
+    restoreSelection();
+
     const selection = window.getSelection();
-    if (!selection || selection.rangeCount === 0) return;
+    if (!selection || selection.rangeCount === 0 || !editorRef.current?.contains(selection.anchorNode)) return;
 
     const range = selection.getRangeAt(0);
     const selectedText = range.toString();
@@ -461,6 +639,11 @@ export default function CommunityPostComposer({
       if (parent) {
         const textNode = document.createTextNode(codeNode.textContent || '');
         parent.replaceChild(textNode, codeNode);
+
+        const caretRange = document.createRange();
+        caretRange.selectNodeContents(textNode);
+        selection.removeAllRanges();
+        selection.addRange(caretRange);
       }
     } else {
       const codeElement = document.createElement('code');
@@ -603,11 +786,11 @@ export default function CommunityPostComposer({
     if (avatarToRender) {
       return (
         <img src={avatarToRender} alt={currentUser.name} referrerPolicy="no-referrer"
-          className="w-9 h-9 rounded-full object-cover shrink-0" />
+          className="w-9 h-9 sm:w-10 sm:h-10 rounded-full object-cover shrink-0 ring-2 ring-indigo-500/20" />
       );
     }
     return (
-      <div className={`w-9 h-9 rounded-full flex items-center justify-center text-[13px] font-bold shrink-0 ${dark ? 'bg-zinc-700 text-zinc-200' : 'bg-zinc-200 text-zinc-700'}`}>
+      <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center text-[14px] font-bold shrink-0 shadow-inner ${dark ? 'bg-zinc-800 text-zinc-200' : 'bg-zinc-200 text-zinc-700'}`}>
         {(currentUser?.name || 'U').charAt(0).toUpperCase()}
       </div>
     );
@@ -624,29 +807,14 @@ export default function CommunityPostComposer({
         prev.map((a) => (a.id === attachment.id ? { ...a, uploading: true, progress: 0 } : a))
       );
 
-      const fileToUpload = await compressPostImage(attachment.file);
-      let publicUrl: string;
-      let signed: { uploadUrl: string; publicUrl: string; mediaType: string } | null = null;
+      const fileToUpload = attachment.type === 'image'
+        ? await compressPostImage(attachment.file)
+        : attachment.file;
 
-      if (attachment.type === 'video') {
-        const formData = new FormData();
-        formData.append('video', fileToUpload, fileToUpload.name);
-        const { data } = await API.post('/community/media/video', formData, {
-          onUploadProgress: (event) => {
-            if (event.total) {
-              setAttachments((prev) =>
-                prev.map((a) => (a.id === attachment.id ? { ...a, progress: Math.round((event.loaded / event.total!) * 100) } : a))
-              );
-            }
-          },
-        });
-        publicUrl = data.publicUrl;
-      } else {
-        signed = await signUpload(fileToUpload.name, fileToUpload.type);
-        publicUrl = signed.publicUrl;
-      }
+      const signed = await signUpload(fileToUpload.name, fileToUpload.type);
+      const publicUrl = signed.publicUrl;
 
-      if (signed) await new Promise<void>((resolve, reject) => {
+      await new Promise<void>((resolve, reject) => {
         const xhr = new XMLHttpRequest();
         xhr.upload.addEventListener('progress', (e) => {
           if (e.lengthComputable) {
@@ -720,9 +888,8 @@ export default function CommunityPostComposer({
     processInitialFile();
   }, [initialFile, uploadFile]);
 
-  const handleFileSelect = useCallback(
-    async (e: React.ChangeEvent<HTMLInputElement>) => {
-      const files = Array.from(e.target.files ?? []);
+  const processSelectedFiles = useCallback(
+    async (files: File[]) => {
       if (!files.length) return;
 
       setIsProcessingFiles(true);
@@ -763,11 +930,40 @@ export default function CommunityPostComposer({
         uploadFile(att);
       });
 
-      e.target.value = '';
       setIsProcessingFiles(false);
     },
     [attachments.length, uploadFile]
   );
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []);
+    processSelectedFiles(files);
+    e.target.value = '';
+  };
+
+  // Drag and Drop handlers
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!isDragging) setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      const droppedFiles = Array.from(e.dataTransfer.files);
+      processSelectedFiles(droppedFiles);
+    }
+  };
 
   const removeAttachment = (id: string) => {
     setAttachments((prev) => {
@@ -818,6 +1014,13 @@ export default function CommunityPostComposer({
       setIsEditorEmpty(true);
       setAttachments([]);
       setShowEmojiPicker(false);
+
+      // Remove draft
+      try {
+        localStorage.removeItem(DRAFT_KEY);
+      } catch {
+        // Ignore
+      }
     } catch (err: any) {
       toast.error(err?.response?.data?.error || 'Failed to publish your post. Please try again.');
     } finally {
@@ -827,115 +1030,46 @@ export default function CommunityPostComposer({
 
   const anyUploading = isProcessingFiles || attachments.some((a) => a.uploading);
   const charLeft = MAX_CHARS - charCount;
+  const progressRatio = Math.min((charCount / MAX_CHARS) * 100, 100);
 
   return (
-    <div className={`relative z-30 rounded-2xl p-3 sm:p-5 mb-6 transition-all duration-300 border shadow-md focus-within:shadow-indigo-500/10 focus-within:ring-2 focus-within:ring-indigo-500/40 backdrop-blur-md ${dark
-      ? 'bg-zinc-900/60 border-zinc-800/80 shadow-black/40'
-      : 'bg-white/90 border-zinc-200 shadow-zinc-200/60'
-      }`}>
-      <div className="flex gap-3.5 sm:gap-4">
-        {getAvatar()}
-        <div className="flex-1 min-w-0 flex flex-col pt-0.5">
+    <div
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+      className={`relative z-30 rounded-2xl p-3 sm:p-5 mb-6 transition-all duration-300 border shadow-md focus-within:shadow-indigo-500/10 focus-within:ring-2 focus-within:ring-indigo-500/40 backdrop-blur-md ${isDragging
+        ? 'border-indigo-500 ring-4 ring-indigo-500/20 scale-[1.01] bg-indigo-500/5'
+        : dark
+          ? 'bg-zinc-900/70 border-zinc-800/80 shadow-black/40'
+          : 'bg-white/90 border-zinc-200 shadow-zinc-200/60'
+        }`}
+    >
+      {/* Drag & Drop Overlay Cue */}
+      {isDragging && (
+        <div className="absolute inset-0 z-50 rounded-2xl bg-indigo-600/15 backdrop-blur-sm border-2 border-dashed border-indigo-500 flex flex-col items-center justify-center gap-2 pointer-events-none animate-in fade-in duration-200">
+          <UploadCloud size={36} className="text-indigo-500 animate-bounce" />
+          <span className="text-[14px] font-bold text-indigo-600 dark:text-indigo-400">Drop media files here</span>
+        </div>
+      )}
 
-          {/* Text Enrichment Formatting Toolbar */}
-          <div className="flex items-center gap-1 mb-2 pb-1.5 border-b border-zinc-200/50 dark:border-zinc-800/60 overflow-x-auto scrollbar-none relative">
-            <button
-              type="button"
-              onClick={toggleBold}
-              title="Bold (Ctrl+B)"
-              className={`p-1.5 rounded-lg text-[12px] transition-all duration-200 active:scale-95 ${isBold
-                ? 'text-indigo-500 dark:text-indigo-400 bg-indigo-500/10 scale-105'
-                : dark ? 'text-zinc-400 hover:text-white hover:bg-zinc-800' : 'text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100'
-                }`}
-            >
-              <Bold size={15} />
-            </button>
-            <button
-              type="button"
-              onClick={toggleItalic}
-              title="Italic (Ctrl+I)"
-              className={`p-1.5 rounded-lg text-[12px] transition-all duration-200 active:scale-95 ${isItalic
-                ? 'text-indigo-500 dark:text-indigo-400 bg-indigo-500/10 scale-105'
-                : dark ? 'text-zinc-400 hover:text-white hover:bg-zinc-800' : 'text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100'
-                }`}
-            >
-              <Italic size={15} />
-            </button>
-            <button
-              type="button"
-              onClick={toggleStrike}
-              title="Strikethrough"
-              className={`p-1.5 rounded-lg text-[12px] transition-all duration-200 active:scale-95 ${isStrike
-                ? 'text-indigo-500 dark:text-indigo-400 bg-indigo-500/10 scale-105'
-                : dark ? 'text-zinc-400 hover:text-white hover:bg-zinc-800' : 'text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100'
-                }`}
-            >
-              <Strikethrough size={15} />
-            </button>
-            <button
-              type="button"
-              onClick={toggleCode}
-              title="Code snippet"
-              className={`p-1.5 rounded-lg text-[12px] transition-all duration-200 active:scale-95 ${isCodeActive
-                ? 'text-indigo-500 dark:text-indigo-400 bg-indigo-500/10 scale-105'
-                : dark ? 'text-zinc-400 hover:text-white hover:bg-zinc-800' : 'text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100'
-                }`}
-            >
-              <Code size={15} />
-            </button>
-            <button
-              type="button"
-              onClick={toggleList}
-              title="Bullet List"
-              className={`p-1.5 rounded-lg text-[12px] transition-all duration-200 active:scale-95 ${isListActive
-                ? 'text-indigo-500 dark:text-indigo-400 bg-indigo-500/10 scale-105'
-                : dark ? 'text-zinc-400 hover:text-white hover:bg-zinc-800' : 'text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100'
-                }`}
-            >
-              <List size={15} />
-            </button>
-            <button
-              type="button"
-              onClick={toggleLink}
-              title="Link"
-              className={`p-1.5 rounded-lg text-[12px] transition-all duration-200 active:scale-95 ${isLinkActive
-                ? 'text-indigo-500 dark:text-indigo-400 bg-indigo-500/10 scale-105'
-                : dark ? 'text-zinc-400 hover:text-white hover:bg-zinc-800' : 'text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100'
-                }`}
-            >
-              <LinkIcon size={14} />
-            </button>
+      <div className="display:flex flex-col sm:gap-4">
 
+        <div className="flex-1 min-w-0 flex flex-col pt-1 relative">
 
-
-            {/* Quick Hashtags */}
-            <div className="h-4 w-px bg-zinc-200 dark:bg-zinc-800 mx-1" />
-            <button
-              type="button"
-              onClick={() => insertTextAtCursor(' #dojo')}
-              className={`px-2 py-0.5 rounded-md text-[11px] font-semibold transition-all duration-200 hover:scale-102 ${dark ? 'text-indigo-400 bg-indigo-500/10 hover:bg-indigo-500/20' : 'text-indigo-600 bg-indigo-50 hover:bg-indigo-100'
-                }`}
-            >
-              #dojo
-            </button>
-            <button
-              type="button"
-              onClick={() => insertTextAtCursor(' #study')}
-              className={`px-2 py-0.5 rounded-md text-[11px] font-semibold transition-all duration-200 hover:scale-102 ${dark ? 'text-indigo-400 bg-indigo-500/10 hover:bg-indigo-500/20' : 'text-indigo-600 bg-indigo-50 hover:bg-indigo-100'
-                }`}
-            >
-              #study
-            </button>
-          </div>
-
-          <div className="relative min-h-[90px] mb-2 dojo-editor">
+          {/* Main ContentEditable Editor Area */}
+          <div className="relative min-h-[110px] mb-2 dojo-editor">
             <style dangerouslySetInnerHTML={{
               __html: `
+              .dojo-editor [contenteditable] {
+                font-size: 16px !important;
+                line-height: 1.65 !important;
+                letter-spacing: -0.01em !important;
+              }
               .dojo-editor ul {
                 list-style-type: disc !important;
                 padding-left: 1.25rem !important;
-                margin-top: 0.25rem !important;
-                margin-bottom: 0.25rem !important;
+                margin-top: 0.35rem !important;
+                margin-bottom: 0.35rem !important;
               }
               .dojo-editor li {
                 display: list-item !important;
@@ -946,23 +1080,26 @@ export default function CommunityPostComposer({
                 font-weight: 600 !important;
               }
               .dojo-editor code {
-                font-family: monospace !important;
-                padding: 0.125rem 0.375rem !important;
-                border-radius: 0.25rem !important;
-                font-size: 0.8125rem !important;
-                border-width: 1px !important;
+                font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+                padding: 0.15rem 0.4rem !important;
+                border-radius: 0.375rem !important;
+                font-size: 0.85rem !important;
+                border: 1px solid rgba(99, 102, 241, 0.25) !important;
+                background: rgba(99, 102, 241, 0.08) !important;
+                color: #6366f1 !important;
               }
             `}} />
+
             {isEditorEmpty && (
-              <div className="absolute top-0 left-0 pointer-events-none text-zinc-400 dark:text-zinc-500 text-[15px] leading-relaxed select-none">
-                Share an update, notes, or question with the dojo...
+              <div className="absolute top-0  left-0 pointer-events-none italic text-gray-400 dark:text-zinc-500 text-[16px] leading-relaxed select-none font-normal">
+                <span className="font-normal text-gray-400 font-italic">@</span> to mention
               </div>
             )}
+
             <div
               ref={editorRef}
               contentEditable
               onInput={() => {
-                autoLinkWhileTyping();
                 handleEditorChange();
                 saveSelection();
               }}
@@ -970,10 +1107,12 @@ export default function CommunityPostComposer({
               onKeyUp={() => {
                 checkSelection();
                 saveSelection();
+                detectTriggers();
               }}
               onMouseUp={() => {
                 checkSelection();
                 saveSelection();
+                detectTriggers();
               }}
               onFocus={() => {
                 checkSelection();
@@ -981,13 +1120,100 @@ export default function CommunityPostComposer({
               }}
               onBlur={saveSelection}
               onPaste={handlePaste}
-              className={`w-full min-h-[90px] outline-none text-[15px] leading-relaxed bg-transparent font-normal break-words ${dark ? 'text-zinc-100' : 'text-zinc-900'
+              className={`w-full min-h-[110px] outline-none text-[16px] leading-relaxed tracking-[-0.01em] bg-transparent font-normal break-words transition-colors ${dark ? 'text-zinc-100 placeholder-zinc-500' : 'text-zinc-900 placeholder-zinc-400'
                 }`}
               style={{ wordBreak: 'break-word' }}
             />
           </div>
 
-          {/* Attachment previews */}
+          {/* Twitter @ Mention Autocomplete Popover */}
+          {showMentionPopover && (
+            <div className={`absolute top-full left-0 mt-1 z-50 w-72 max-h-60 overflow-y-auto rounded-2xl border shadow-xl p-1.5 animate-in fade-in zoom-in-95 duration-150 ${dark ? 'bg-zinc-950/95 border-zinc-800 text-white shadow-black/80' : 'bg-white/95 border-zinc-200 text-zinc-900 shadow-zinc-300/80'
+              }`}>
+              <div className="px-2.5 py-1.5 border-b border-zinc-200/60 dark:border-zinc-800/60 flex items-center justify-between text-[11px] font-bold text-zinc-400 uppercase tracking-wider">
+                <span className="flex items-center gap-1"><AtSign size={12} className="text-indigo-500" /> Mention People</span>
+                <span>{filteredFriends.length} found</span>
+              </div>
+              {filteredFriends.length === 0 ? (
+                <div className="p-3 text-center text-[12.5px] text-zinc-400">
+                  No friends matching &quot;{mentionQuery}&quot;
+                </div>
+              ) : (
+                filteredFriends.map((friend, idx) => (
+                  <button
+                    key={friend.id}
+                    type="button"
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      insertMention(friend);
+                    }}
+                    className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-left transition-colors ${idx === mentionIndex
+                      ? 'bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 font-semibold'
+                      : dark ? 'hover:bg-zinc-900 text-zinc-200' : 'hover:bg-zinc-50 text-zinc-800'
+                      }`}
+                  >
+                    <div className="w-7 h-7 rounded-full bg-indigo-500/20 text-indigo-500 flex items-center justify-center font-bold text-[12px] shrink-0">
+                      {friend.avatarUrl ? (
+                        <img src={friend.avatarUrl} alt="" className="w-full h-full rounded-full object-cover" />
+                      ) : (
+                        friend.name.charAt(0).toUpperCase()
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-[13px] leading-tight font-medium truncate">{friend.name}</div>
+                      {friend.username && (
+                        <div className="text-[11px] text-zinc-400 truncate">@{friend.username}</div>
+                      )}
+                    </div>
+                  </button>
+                ))
+              )}
+            </div>
+          )}
+
+          {/* Twitter # Hashtag Autocomplete Popover */}
+          {showHashtagPopover && (
+            <div className={`absolute top-full left-0 mt-1 z-50 w-64 max-h-56 overflow-y-auto rounded-2xl border shadow-xl p-1.5 animate-in fade-in zoom-in-95 duration-150 ${dark ? 'bg-zinc-950/95 border-zinc-800 text-white shadow-black/80' : 'bg-white/95 border-zinc-200 text-zinc-900 shadow-zinc-300/80'
+              }`}>
+              <div className="px-2.5 py-1.5 border-b border-zinc-200/60 dark:border-zinc-800/60 flex items-center justify-between text-[11px] font-bold text-zinc-400 uppercase tracking-wider">
+                <span className="flex items-center gap-1"><Hash size={12} className="text-indigo-500" /> Topic Hashtags</span>
+              </div>
+              {filteredHashtags.length === 0 ? (
+                <button
+                  type="button"
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    insertHashtag(hashtagQuery);
+                  }}
+                  className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-xl text-left font-semibold text-indigo-500 transition-colors ${dark ? 'hover:bg-zinc-900' : 'hover:bg-zinc-50'
+                    }`}
+                >
+                  <Sparkles size={14} />
+                  <span className="text-[13px]">Create #{hashtagQuery}</span>
+                </button>
+              ) : (
+                filteredHashtags.map((tag, idx) => (
+                  <button
+                    key={tag}
+                    type="button"
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      insertHashtag(tag);
+                    }}
+                    className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-xl text-left transition-colors ${idx === hashtagIndex
+                      ? 'bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 font-semibold'
+                      : dark ? 'hover:bg-zinc-900 text-zinc-200' : 'hover:bg-zinc-50 text-zinc-800'
+                      }`}
+                  >
+                    <span className="font-bold text-indigo-500 text-[14px]">#</span>
+                    <span className="text-[13px]">{tag}</span>
+                  </button>
+                ))
+              )}
+            </div>
+          )}
+
+          {/* Attachment Previews */}
           {attachments.length > 0 && (
             <div className="mb-3 flex flex-wrap gap-2.5">
               {attachments.map((att) => (
@@ -1066,50 +1292,111 @@ export default function CommunityPostComposer({
             </div>
           )}
 
-          {/* Bottom Toolbar */}
-          <div className={`flex flex-wrap items-center justify-between gap-y-2 pt-3 border-t transition-colors ${dark ? 'border-zinc-800/80' : 'border-zinc-100'
+          {/* Bottom Action Bar */}
+          <div className={`flex flex-col flex-wrap items-center justify-between gap-y-1.5 pt-3 mt-1 border-t transition-colors ${dark ? 'border-zinc-800/80' : 'border-zinc-100'
             }`}>
-            <div className="flex min-w-0 items-center gap-1 -ml-1 relative">
+            <div className="flex flex-wrap items-center gap-1  relative">
+
+              {/* Text Formatting Controls */}
+              <button
+                type="button"
+                onClick={toggleBold}
+                title="Bold (Ctrl+B)"
+                className={`p-1.5 rounded-lg text-[13px] transition-all duration-200 active:scale-95 ${isBold
+                  ? 'text-indigo-500 dark:text-indigo-400 bg-indigo-500/15 font-bold scale-105'
+                  : dark ? 'text-zinc-400 hover:text-white hover:bg-zinc-800' : 'text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100'
+                  }`}
+              >
+                <Bold size={16} />
+              </button>
+              <button
+                type="button"
+                onClick={toggleItalic}
+                title="Italic (Ctrl+I)"
+                className={`p-1.5 rounded-lg text-[13px] transition-all duration-200 active:scale-95 ${isItalic
+                  ? 'text-indigo-500 dark:text-indigo-400 bg-indigo-500/15 font-bold scale-105'
+                  : dark ? 'text-zinc-400 hover:text-white hover:bg-zinc-800' : 'text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100'
+                  }`}
+              >
+                <Italic size={16} />
+              </button>
+              <button
+                type="button"
+                onClick={toggleStrike}
+                title="Strikethrough"
+                className={`p-1.5 rounded-lg text-[13px] transition-all duration-200 active:scale-95 ${isStrike
+                  ? 'text-indigo-500 dark:text-indigo-400 bg-indigo-500/15 font-bold scale-105'
+                  : dark ? 'text-zinc-400 hover:text-white hover:bg-zinc-800' : 'text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100'
+                  }`}
+              >
+                <Strikethrough size={16} />
+              </button>
+              <button
+                type="button"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  saveSelection();
+                }}
+                onClick={toggleCode}
+                title="Code snippet"
+                className={`p-1.5 rounded-lg text-[13px] transition-all duration-200 active:scale-95 ${isCodeActive
+                  ? 'text-indigo-500 dark:text-indigo-400 bg-indigo-500/15 font-bold scale-105'
+                  : dark ? 'text-zinc-400 hover:text-white hover:bg-zinc-800' : 'text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100'
+                  }`}
+              >
+                <Code size={16} />
+              </button>
+              <button
+                type="button"
+                onClick={toggleList}
+                title="Bullet List"
+                className={`p-1.5 rounded-lg text-[13px] transition-all duration-200 active:scale-95 ${isListActive
+                  ? 'text-indigo-500 dark:text-indigo-400 bg-indigo-500/15 font-bold scale-105'
+                  : dark ? 'text-zinc-400 hover:text-white hover:bg-zinc-800' : 'text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100'
+                  }`}
+              >
+                <List size={16} />
+              </button>
+              <button
+                type="button"
+                onClick={handleOpenLinkModal}
+                title="Insert Web Link"
+                className={`p-1.5 rounded-lg transition-all duration-200 active:scale-95 ${isLinkActive || showLinkModal
+                  ? 'text-blue-500 dark:text-blue-400 bg-blue-500/15 font-bold scale-105'
+                  : dark ? 'text-zinc-400 hover:text-white hover:bg-zinc-800' : 'text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100'
+                  }`}
+              >
+                <LinkIcon size={16} />
+              </button>
+
+
+              <div className="h-4 w-px bg-zinc-200 dark:bg-zinc-800 mx-1" />
+              {/* Media Button */}
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={attachments.length >= MAX_FILES}
                 title="Attach photo or video"
                 className={`p-2 rounded-xl transition-all duration-200 disabled:opacity-40 flex items-center gap-1.5 text-[13px] font-semibold ${dark
-                  ? 'text-indigo-400 hover:text-indigo-300 hover:bg-indigo-500/15'
-                  : 'text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50'
+                  ? ' hover:text-indigo-300 hover:bg-indigo-500/15'
+                  : 'hover:text-indigo-700 hover:bg-indigo-50'
                   }`}
               >
                 <ImageIcon size={18} strokeWidth={2} />
-                <span className="hidden sm:inline">Media</span>
               </button>
+
+              {/* Camera Button */}
               <button
                 type="button"
                 onClick={() => cameraInputRef.current?.click()}
                 disabled={attachments.length >= MAX_FILES}
                 title="Take photo with camera"
                 className={`p-2 rounded-xl transition-all duration-200 disabled:opacity-40 ${dark
-                  ? 'text-indigo-400 hover:text-indigo-300 hover:bg-indigo-500/15'
-                  : 'text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50'
+                  ? ' hover:text-indigo-300 hover:bg-indigo-500/15'
+                  : ' hover:text-indigo-700 hover:bg-indigo-50'
                   }`}
               >
                 <Camera size={18} strokeWidth={2} />
-              </button>
-
-              {/* Link Trigger Button */}
-              <button
-                type="button"
-                onClick={handleOpenLinkModal}
-                title="Insert Web Link"
-                className={`p-2 rounded-xl transition-all duration-200 flex items-center gap-1 text-[13px] font-semibold ${showLinkModal
-                  ? 'text-blue-500 bg-blue-500/10'
-                  : dark
-                    ? 'text-blue-400 hover:text-blue-300 hover:bg-blue-500/15'
-                    : 'text-blue-600 hover:text-blue-700 hover:bg-blue-50'
-                  }`}
-              >
-                <LinkIcon size={18} strokeWidth={2} />
-                <span className="hidden sm:inline">Link</span>
               </button>
 
               {/* Emoji Picker Trigger */}
@@ -1119,16 +1406,45 @@ export default function CommunityPostComposer({
                 onClick={() => setShowEmojiPicker((v) => !v)}
                 title="Insert Emojis"
                 className={`p-2 rounded-xl transition-all duration-200 ${showEmojiPicker
-                  ? 'text-amber-500 bg-amber-500/10'
+                  ? ' bg-amber-500/10'
                   : dark
-                    ? 'text-amber-400 hover:text-amber-300 hover:bg-amber-500/15'
-                    : 'text-amber-600 hover:text-amber-700 hover:bg-amber-50'
+                    ? ' hover:text-amber-300 hover:bg-amber-500/15'
+                    : ' hover:text-amber-700 hover:bg-amber-50'
                   }`}
               >
                 <Smile size={18} strokeWidth={2} />
               </button>
 
-              {/* Emoji Popover Menu (Positioned Below Toolbar) */}
+
+              <div className="h-4 w-px bg-zinc-200 dark:bg-zinc-800 mx-1" />
+
+              {/* Mention button trigger */}
+              <button
+                type="button"
+                onClick={() => insertTextAtCursor('@')}
+                title="Mention User (@)"
+                className={`p-1.5 rounded-lg transition-all duration-200 text-[13px] font-bold ${dark
+                  ? 'text-gray-600 hover:text-indigo-300 hover:bg-indigo-500/15'
+                  : 'text-gray-600 hover:text-indigo-700 hover:bg-indigo-50'
+                  }`}
+              >
+                <AtSign size={17} strokeWidth={2} />
+              </button>
+
+              {/* Hashtag trigger */}
+              <button
+                type="button"
+                onClick={() => insertTextAtCursor('#')}
+                title="Add Hashtag (#)"
+                className={`p-1.5 rounded-lg transition-all duration-200 text-[13px] font-bold ${dark
+                  ? 'text-gray-600 hover:text-indigo-300 hover:bg-indigo-500/15'
+                  : 'text-gray-800 hover:text-indigo-700 hover:bg-indigo-50'
+                  }`}
+              >
+                <Hash size={17} strokeWidth={2} />
+              </button>
+
+              {/* Emoji Popover Menu */}
               {showEmojiPicker && (
                 <>
                   <div className="fixed inset-0 z-[90]" onClick={() => setShowEmojiPicker(false)} />
@@ -1184,53 +1500,57 @@ export default function CommunityPostComposer({
               )}
             </div>
 
-            <div className="flex shrink-0 items-center gap-2 sm:gap-3">
-              {charCount > 0 && (
-                <div className="flex items-center gap-2">
-                  <svg className="w-5 h-5 -rotate-90" viewBox="0 0 24 24">
-                    <circle
-                      className="stroke-zinc-200 dark:stroke-zinc-800 fill-none"
-                      strokeWidth="2"
-                      r="9"
-                      cx="12"
-                      cy="12"
-                    />
-                    <circle
-                      className={`fill-none transition-all duration-100 ease-out ${charCount > MAX_CHARS
-                        ? 'stroke-rose-500 animate-pulse'
-                        : MAX_CHARS - charCount < 20
-                          ? 'stroke-amber-500'
-                          : 'stroke-indigo-500 dark:stroke-indigo-400'
-                        }`}
-                      strokeWidth="2"
-                      strokeDasharray={2 * Math.PI * 9}
-                      strokeDashoffset={(2 * Math.PI * 9) - (Math.min((charCount / MAX_CHARS) * 100, 100) / 100) * (2 * Math.PI * 9)}
-                      strokeLinecap="round"
-                      r="9"
-                      cx="12"
-                      cy="12"
-                    />
-                  </svg>
-                  <span className={`text-[11.5px] font-bold transition-colors duration-200 ${charCount > MAX_CHARS
-                    ? 'text-rose-500'
-                    : MAX_CHARS - charCount < 20
-                      ? 'text-amber-500'
-                      : dark ? 'text-zinc-500' : 'text-zinc-400'
-                    }`}>
-                    {charLeft}
-                  </span>
+            {/* Twitter-style Circular Character Ring & Submit Button */}
+            <div className="flex w-full justify-end items-center gap-2.5 sm:gap-3">
+              {/* {charCount > 0 && (
+                <div className="flex  gap-2">
+                  <div className="relative w-6 h-6 flex justify-end">
+                    <svg className="w-6 h-6 -rotate-90" viewBox="0 0 24 24">
+                      <circle
+                        className="stroke-zinc-200 dark:stroke-zinc-800 fill-none"
+                        strokeWidth="2.5"
+                        r="9"
+                        cx="12"
+                        cy="12"
+                      />
+                      <circle
+                        className={`fill-none transition-all duration-200 ease-out ${charCount > MAX_CHARS
+                          ? 'stroke-rose-500 animate-pulse'
+                          : charLeft < 20
+                            ? 'stroke-amber-500'
+                            : 'stroke-indigo-500 dark:stroke-indigo-400'
+                          }`}
+                        strokeWidth="2.5"
+                        strokeDasharray={2 * Math.PI * 9}
+                        strokeDashoffset={(2 * Math.PI * 9) - (progressRatio / 100) * (2 * Math.PI * 9)}
+                        strokeLinecap="round"
+                        r="9"
+                        cx="12"
+                        cy="12"
+                      />
+                    </svg>
+                  </div>
+                  {(charLeft < 50 || charCount > MAX_CHARS) && (
+                    <span className={`text-[11.5px] font-bold transition-colors duration-200 ${charCount > MAX_CHARS
+                      ? 'text-rose-500'
+                      : charLeft < 20
+                        ? 'text-amber-500'
+                        : dark ? 'text-zinc-500' : 'text-zinc-400'
+                      }`}>
+                      {charLeft}
+                    </span>
+                  )}
                 </div>
-              )}
+              )} */}
+
               <button
                 onClick={handleSubmit}
                 disabled={!canSubmit}
-                className="group relative flex shrink-0 items-center gap-2 px-4 sm:px-5 py-2 rounded-full text-[13.5px] font-bold bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 disabled:opacity-50 disabled:hover:from-indigo-600 disabled:hover:to-violet-600 text-white transition-all duration-300 shadow-md shadow-indigo-600/25 hover:shadow-lg hover:shadow-indigo-500/35 active:scale-95"
+                className="group relative flex shrink-0 items-center gap-2 px-4 sm:px-5 py-2 rounded-full text-[13.5px]  bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 disabled:opacity-50 disabled:hover:from-indigo-600 disabled:hover:to-violet-600 text-white transition-all duration-300 shadow-md shadow-indigo-600/25 hover:shadow-lg hover:shadow-indigo-500/35 active:scale-95"
               >
                 {submitting || anyUploading ? (
                   <Loader2 size={15} className="animate-spin" />
-                ) : (
-                  <Send size={15} className="transition-transform group-hover:translate-x-0.5" />
-                )}
+                ) : ""}
                 <span>{submitting ? 'Posting...' : anyUploading ? 'Uploading...' : 'Post'}</span>
               </button>
             </div>

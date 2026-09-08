@@ -14,25 +14,21 @@ type ChatContextValue = {
   activeChatId: string | null;
   setActiveChatId: (chatId: string | null) => void;
   chats: Record<string, ChatState>;
-  messagesByChat: Record<string, Message[]>;
   setChatState: (chatId: string, patch: Partial<ChatState>) => void;
   setMessagesForChat: (chatId: string, messages: Message[]) => void;
   appendMessageToChat: (chatId: string, message: Message) => void;
   updateMessageInChat: (chatId: string, message: Message) => void;
-  removeMessageFromChat: (chatId: string, messageId: string) => void;
   setFriendForChat: (chatId: string, friend: any | null) => void;
   setLoadingMessagesForChat: (chatId: string, loading: boolean) => void;
   setLoadingFriendForChat: (chatId: string, loading: boolean) => void;
   cacheActivity: (chatId: string, message: Message, currentUserId?: string | null) => void;
-  recentActivity: Record<string, { chatId: string; preview: string; ts: string; fromMe?: boolean; status?: string }>;
+  recentActivity: Record<string, { chatId: string; preview: string; ts: string; fromMe?: boolean }>;
   globalOnlineUsers: Set<string>;
   setGlobalOnlineUsers: React.Dispatch<React.SetStateAction<Set<string>>>;
   globalTypingUsers: Record<string, string>;
   setGlobalTypingUsers: React.Dispatch<React.SetStateAction<Record<string, string>>>;
   unreadCounts: Record<string, number>;
   setUnreadCounts: React.Dispatch<React.SetStateAction<Record<string, number>>>;
-  forwardingMessages: Message[] | null;
-  setForwardingMessages: React.Dispatch<React.SetStateAction<Message[] | null>>;
 };
 
 const ChatContext = createContext<ChatContextValue | null>(null);
@@ -44,14 +40,23 @@ const emptyChatState: ChatState = {
   loadingFriend: true,
 };
 
+const dedupeMessages = (messages: Message[]): Message[] => {
+  const byIdentity = new Map<string, Message>();
+  for (const message of messages) {
+    const identity = message.id || message.clientId;
+    if (!identity) continue;
+    byIdentity.set(identity, message);
+  }
+  return [...byIdentity.values()];
+};
+
 export function ChatProvider({ children }: { children: React.ReactNode }) {
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
   const [chats, setChats] = useState<Record<string, ChatState>>({});
-  const [recentActivity, setRecentActivity] = useState<Record<string, { chatId: string; preview: string; ts: string; fromMe?: boolean; status?: string }>>({});
+  const [recentActivity, setRecentActivity] = useState<Record<string, { chatId: string; preview: string; ts: string; fromMe?: boolean }>>({});
   const [globalOnlineUsers, setGlobalOnlineUsers] = useState<Set<string>>(new Set());
   const [globalTypingUsers, setGlobalTypingUsers] = useState<Record<string, string>>({});
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
-  const [forwardingMessages, setForwardingMessages] = useState<Message[] | null>(null);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -73,15 +78,23 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const setMessagesForChat = useCallback((chatId: string, messages: Message[]) => {
-    setChatState(chatId, { messages, loadingMessages: false });
+    setChatState(chatId, { messages: dedupeMessages(messages), loadingMessages: false });
   }, [setChatState]);
 
   const appendMessageToChat = useCallback((chatId: string, message: Message) => {
     setChats((prev) => {
       const current = prev[chatId] || emptyChatState;
+      const existingIndex = current.messages.findIndex((entry) =>
+        entry.id === message.id || (message.clientId && entry.clientId === message.clientId)
+      );
+      if (existingIndex >= 0) {
+        const messages = [...current.messages];
+        messages[existingIndex] = { ...messages[existingIndex], ...message };
+        return { ...prev, [chatId]: { ...current, messages: dedupeMessages(messages), loadingMessages: false } };
+      }
       return {
         ...prev,
-        [chatId]: { ...current, messages: [...current.messages, message], loadingMessages: false },
+        [chatId]: { ...current, messages: dedupeMessages([...current.messages, message]), loadingMessages: false },
       };
     });
   }, []);
@@ -90,27 +103,15 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     setChats((prev) => {
       const current = prev[chatId] || emptyChatState;
       const existing = current.messages;
-      const index = existing.findIndex((entry) => message.clientId && entry.clientId && entry.clientId === message.clientId);
+      const index = existing.findIndex((entry) =>
+        entry.id === message.id || (message.clientId && entry.clientId === message.clientId)
+      );
       if (index >= 0) {
         const next = [...existing];
         next[index] = { ...next[index], ...message };
-        return { ...prev, [chatId]: { ...current, messages: next, loadingMessages: false } };
+        return { ...prev, [chatId]: { ...current, messages: dedupeMessages(next), loadingMessages: false } };
       }
-      return { ...prev, [chatId]: { ...current, messages: [...existing, message], loadingMessages: false } };
-    });
-  }, []);
-
-  const removeMessageFromChat = useCallback((chatId: string, messageId: string) => {
-    setChats((prev) => {
-      const current = prev[chatId];
-      if (!current) return prev;
-      return {
-        ...prev,
-        [chatId]: {
-          ...current,
-          messages: current.messages.filter((m) => m.id !== messageId),
-        },
-      };
+      return { ...prev, [chatId]: { ...current, messages: dedupeMessages([...existing, message]), loadingMessages: false } };
     });
   }, []);
 
@@ -128,56 +129,30 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 
   const cacheActivity = useCallback((chatId: string, message: Message, currentUserId?: string | null) => {
     setRecentActivity((prev) => {
-      let previewText = message.text || "";
-      if (previewText.startsWith("IMAGE::")) {
-        previewText = "🖼️ Image";
-      } else if (previewText.startsWith("AUDIO::")) {
-        previewText = "🎤 Voice Message";
-      } else if (previewText.startsWith("FILE::")) {
-        previewText = "📄 File";
-      } else if (previewText.length > 200) {
-        previewText = previewText.slice(0, 200) + "...";
-      }
-
       const next = {
         ...prev,
         [chatId]: {
           chatId,
-          preview: previewText,
+          preview: message.text || "",
           ts: message.ts ? new Date(message.ts).toISOString() : new Date().toISOString(),
           fromMe: String(message.userId) === String(currentUserId || ""),
-          status: message.status,
         },
       };
       if (typeof window !== "undefined") {
-        try {
-          localStorage.setItem("friend_chat_activity", JSON.stringify(next));
-        } catch (e) {
-          console.error("Failed to write to localStorage (quota exceeded):", e);
-        }
+        localStorage.setItem("friend_chat_activity", JSON.stringify(next));
       }
       return next;
     });
   }, []);
 
-  const messagesByChat = useMemo(() => {
-    const result: Record<string, Message[]> = {};
-    for (const [chatId, state] of Object.entries(chats)) {
-      result[chatId] = state.messages;
-    }
-    return result;
-  }, [chats]);
-
   const value = useMemo(() => ({
     activeChatId,
     setActiveChatId,
     chats,
-    messagesByChat,
     setChatState,
     setMessagesForChat,
     appendMessageToChat,
     updateMessageInChat,
-    removeMessageFromChat,
     setFriendForChat,
     setLoadingMessagesForChat,
     setLoadingFriendForChat,
@@ -189,15 +164,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     setGlobalTypingUsers,
     unreadCounts,
     setUnreadCounts,
-    forwardingMessages,
-    setForwardingMessages,
-  }), [
-    activeChatId, chats, messagesByChat, recentActivity, 
-    setChatState, setMessagesForChat, appendMessageToChat, updateMessageInChat, removeMessageFromChat,
-    setFriendForChat, setLoadingMessagesForChat, setLoadingFriendForChat, cacheActivity,
-    globalOnlineUsers, globalTypingUsers, unreadCounts,
-    forwardingMessages, setForwardingMessages,
-  ]);
+  }), [activeChatId, chats, recentActivity, globalOnlineUsers, globalTypingUsers, unreadCounts, setChatState, setMessagesForChat, appendMessageToChat, updateMessageInChat, setFriendForChat, setLoadingMessagesForChat, setLoadingFriendForChat, cacheActivity]);
 
   return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>;
 }

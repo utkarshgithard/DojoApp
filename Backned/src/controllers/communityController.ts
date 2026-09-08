@@ -3,6 +3,7 @@ import prisma from '../lib/prisma.js';
 import { AuthenticatedRequest } from '../middleware/authmiddleware.js';
 import { checkAndSyncAvatar } from '../utils/avatarSync.js';
 import { createNotification } from '../utils/notificationHelper.js';
+import { cacheGet, cacheSet } from '../lib/redis.js';
 
 // Calculate the Hacker News style hot score: (upvotes - downvotes) / (age_in_hours + 2)^gravity
 export const calculateHotScore = (likeCount: number, createdAt: Date): number => {
@@ -18,6 +19,18 @@ export const calculateHotScore = (likeCount: number, createdAt: Date): number =>
 };
 
 const POSTS_PER_PAGE = 10;
+const COMMENTS_CACHE_TTL = 60;
+
+const getCommentsCacheVersion = async (postId: string): Promise<string> =>
+  (await cacheGet(`community:comments:version:${postId}`)) || '0';
+
+const invalidateCommentsCache = async (postId: string): Promise<void> => {
+  await cacheSet(
+    `community:comments:version:${postId}`,
+    Date.now().toString(),
+    86400,
+  );
+};
 
 const canViewCommunity = async (communityId: string, visibility: string, userId?: string) => {
   if (visibility === 'public') return true;
@@ -655,6 +668,7 @@ export const getSuggestedUsers = async (req: AuthenticatedRequest, res: Response
         name: true,
         avatarUrl: true,
         friendCode: true,
+        username: true,
         collegeCode: true,
         college: true,
         communityMemberships: { select: { communityId: true } },
@@ -753,6 +767,7 @@ export const getSuggestedUsers = async (req: AuthenticatedRequest, res: Response
           name: u.name,
           avatarUrl,
           friendCode: u.friendCode,
+          username: u.username,
           score: u.score,
           followsYou: u.followsYou,
           mutualFriends: u.mutualFriendCount,
@@ -787,7 +802,7 @@ export const getMyNetwork = async (req: AuthenticatedRequest, res: Response): Pr
       prisma.userFriend.findMany({
         where: { userId },
         include: {
-          friend: { select: { id: true, name: true, avatarUrl: true, friendCode: true } },
+          friend: { select: { id: true, name: true, avatarUrl: true, friendCode: true, username: true } },
         },
       }),
       // Following (people I follow)
@@ -795,7 +810,7 @@ export const getMyNetwork = async (req: AuthenticatedRequest, res: Response): Pr
         where: { followerId: userId },
         orderBy: { createdAt: 'desc' },
         include: {
-          following: { select: { id: true, name: true, avatarUrl: true } },
+          following: { select: { id: true, name: true, avatarUrl: true, username: true } },
         },
       }),
       // Followers (people who follow me)
@@ -803,7 +818,7 @@ export const getMyNetwork = async (req: AuthenticatedRequest, res: Response): Pr
         where: { followingId: userId },
         orderBy: { createdAt: 'desc' },
         include: {
-          follower: { select: { id: true, name: true, avatarUrl: true } },
+          follower: { select: { id: true, name: true, avatarUrl: true, username: true } },
         },
       }),
     ]);
@@ -866,6 +881,7 @@ export const getMyNetwork = async (req: AuthenticatedRequest, res: Response): Pr
           name: f.friend.name,
           avatarUrl,
           friendCode: f.friend.friendCode,
+          username: f.friend.username,
           mutualFriends: mutualIds ? mutualIds.size : 0,
           mutualFriendPreviews,
         };
@@ -875,7 +891,7 @@ export const getMyNetwork = async (req: AuthenticatedRequest, res: Response): Pr
     const following = await Promise.all(
       followingData.map(async (f) => {
         const avatarUrl = await checkAndSyncAvatar(f.following);
-        return { id: f.following.id, name: f.following.name, avatarUrl, since: f.createdAt };
+        return { id: f.following.id, name: f.following.name, avatarUrl, username: f.following.username, since: f.createdAt };
       })
     );
 
@@ -884,7 +900,7 @@ export const getMyNetwork = async (req: AuthenticatedRequest, res: Response): Pr
         const avatarUrl = await checkAndSyncAvatar(f.follower);
         // Does the current user follow them back?
         const followsBack = followingData.some((fw) => fw.followingId === f.follower.id);
-        return { id: f.follower.id, name: f.follower.name, avatarUrl, followsBack, since: f.createdAt };
+        return { id: f.follower.id, name: f.follower.name, avatarUrl, username: f.follower.username, followsBack, since: f.createdAt };
       })
     );
 
@@ -1049,10 +1065,13 @@ export const getComments = async (req: AuthenticatedRequest, res: Response): Pro
     const postId = req.params.id as string;
     const limit = parseInt(req.query.limit as string) || 20;
     const cursor = req.query.cursor as string | undefined;
-    const post = await prisma.post.findUnique({
-      where: { id: postId },
-      select: { community: { select: { id: true, visibility: true } } },
-    });
+    const [post, version] = await Promise.all([
+      prisma.post.findUnique({
+        where: { id: postId },
+        select: { community: { select: { id: true, visibility: true } } },
+      }),
+      getCommentsCacheVersion(postId),
+    ]);
     if (!post) {
       res.status(404).json({ error: 'Post not found' });
       return;
@@ -1062,16 +1081,24 @@ export const getComments = async (req: AuthenticatedRequest, res: Response): Pro
       return;
     }
 
+    const safeLimit = Math.min(Math.max(limit, 1), 50);
+    const cacheKey = `community:comments:${postId}:${safeLimit}:${cursor || 'first'}:${version}`;
+    const cached = await cacheGet(cacheKey);
+    if (cached) {
+      res.json(JSON.parse(cached));
+      return;
+    }
+
     const topLevelComments = await prisma.postComment.findMany({
       where: { postId, parentId: null },
       orderBy: { createdAt: 'desc' },
-      take: limit + 1,
+      take: safeLimit + 1,
       ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
       include: { author: { select: { id: true, name: true, avatarUrl: true } } },
     });
 
-    const hasNextPage = topLevelComments.length > limit;
-    const page = hasNextPage ? topLevelComments.slice(0, limit) : topLevelComments;
+    const hasNextPage = topLevelComments.length > safeLimit;
+    const page = hasNextPage ? topLevelComments.slice(0, safeLimit) : topLevelComments;
     const nextCursor = hasNextPage ? page[page.length - 1].id : null;
 
     const topLevelIds = page.map((c) => c.id);
@@ -1096,7 +1123,9 @@ export const getComments = async (req: AuthenticatedRequest, res: Response): Pro
       })
     );
 
-    res.json({ comments: formatted, nextCursor });
+    const response = { comments: formatted, nextCursor };
+    await cacheSet(cacheKey, JSON.stringify(response), COMMENTS_CACHE_TTL);
+    res.json(response);
   } catch (err) {
     console.error('[getComments]', err);
     res.status(500).json({ error: 'Failed to fetch comments' });
@@ -1168,6 +1197,7 @@ export const addComment = async (req: AuthenticatedRequest, res: Response): Prom
     }
 
     const commentCount = await prisma.postComment.count({ where: { postId } });
+    await invalidateCommentsCache(postId);
     if (io) {
       io.emit('post_interaction', { postId, commentCount });
     }
@@ -1219,6 +1249,7 @@ export const editComment = async (req: AuthenticatedRequest, res: Response): Pro
       data: { content: content.trim() },
     });
 
+    await invalidateCommentsCache(comment.postId);
     res.json({ success: true, comment: updatedComment });
   } catch (err) {
     console.error('[editComment]', err);
@@ -1247,6 +1278,7 @@ export const deleteComment = async (req: AuthenticatedRequest, res: Response): P
     await prisma.postComment.delete({ where: { id: commentId } });
 
     const commentCount = await prisma.postComment.count({ where: { postId: comment.postId } });
+    await invalidateCommentsCache(comment.postId);
     const io = req.app.get('io');
     if (io) {
       io.emit('post_interaction', { postId: comment.postId, commentCount });

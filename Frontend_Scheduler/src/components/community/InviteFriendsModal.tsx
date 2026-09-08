@@ -8,6 +8,7 @@ interface Friend {
   id: string;
   name: string;
   friendCode: string;
+  username?: string | null;
   email: string;
   avatarUrl?: string | null;
 }
@@ -79,7 +80,7 @@ export default function InviteFriendsModal({
 
   const filteredFriends = friends.filter((friend) =>
     friend.name.toLowerCase().includes(search.toLowerCase()) ||
-    friend.friendCode.toLowerCase().includes(search.toLowerCase())
+    (friend.username || friend.friendCode).toLowerCase().includes(search.toLowerCase())
   );
 
   return (
@@ -192,7 +193,7 @@ export default function InviteFriendsModal({
                           {friend.name}
                         </div>
                         <div className={`text-[10.5px] mt-0.5 leading-none ${dark ? 'text-zinc-500' : 'text-zinc-450'}`}>
-                          #{friend.friendCode}
+                          @{friend.username || friend.friendCode}
                         </div>
                       </div>
                     </div>
