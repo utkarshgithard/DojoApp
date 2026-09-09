@@ -6,6 +6,7 @@ import { useAuth } from '@/context/authContext';
 import { useDarkMode } from '@/context/DarkModeContext';
 import { useCommunityGroups } from '@/context/CommunityGroupContext';
 import CommunityGroupCard from '@/components/community/CommunityGroupCard';
+import CommunityGroupCardSkeleton from '@/components/community/CommunityGroupCardSkeleton';
 import CreateCommunityModal from '@/components/community/CreateCommunityModal';
 import { Users2, Search, Plus, ArrowLeft, Compass, MailOpen, Check, Trash2, X, Loader2 } from 'lucide-react';
 
@@ -21,7 +22,6 @@ export default function DiscoverCommunitiesPage() {
     loading: fetching,
     error: communitiesError,
     fetchCommunities,
-    prefetchCommunityCategories,
     joinOrLeave,
     invites,
     fetchInvites,
@@ -108,14 +108,9 @@ export default function DiscoverCommunitiesPage() {
     // Render matches from the already-loaded page immediately. Only search the
     // server when the local page cannot satisfy the query.
     if (debouncedSearch && locallyMatchedCommunities.length > 0) return;
-    if (!debouncedSearch && !hasLoadedCommunities) {
-      hasLoadedCommunitiesRef.current = true;
-      prefetchCommunityCategories();
-    } else {
-      hasLoadedCommunitiesRef.current = true;
-      fetchCommunities(undefined, debouncedSearch || undefined, filter || undefined, isSilent);
-    }
-  }, [loading, debouncedSearch, filter, locallyMatchedCommunities.length, fetchCommunities, prefetchCommunityCategories]);
+    hasLoadedCommunitiesRef.current = true;
+    fetchCommunities(undefined, debouncedSearch || undefined, filter || undefined, isSilent);
+  }, [loading, debouncedSearch, filter, locallyMatchedCommunities.length, fetchCommunities]);
 
   const handleJoinToggle = useCallback(async (slug: string) => {
     try {
@@ -127,7 +122,8 @@ export default function DiscoverCommunitiesPage() {
     if (nextCursor) fetchCommunities(nextCursor, debouncedSearch || undefined, filter || undefined);
   };
 
-  if (loading) return null;
+  // Show skeletons while auth resolves — never a blank screen.
+  const showSkeletons = loading || (fetching && locallyMatchedCommunities.length === 0);
 
   const FILTERS = [
     { value: '', label: 'All' },
@@ -178,7 +174,7 @@ export default function DiscoverCommunitiesPage() {
             <div className={`flex-1 min-w-[180px] flex items-center gap-2 px-3.5 py-2 rounded-xl border transition-all focus-within:ring-2 focus-within:ring-indigo-500/20 focus-within:border-indigo-500 ${
               dark ? 'bg-zinc-900 border-zinc-800' : 'bg-zinc-50 border-zinc-200'
             }`}>
-              {fetching && debouncedSearch ? (
+              {fetching && search ? (
                 <Loader2 size={15} className="animate-spin text-indigo-500" />
               ) : (
                 <Search size={15} className={dark ? 'text-zinc-500' : 'text-zinc-400'} />
@@ -292,17 +288,10 @@ export default function DiscoverCommunitiesPage() {
         )}
 
         {/* Grid */}
-        {fetching && locallyMatchedCommunities.length === 0 ? (
+        {showSkeletons ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {[1, 2, 3, 4, 5, 6].map((i) => (
-              <div key={i} className={`rounded-2xl border animate-pulse ${dark ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-zinc-200'}`}>
-                <div className={`h-20 ${dark ? 'bg-zinc-800' : 'bg-zinc-200'}`} />
-                <div className="p-4 pt-7 space-y-2">
-                  <div className={`h-4 w-3/4 rounded ${dark ? 'bg-zinc-800' : 'bg-zinc-200'}`} />
-                  <div className={`h-3 w-1/2 rounded ${dark ? 'bg-zinc-800' : 'bg-zinc-200'}`} />
-                  <div className={`h-3 w-full rounded ${dark ? 'bg-zinc-800' : 'bg-zinc-200'}`} />
-                </div>
-              </div>
+            {Array.from({ length: 6 }, (_, i) => (
+              <CommunityGroupCardSkeleton key={i} dark={dark} />
             ))}
           </div>
         ) : communitiesError ? (

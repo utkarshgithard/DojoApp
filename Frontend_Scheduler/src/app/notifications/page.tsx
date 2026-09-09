@@ -5,7 +5,7 @@ import { useNotifications, Notification } from '@/context/NotificationContext';
 import { useDarkMode } from '@/context/DarkModeContext';
 import { useNetwork } from '@/context/NetworkContext';
 import { useRouter } from 'next/navigation';
-import { Bell, Heart, MessageSquare, Check, ArrowLeft, RefreshCw, User, UserPlus, Play, Film } from 'lucide-react';
+import { Bell, Heart, MessageSquare, Check, ArrowLeft, RefreshCw, User, UserPlus, AtSign, Play, Film } from 'lucide-react';
 import moment from 'moment';
 
 export default function NotificationsPage() {
@@ -131,6 +131,10 @@ export default function NotificationsPage() {
                 badgeBg = 'bg-rose-500 text-white border-rose-400';
                 badgeIcon = <Heart size={9} fill="white" />;
                 bodyText = 'liked your post.';
+              } else if (n.type === 'mention') {
+                badgeBg = 'bg-violet-500 text-white border-violet-400';
+                badgeIcon = <AtSign size={9} />;
+                bodyText = 'mentioned you in a comment.';
               } else if (n.type === 'follow_request') {
                 badgeBg = 'bg-blue-500 text-white border-blue-400';
                 badgeIcon = <UserPlus size={9} />;

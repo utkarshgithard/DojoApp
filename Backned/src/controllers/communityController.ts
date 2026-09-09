@@ -21,6 +21,106 @@ export const calculateHotScore = (likeCount: number, createdAt: Date): number =>
 const POSTS_PER_PAGE = 10;
 const COMMENTS_CACHE_TTL = 60;
 
+// ── Mentions ──────────────────────────────────────────────────────────────────
+
+export interface MentionUser {
+  id: string;
+  name: string;
+  username: string | null;
+  avatarUrl: string | null;
+}
+
+const MENTION_TOKEN_RE = /@([A-Za-z][A-Za-z0-9_]{2,19})/g;
+
+/** Extract unique @mention tokens (handles) from a piece of text. */
+const extractMentionTokens = (content: string): string[] => {
+  const tokens = new Set<string>();
+  for (const match of content.matchAll(MENTION_TOKEN_RE)) {
+    tokens.add(match[1]);
+  }
+  return Array.from(tokens);
+};
+
+/**
+ * Resolve @mention tokens found in the given contents to real users.
+ * Matches by username (exact, case-insensitive) or single-word display name.
+ * Returns a map keyed by lowercase handle (username or name) → user.
+ */
+const resolveMentionedUsers = async (contents: string[]): Promise<Map<string, MentionUser>> => {
+  const map = new Map<string, MentionUser>();
+  const tokens = Array.from(new Set(contents.flatMap(extractMentionTokens)));
+  if (tokens.length === 0) return map;
+  try {
+    const users = await prisma.user.findMany({
+      where: {
+        OR: [
+          { username: { in: tokens.map((t) => t.toLowerCase()) } },
+          { name: { in: tokens, mode: 'insensitive' } },
+        ],
+      },
+      select: { id: true, name: true, username: true, avatarUrl: true },
+      take: 100,
+    });
+    for (const user of users) {
+      if (user.username) map.set(user.username.toLowerCase(), user);
+      map.set(user.name.toLowerCase(), user);
+    }
+  } catch (err) {
+    console.error('[resolveMentionedUsers]', err);
+  }
+  return map;
+};
+
+/** Deduped list of users mentioned in a single comment body. */
+const buildCommentMentions = (content: string, mentionMap: Map<string, MentionUser>): MentionUser[] => {
+  const seen = new Set<string>();
+  const mentions: MentionUser[] = [];
+  for (const token of extractMentionTokens(content)) {
+    const user = mentionMap.get(token.toLowerCase());
+    if (user && !seen.has(user.id)) {
+      seen.add(user.id);
+      mentions.push(user);
+    }
+  }
+  return mentions;
+};
+
+// ── User search (for @mentions autocomplete) ─────────────────────────────────
+
+export const searchUsers = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const q = String(req.query.q ?? '').replace(/^@+/, '').trim();
+    if (!q) {
+      res.json({ users: [] });
+      return;
+    }
+    const safeLimit = Math.min(parseInt(String(req.query.limit ?? '')) || 8, 20);
+    const users = await prisma.user.findMany({
+      where: {
+        verified: true,
+        OR: [
+          { username: { startsWith: q.toLowerCase() } },
+          { name: { contains: q, mode: 'insensitive' } },
+        ],
+      },
+      select: { id: true, name: true, username: true, avatarUrl: true },
+      take: safeLimit * 3,
+    });
+    // Username prefix matches are most relevant for @mentions.
+    const lower = q.toLowerCase();
+    users.sort((a, b) => {
+      const aStarts = a.username?.startsWith(lower) ? 0 : 1;
+      const bStarts = b.username?.startsWith(lower) ? 0 : 1;
+      if (aStarts !== bStarts) return aStarts - bStarts;
+      return (a.username ?? a.name).toLowerCase().localeCompare((b.username ?? b.name).toLowerCase());
+    });
+    res.json({ users: users.slice(0, safeLimit) });
+  } catch (err) {
+    console.error('[searchUsers]', err);
+    res.status(500).json({ error: 'Failed to search users' });
+  }
+};
+
 const getCommentsCacheVersion = async (postId: string): Promise<string> =>
   (await cacheGet(`community:comments:version:${postId}`)) || '0';
 
@@ -1094,7 +1194,7 @@ export const getComments = async (req: AuthenticatedRequest, res: Response): Pro
       orderBy: { createdAt: 'desc' },
       take: safeLimit + 1,
       ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
-      include: { author: { select: { id: true, name: true, avatarUrl: true } } },
+      include: { author: { select: { id: true, name: true, username: true, avatarUrl: true } } },
     });
 
     const hasNextPage = topLevelComments.length > safeLimit;
@@ -1105,7 +1205,7 @@ export const getComments = async (req: AuthenticatedRequest, res: Response): Pro
     const replies = await prisma.postComment.findMany({
       where: { postId, parentId: { in: topLevelIds } },
       orderBy: { createdAt: 'asc' },
-      include: { author: { select: { id: true, name: true, avatarUrl: true } } },
+      include: { author: { select: { id: true, name: true, username: true, avatarUrl: true } } },
     });
 
     const allComments = [...page, ...replies].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
@@ -1123,7 +1223,14 @@ export const getComments = async (req: AuthenticatedRequest, res: Response): Pro
       })
     );
 
-    const response = { comments: formatted, nextCursor };
+    // Resolve @mentions across all returned comments so the client can render clickable tags.
+    const mentionMap = await resolveMentionedUsers(allComments.map((c) => c.content));
+
+    const response = {
+      comments: formatted,
+      nextCursor,
+      mentions: Object.fromEntries(mentionMap),
+    };
     await cacheSet(cacheKey, JSON.stringify(response), COMMENTS_CACHE_TTL);
     res.json(response);
   } catch (err) {
@@ -1173,15 +1280,26 @@ export const addComment = async (req: AuthenticatedRequest, res: Response): Prom
         parentId: parentId || null,
       },
       include: {
-        author: { select: { id: true, name: true, avatarUrl: true } },
+        author: { select: { id: true, name: true, username: true, avatarUrl: true } },
       },
     });
 
     const avatarUrl = await checkAndSyncAvatar(comment.author);
 
-    // Trigger comment notification (if commenting on someone else's post)
     const io = req.app.get('io');
-    if (post.userId !== userId) {
+
+    // Notify @mentioned users (including the post author / parent author if they are tagged)
+    const mentionMap = await resolveMentionedUsers([comment.content]);
+    const mentioned = buildCommentMentions(comment.content, mentionMap);
+    const notifiedIds = new Set<string>([userId]);
+    for (const mentionedUser of mentioned) {
+      if (notifiedIds.has(mentionedUser.id)) continue;
+      notifiedIds.add(mentionedUser.id);
+      await createNotification(mentionedUser.id, userId, 'mention', postId, comment.id, io);
+    }
+
+    // Trigger comment notification (if commenting on someone else's post)
+    if (post.userId !== userId && !notifiedIds.has(post.userId)) {
       await createNotification(post.userId, userId, 'comment', postId, comment.id, io);
     }
 
@@ -1191,7 +1309,12 @@ export const addComment = async (req: AuthenticatedRequest, res: Response): Prom
         where: { id: parentId },
         select: { userId: true },
       });
-      if (parentComment && parentComment.userId !== userId && parentComment.userId !== post.userId) {
+      if (
+        parentComment &&
+        parentComment.userId !== userId &&
+        parentComment.userId !== post.userId &&
+        !notifiedIds.has(parentComment.userId)
+      ) {
         await createNotification(parentComment.userId, userId, 'comment', postId, comment.id, io);
       }
     }
@@ -1210,6 +1333,7 @@ export const addComment = async (req: AuthenticatedRequest, res: Response): Prom
           avatarUrl,
         },
       },
+      mentions: Object.fromEntries(mentionMap),
     });
   } catch (err) {
     console.error('[addComment]', err);
@@ -1247,10 +1371,22 @@ export const editComment = async (req: AuthenticatedRequest, res: Response): Pro
     const updatedComment = await prisma.postComment.update({
       where: { id: commentId },
       data: { content: content.trim() },
+      include: {
+        author: { select: { id: true, name: true, username: true, avatarUrl: true } },
+      },
     });
 
+    // Newly tagged users get notified on edit
+    const io = req.app.get('io');
+    const mentionMap = await resolveMentionedUsers([updatedComment.content]);
+    const mentioned = buildCommentMentions(updatedComment.content, mentionMap);
+    for (const mentionedUser of mentioned) {
+      if (mentionedUser.id === userId) continue;
+      await createNotification(mentionedUser.id, userId, 'mention', comment.postId, commentId, io);
+    }
+
     await invalidateCommentsCache(comment.postId);
-    res.json({ success: true, comment: updatedComment });
+    res.json({ success: true, comment: updatedComment, mentions: Object.fromEntries(mentionMap) });
   } catch (err) {
     console.error('[editComment]', err);
     res.status(500).json({ error: 'Failed to edit comment' });

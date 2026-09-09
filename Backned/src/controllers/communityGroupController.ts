@@ -1,9 +1,22 @@
 import { Response } from 'express';
 import prisma from '../lib/prisma.js';
 import { AuthenticatedRequest } from '../middleware/authmiddleware.js';
+import { cacheGet, cacheSet } from '../lib/redis.js';
 
 const POSTS_PER_PAGE = 10;
 const MEMBERS_PER_PAGE = 20;
+
+// ── Discovery cache ───────────────────────────────────────────────────────────
+// Version-key pattern (same as the comments cache in communityController):
+// bumping the single version key instantly invalidates every cached
+// page/filter/user combo, so mutations never serve stale lists.
+const DISCOVERY_CACHE_TTL = 60; // seconds — short TTL bounds staleness for free
+const getDiscoveryCacheVersion = async (): Promise<string> =>
+  (await cacheGet('groups:discover:version')) || '0';
+
+const invalidateDiscoveryCache = async (): Promise<void> => {
+  await cacheSet('groups:discover:version', Date.now().toString(), 86400);
+};
 
 // ── Validation helper ─────────────────────────────────────────────────────────
 function isValidSlug(slug: string): boolean {
@@ -61,6 +74,8 @@ export const createCommunity = async (req: AuthenticatedRequest, res: Response):
       },
     });
 
+    await invalidateDiscoveryCache();
+
     res.status(201).json({ community: formatCommunity(community, userId) });
   } catch (err: any) {
     if (err?.code === 'P2002') {
@@ -112,6 +127,20 @@ export const getCommunities = async (req: AuthenticatedRequest, res: Response): 
       ];
     }
 
+    // Cache the default discover views (no search, first page) — the main
+    // slow path hit on every page open. Search and cursor pages stay direct.
+    const cacheable = !cursor && !search?.trim();
+    let cacheKey = '';
+    if (cacheable) {
+      const version = await getDiscoveryCacheVersion();
+      cacheKey = `groups:discover:v${version}:${userId || 'anon'}:${filter || 'all'}`;
+      const cached = await cacheGet(cacheKey);
+      if (cached) {
+        res.json(JSON.parse(cached));
+        return;
+      }
+    }
+
     const communities = await prisma.community.findMany({
       take: PAGE + 1,
       ...(cursor ? { skip: 1, cursor: { slug: cursor } } : {}),
@@ -135,10 +164,16 @@ export const getCommunities = async (req: AuthenticatedRequest, res: Response): 
     const page = hasNextPage ? communities.slice(0, PAGE) : communities;
     const nextCursor = hasNextPage ? page[page.length - 1].slug : null;
 
-    res.json({
+    const payload = {
       communities: page.map((c) => formatCommunity(c, userId)),
       nextCursor,
-    });
+    };
+
+    if (cacheable) {
+      await cacheSet(cacheKey, JSON.stringify(payload), DISCOVERY_CACHE_TTL);
+    }
+
+    res.json(payload);
   } catch (err) {
     console.error('[getCommunities]', err);
     res.status(500).json({ error: 'Failed to fetch communities' });
@@ -231,6 +266,8 @@ export const updateCommunity = async (req: AuthenticatedRequest, res: Response):
       },
     });
 
+    await invalidateDiscoveryCache();
+
     res.json({ community: formatCommunity(updated, userId) });
   } catch (err) {
     console.error('[updateCommunity]', err);
@@ -256,6 +293,7 @@ export const deleteCommunity = async (req: AuthenticatedRequest, res: Response):
     }
 
     await prisma.community.delete({ where: { slug } });
+    await invalidateDiscoveryCache();
     res.json({ ok: true });
   } catch (err) {
     console.error('[deleteCommunity]', err);
@@ -295,6 +333,7 @@ export const joinOrLeaveCommunity = async (req: AuthenticatedRequest, res: Respo
           data: { memberCount: { decrement: 1 } },
         }),
       ]);
+      await invalidateDiscoveryCache();
       res.json({ joined: false, memberCount: community.memberCount - 1 });
     } else {
       // For invite-only communities, check if user has an accepted invite
@@ -318,6 +357,7 @@ export const joinOrLeaveCommunity = async (req: AuthenticatedRequest, res: Respo
           data: { memberCount: { increment: 1 } },
         }),
       ]);
+      await invalidateDiscoveryCache();
       res.json({ joined: true, memberCount: community.memberCount + 1 });
     }
   } catch (err: any) {
@@ -359,6 +399,8 @@ export const updateMemberRole = async (req: AuthenticatedRequest, res: Response)
       where: { communityId_userId: { communityId: community.id, userId: memberId } },
       data: { role },
     });
+
+    await invalidateDiscoveryCache();
 
     res.json({ ok: true });
   } catch (err) {
@@ -405,6 +447,8 @@ export const removeMember = async (req: AuthenticatedRequest, res: Response): Pr
         data: { memberCount: { decrement: 1 } },
       }),
     ]);
+
+    await invalidateDiscoveryCache();
 
     res.json({ ok: true });
   } catch (err) {
@@ -672,6 +716,8 @@ export const acceptInvite = async (req: AuthenticatedRequest, res: Response): Pr
         data: { memberCount: { increment: 1 } },
       }),
     ]);
+
+    await invalidateDiscoveryCache();
 
     res.json({ ok: true });
   } catch (err) {

@@ -17,6 +17,78 @@ export interface AuthenticatedRequest extends Request {
   };
 }
 
+// Shared resolver used by both middleware. Caches the Firebase token verify
+// AND the user row lookup (two round-trips per request otherwise).
+// User data is cached for at most 15 minutes, bounded by the token lifetime.
+const resolveUserFromToken = async (
+  req: AuthenticatedRequest,
+  token: string,
+  opts: { required?: boolean } = {}
+): Promise<{ ok: boolean; error?: string; status?: number }> => {
+  const { required = false } = opts;
+  const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+  const tokenCacheKey = `token:${tokenHash}`;
+  const userCacheKey = `token:user:${tokenHash}`;
+
+  let decodedToken: any;
+  try {
+    const cached = await cacheGet(tokenCacheKey);
+    if (cached) {
+      decodedToken = JSON.parse(cached);
+    } else {
+      decodedToken = await admin.auth().verifyIdToken(token);
+      const remainingTime = decodedToken.exp - Math.floor(Date.now() / 1000);
+      if (remainingTime > 0) {
+        // Cache for at most 15 minutes (900 seconds)
+        await cacheSet(tokenCacheKey, JSON.stringify(decodedToken), Math.min(remainingTime, 900));
+      }
+    }
+  } catch (err: any) {
+    const isExpired = err?.code === 'auth/id-token-expired' || err?.errorInfo?.code === 'auth/id-token-expired';
+    if (isExpired) {
+      console.log(`ℹ️ Auth token expired: ${err.message || 'Firebase ID token has expired.'} (Axios client will automatically refresh and retry)`);
+    } else {
+      console.error('Token verification error:', err);
+    }
+    return { ok: false, error: 'Invalid or expired token', status: 401 };
+  }
+
+  req.userId = decodedToken.uid;
+
+  try {
+    const cachedUser = await cacheGet(userCacheKey);
+    if (cachedUser) {
+      req.user = JSON.parse(cachedUser);
+    } else {
+      const user = await prisma.user.findUnique({
+        where: { id: decodedToken.uid },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          verified: true,
+          friendCode: true,
+          createdAt: true,
+          role: true,
+        },
+      });
+
+      if (user) {
+        req.user = user;
+        await cacheSet(userCacheKey, JSON.stringify(user), 900);
+      }
+    }
+  } catch (err: any) {
+    if (required) {
+      console.error('Database query error in verifyToken:', err);
+      return { ok: false, error: 'Database query failure. Please try again later.', status: 500 };
+    }
+    // Optional middleware: userId is already set — continue without req.user.
+  }
+
+  return { ok: true };
+};
+
 export const verifyToken = async (
   req: AuthenticatedRequest,
   res: Response,
@@ -29,56 +101,12 @@ export const verifyToken = async (
   }
 
   const token = authHeader.replace('Bearer ', '');
-  const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
-  const cacheKey = `token:${tokenHash}`;
-  let decodedToken;
-
-  try {
-    const cached = await cacheGet(cacheKey);
-    if (cached) {
-      decodedToken = JSON.parse(cached);
-    } else {
-      decodedToken = await admin.auth().verifyIdToken(token);
-      const remainingTime = decodedToken.exp - Math.floor(Date.now() / 1000);
-      if (remainingTime > 0) {
-        // Cache for at most 15 minutes (900 seconds)
-        await cacheSet(cacheKey, JSON.stringify(decodedToken), Math.min(remainingTime, 900));
-      }
-    }
-    req.userId = decodedToken.uid;
-  } catch (err: any) {
-    const isExpired = err?.code === 'auth/id-token-expired' || err?.errorInfo?.code === 'auth/id-token-expired';
-    if (isExpired) {
-      console.log(`ℹ️ Auth token expired: ${err.message || 'Firebase ID token has expired.'} (Axios client will automatically refresh and retry)`);
-    } else {
-      console.error('Token verification error:', err);
-    }
-    res.status(401).json({ error: 'Invalid or expired token', success: false });
+  const result = await resolveUserFromToken(req, token, { required: true });
+  if (!result.ok) {
+    res.status(result.status || 401).json({ error: result.error, success: false });
     return;
   }
-
-  try {
-    const user = await prisma.user.findUnique({
-      where: { id: decodedToken.uid },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        verified: true,
-        friendCode: true,
-        createdAt: true,
-        role: true,
-      },
-    });
-
-    if (user) {
-      req.user = user;
-    }
-    next();
-  } catch (err: any) {
-    console.error('Database query error in verifyToken:', err);
-    res.status(500).json({ error: 'Database query failure. Please try again later.', success: false });
-  }
+  next();
 };
 
 export const optionalVerifyToken = async (
@@ -96,43 +124,10 @@ export const optionalVerifyToken = async (
     return next();
   }
 
-  try {
-    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
-    const cacheKey = `token:${tokenHash}`;
-    let decodedToken;
-
-    const cached = await cacheGet(cacheKey);
-    if (cached) {
-      decodedToken = JSON.parse(cached);
-    } else {
-      decodedToken = await admin.auth().verifyIdToken(token);
-      const remainingTime = decodedToken.exp - Math.floor(Date.now() / 1000);
-      if (remainingTime > 0) {
-        await cacheSet(cacheKey, JSON.stringify(decodedToken), Math.min(remainingTime, 900));
-      }
-    }
-    
-    req.userId = decodedToken.uid;
-
-    const user = await prisma.user.findUnique({
-      where: { id: decodedToken.uid },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        verified: true,
-        friendCode: true,
-        createdAt: true,
-        role: true,
-      },
-    });
-
-    if (user) {
-      req.user = user;
-    }
-  } catch (err: any) {
+  const result = await resolveUserFromToken(req, token);
+  if (!result.ok) {
     // Optional token validation is bypassed on failure
-    console.log('Optional token validation bypassed/failed:', err.message || err);
+    console.log('Optional token validation bypassed/failed:', result.error);
   }
   next();
 };

@@ -18,6 +18,7 @@ import {
   getFollowing,
   getMyNetwork,
   getSuggestedUsers,
+  searchUsers,
   sharePost,
   getSharedWithMe,
   markShareAsViewed,
@@ -56,6 +57,10 @@ communityRouter.get('/posts/:id/comments', optionalVerifyToken, getComments);
 communityRouter.post('/posts/:id/comments', verifyToken, addComment);
 communityRouter.put('/comments/:commentId', verifyToken, editComment);
 communityRouter.delete('/comments/:commentId', verifyToken, deleteComment);
+
+// ── User search (for @mentions autocomplete) ─────────────────────────────────
+// NOTE: must be registered before '/users/:userId/...' routes.
+communityRouter.get('/users/search', optionalVerifyToken, searchUsers);
 
 // ── Follow ────────────────────────────────────────────────────────────────────
 communityRouter.post('/users/:userId/follow', verifyToken, toggleFollow);

@@ -1,14 +1,20 @@
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import API from '@/lib/axios';
-import { Send, Trash2, X, Edit2, Save, MessageCircle } from 'lucide-react';
+import { Send, Trash2, X, Edit2, Save, MessageCircle, AtSign } from 'lucide-react';
 import { formatDistanceToNowStrict } from 'date-fns';
 import { useRouter } from 'next/navigation';
 import { auth } from '@/lib/firebase';
 import { useAuth } from '@/context/authContext';
 import { toast } from 'sonner';
 import useSWR, { preload } from 'swr';
+
+/** Temp id prefix for comments rendered optimistically before the server confirms. */
+const OPTIMISTIC_PREFIX = 'optimistic-';
+const isOptimisticId = (id: string) => id.startsWith(OPTIMISTIC_PREFIX);
+let optimisticSeq = 0;
+const nextOptimisticId = () => `${OPTIMISTIC_PREFIX}${Date.now()}-${++optimisticSeq}`;
 
 const COMMENTS_LIMIT = 10;
 const commentsKey = (postId: string) => `/community/posts/${postId}/comments?limit=${COMMENTS_LIMIT}`;
@@ -26,9 +32,19 @@ interface Comment {
   author: {
     id: string;
     name: string;
+    username?: string | null;
     avatarUrl?: string | null;
   };
 }
+
+interface MentionUser {
+  id: string;
+  name: string;
+  username: string | null;
+  avatarUrl?: string | null;
+}
+
+const MENTION_TRIGGER_RE = /(^|\s)@([A-Za-z][A-Za-z0-9_]{0,19})$/;
 
 interface CommunityCommentSectionProps {
   postId: string;
@@ -50,7 +66,11 @@ export default function CommunityCommentSection({
   onUserClick,
 }: CommunityCommentSectionProps) {
   const { userDetails } = useAuth() as any;
-  const { data, mutate, isValidating } = useSWR<{ comments: Comment[]; nextCursor: string | null }>(
+  const { data, mutate, isValidating } = useSWR<{
+    comments: Comment[];
+    nextCursor: string | null;
+    mentions?: Record<string, MentionUser>;
+  }>(
     commentsKey(postId),
     fetchComments,
     {
@@ -59,6 +79,9 @@ export default function CommunityCommentSection({
     },
   );
   const [additionalComments, setAdditionalComments] = useState<Comment[]>([]);
+  // Comments rendered optimistically (not yet confirmed by the server). Kept in local
+  // state — NOT the SWR cache — so background revalidation can't wipe them mid-flight.
+  const [pendingComments, setPendingComments] = useState<Comment[]>([]);
   const [text, setText] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [loadingComments, setLoadingComments] = useState(initialComments.length === 0 && !data);
@@ -68,10 +91,20 @@ export default function CommunityCommentSection({
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
   const [editCommentText, setEditCommentText] = useState('');
   const [savingEdit, setSavingEdit] = useState(false);
+  const [failedComments, setFailedComments] = useState<Set<string>>(new Set());
+
+  // ── @mention autocomplete state ──
+  const [mentionQuery, setMentionQuery] = useState<string | null>(null); // null = closed
+  const [mentionResults, setMentionResults] = useState<MentionUser[]>([]);
+  const [mentionLoading, setMentionLoading] = useState(false);
+  const [mentionIndex, setMentionIndex] = useState(0);
+  const [mentionMap, setMentionMap] = useState<Record<string, MentionUser>>({});
+  const mentionSearchSeq = useRef(0);
+  const editTextareaRef = useRef<HTMLTextAreaElement>(null);
   
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const router = useRouter();
-  const comments = [...(data?.comments || []), ...additionalComments].filter(
+  const comments = [...(data?.comments || []), ...additionalComments, ...pendingComments].filter(
     (comment, index, all) => all.findIndex((item) => item.id === comment.id) === index,
   );
 
@@ -86,7 +119,98 @@ export default function CommunityCommentSection({
   useEffect(() => {
     setLoadingComments(!data && initialComments.length === 0);
     if (data) setNextCursor(data.nextCursor || null);
+    if (data?.mentions) {
+      setMentionMap((prev) => ({ ...prev, ...data.mentions }));
+    }
   }, [data, initialComments.length]);
+
+  // Merge mention map from freshly-added comments (addComment response)
+  const mergeMentions = useCallback((map?: Record<string, MentionUser>) => {
+    if (map) setMentionMap((prev) => ({ ...prev, ...map }));
+  }, []);
+
+  // ── @mention search (debounced) ──
+  useEffect(() => {
+    if (mentionQuery === null) return;
+    if (!mentionQuery) {
+      // '@' typed but no chars yet — don't search, just show empty hint
+      setMentionResults([]);
+      setMentionLoading(false);
+      return;
+    }
+    setMentionLoading(true);
+    const seq = ++mentionSearchSeq.current;
+    const timer = setTimeout(async () => {
+      try {
+        const { data: res } = await API.get(`/community/users/search?q=${encodeURIComponent(mentionQuery)}&limit=8`);
+        if (seq === mentionSearchSeq.current) {
+          setMentionResults(res.users || []);
+          setMentionIndex(0);
+        }
+      } catch {
+        if (seq === mentionSearchSeq.current) setMentionResults([]);
+      } finally {
+        if (seq === mentionSearchSeq.current) setMentionLoading(false);
+      }
+    }, 180);
+    return () => clearTimeout(timer);
+  }, [mentionQuery]);
+
+  const closeMentionDropdown = useCallback(() => {
+    setMentionQuery(null);
+    setMentionResults([]);
+    setMentionIndex(0);
+  }, []);
+
+  /** Replace the in-progress @query at the caret with the selected user's handle. */
+  const applyMention = useCallback(
+    (user: MentionUser, source: 'main' | 'edit') => {
+      const handle = user.username || user.name.toLowerCase().replace(/[^a-z0-9_]+/g, '_').replace(/^_+|_+$/g, '');
+      if (!handle) {
+        closeMentionDropdown();
+        return;
+      }
+      const el = source === 'main' ? textareaRef.current : editTextareaRef.current;
+      const value = el?.value ?? (source === 'main' ? text : editCommentText);
+      const caret = el?.selectionStart ?? value.length;
+      const before = value.slice(0, caret);
+      const match = before.match(/(^|\s)@([A-Za-z][A-Za-z0-9_]{0,19})$/);
+      if (match) {
+        const start = caret - match[2].length - 1; // position of '@'
+        const replacement = `@${handle} `;
+        const next = (value.slice(0, start) + replacement + value.slice(caret)).slice(0, 300);
+        if (source === 'main') {
+          setText(next);
+        } else {
+          setEditCommentText(next);
+        }
+        requestAnimationFrame(() => {
+          const pos = Math.min(start + replacement.length, next.length);
+          el?.focus();
+          el?.setSelectionRange(pos, pos);
+        });
+      }
+      // Remember this user so the mention renders highlighted even before the server responds.
+      setMentionMap((prev) => ({
+        ...prev,
+        [handle.toLowerCase()]: { id: user.id, name: user.name, username: user.username, avatarUrl: user.avatarUrl ?? null },
+      }));
+      closeMentionDropdown();
+    },
+    [closeMentionDropdown, text, editCommentText],
+  );
+
+  /** Detect an active @query from the current caret position. */
+  const detectMention = useCallback((value: string, caret: number) => {
+    const before = value.slice(0, caret);
+    const match = before.match(MENTION_TRIGGER_RE);
+    if (match) {
+      setMentionQuery(match[2]);
+    } else {
+      // Only close if the dropdown is actually open
+      setMentionQuery((q) => (q !== null ? null : q));
+    }
+  }, []);
 
   const loadMore = async () => {
     if (!nextCursor || loadingMore) return;
@@ -115,58 +239,147 @@ export default function CommunityCommentSection({
     }
   };
 
+  /**
+   * Optimistic submit: render the comment immediately with local data, fire the
+   * API call in the background, then swap in the server copy when it arrives.
+   * On failure, mark the comment with an error banner (retry / remove).
+   */
   const handleSubmit = async (e?: React.FormEvent) => {
     e?.preventDefault();
-    if (!text.trim() || submitting) return;
+    const content = text.trim();
+    if (!content || submitting) return;
+
+    const parentId = replyingTo?.parentId || null;
+    const tempId = nextOptimisticId();
+    const optimisticComment: Comment = {
+      id: tempId,
+      content,
+      createdAt: new Date().toISOString(),
+      parentId,
+      author: {
+        id: currentUserId,
+        name: userDetails?.name || 'You',
+        username: userDetails?.username ?? null,
+        avatarUrl: userDetails?.avatarUrl ?? auth.currentUser?.photoURL ?? null,
+      },
+    };
+
+    // 1. Render instantly — no waiting on the network
     setSubmitting(true);
+    setPendingComments((prev) => [...prev, optimisticComment]);
+    setText('');
+    setReplyingTo(null);
+    closeMentionDropdown();
+
+    // 2. Sync the backend silently in the background
     try {
-      const parentId = replyingTo?.parentId || null;
       const { data: response } = await API.post(`/community/posts/${postId}/comments`, {
-        content: text.trim(),
-        parentId
+        content,
+        parentId,
       });
-      const newComment = response.comment as Comment;
-      await mutate((current) => ({
-        comments: [...(current?.comments || []), newComment],
-        nextCursor: current?.nextCursor || null,
-      }), false);
-      setText('');
-      setReplyingTo(null);
+      const savedComment = response.comment as Comment;
+      mergeMentions(response.mentions);
+      // Swap the temp comment for the confirmed server copy: drop the temp from
+      // pending and append the server copy to the SWR cache (deduped on render).
+      setPendingComments((prev) => prev.filter((c) => c.id !== tempId));
+      await mutate(
+        (current) => ({
+          comments: [...(current?.comments || []), savedComment],
+          nextCursor: current?.nextCursor || null,
+        }),
+        { revalidate: false },
+      );
       onCommentAdded?.();
     } catch {
-      toast.error('Failed to add comment');
+      toast.error('Failed to add comment', {
+        action: {
+          label: 'Retry',
+          onClick: () => retryFailedComment(tempId, content, parentId),
+        },
+      });
+      setFailedComments((prev) => new Set(prev).add(tempId));
     } finally {
       setSubmitting(false);
     }
   };
 
+  const retryFailedComment = async (tempId: string, content: string, parentId: string | null) => {
+    setFailedComments((prev) => {
+      const next = new Set(prev);
+      next.delete(tempId);
+      return next;
+    });
+    try {
+      const { data: response } = await API.post(`/community/posts/${postId}/comments`, {
+        content,
+        parentId,
+      });
+      const savedComment = response.comment as Comment;
+      mergeMentions(response.mentions);
+      setPendingComments((prev) => prev.filter((c) => c.id !== tempId));
+      await mutate(
+        (current) => ({
+          comments: [...(current?.comments || []), savedComment],
+          nextCursor: current?.nextCursor || null,
+        }),
+        { revalidate: false },
+      );
+      onCommentAdded?.();
+    } catch {
+      toast.error('Still failed to add comment');
+      setFailedComments((prev) => new Set(prev).add(tempId));
+    }
+  };
+
   const handleDelete = async (commentId: string) => {
+    // Optimistic comment that never reached the server — just drop it locally.
+    if (isOptimisticId(commentId)) {
+      setPendingComments((prev) => prev.filter((c) => c.id !== commentId));
+      setFailedComments((prev) => {
+        const next = new Set(prev);
+        next.delete(commentId);
+        return next;
+      });
+      return;
+    }
+
+    // Optimistic delete: remove from the UI instantly, restore if the API fails.
+    // `removed` holds the comment plus any replies (cascade) so we can restore them.
+    const removed = comments.filter((c) => c.id === commentId || c.parentId === commentId);
+    const countDeleted = removed.length;
+    const snapshot = comments;
+
+    setPendingComments((prev) => prev.filter((c) => c.id !== commentId && c.parentId !== commentId));
+    setAdditionalComments((prev) => prev.filter((c) => c.id !== commentId && c.parentId !== commentId));
+    await mutate(
+      (current) => ({
+        comments: (current?.comments || []).filter((c) => c.id !== commentId && c.parentId !== commentId),
+        nextCursor: current?.nextCursor || null,
+      }),
+      { revalidate: false },
+    );
+
     try {
       await API.delete(`/community/comments/${commentId}`);
-      
-      const commentToDelete = comments.find((c) => c.id === commentId);
-      let countDeleted = 1;
-      
-      if (commentToDelete && !commentToDelete.parentId) {
-        // Deleting top-level comment means all of its replies are cascade deleted
-        const repliesToDelete = comments.filter((c) => c.parentId === commentId);
-        countDeleted += repliesToDelete.length;
-        await mutate((current) => ({
-          comments: (current?.comments || []).filter((c) => c.id !== commentId && c.parentId !== commentId),
-          nextCursor: current?.nextCursor || null,
-        }), false);
-        setAdditionalComments((prev) => prev.filter((c) => c.id !== commentId && c.parentId !== commentId));
-      } else {
-        await mutate((current) => ({
-          comments: (current?.comments || []).filter((c) => c.id !== commentId),
-          nextCursor: current?.nextCursor || null,
-        }), false);
-        setAdditionalComments((prev) => prev.filter((c) => c.id !== commentId));
-      }
-      
       onCommentDeleted?.(countDeleted);
       toast.success('Comment deleted successfully');
     } catch {
+      // Restore the deleted comment(s) on failure
+      setPendingComments((prev) => [
+        ...prev,
+        ...removed.filter((c) => isOptimisticId(c.id) && !prev.some((p) => p.id === c.id)),
+      ]);
+      setAdditionalComments((prev) => [
+        ...prev,
+        ...removed.filter((c) => !isOptimisticId(c.id) && !prev.some((p) => p.id === c.id) && !snapshot.some((s) => s.id === c.id)),
+      ]);
+      await mutate(
+        (current) => ({
+          comments: [...(current?.comments || []), ...removed.filter((c) => !isOptimisticId(c.id) && !snapshot.some((s) => s.id === c.id))],
+          nextCursor: current?.nextCursor || null,
+        }),
+        { revalidate: false },
+      );
       toast.error('Failed to delete comment');
     }
   };
@@ -176,13 +389,16 @@ export default function CommunityCommentSection({
     setSavingEdit(true);
     try {
       const { data } = await API.put(`/community/comments/${commentId}`, { content: editCommentText.trim() });
+      mergeMentions(data.mentions);
       await mutate((current) => ({
         comments: (current?.comments || []).map((c) => c.id === commentId ? { ...c, content: data.comment.content } : c),
         nextCursor: current?.nextCursor || null,
       }), false);
       setAdditionalComments((prev) => prev.map((c) => c.id === commentId ? { ...c, content: data.comment.content } : c));
+      setPendingComments((prev) => prev.map((c) => c.id === commentId ? { ...c, content: data.comment.content } : c));
       setEditingCommentId(null);
       setEditCommentText('');
+      closeMentionDropdown();
       toast.success('Comment edited successfully');
     } catch {
       toast.error('Failed to edit comment');
@@ -191,11 +407,40 @@ export default function CommunityCommentSection({
     }
   };
 
-  const handleKey = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+  const handleKey = (e: React.KeyboardEvent<HTMLTextAreaElement>, source: 'main' | 'edit' = 'main') => {
+    if (mentionQuery !== null && mentionResults.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setMentionIndex((i) => (i + 1) % mentionResults.length);
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setMentionIndex((i) => (i - 1 + mentionResults.length) % mentionResults.length);
+        return;
+      }
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault();
+        applyMention(mentionResults[mentionIndex], source);
+        return;
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        closeMentionDropdown();
+        return;
+      }
+    }
+    // Main input: Enter sends. Edit textarea keeps default (Enter = newline, Save button to submit).
+    if (source === 'main' && e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSubmit();
     }
+  };
+
+  const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const value = e.target.value.slice(0, 300);
+    setText(value);
+    detectMention(value, e.target.selectionStart);
   };
 
   const handleReplyClick = (comment: Comment) => {
@@ -207,7 +452,9 @@ export default function CommunityCommentSection({
     });
     
     if (comment.parentId) {
-      setText(`@${comment.author.name} `);
+      // Prefer the @username handle (single token, resolvable server-side); fall back to name.
+      const handle = comment.author.username || comment.author.name.split(/\s+/)[0];
+      setText(`@${handle} `);
     } else {
       setText('');
     }
@@ -215,6 +462,56 @@ export default function CommunityCommentSection({
     setTimeout(() => {
       textareaRef.current?.focus();
     }, 50);
+  };
+
+  /** Shared @mention autocomplete dropdown. `source` picks which textarea it applies to. */
+  const renderMentionDropdown = (source: 'main' | 'edit') => {
+    if (mentionQuery === null || !currentUserId) return null;
+    return (
+      <div
+        className={`absolute left-0 right-0 z-30 rounded-xl border shadow-xl overflow-hidden ${
+          source === 'main' ? 'bottom-full mb-1.5' : 'top-full mt-1'
+        } ${dark ? 'bg-zinc-900 border-zinc-700' : 'bg-white border-zinc-200'}`}
+      >
+        <div className={`flex items-center gap-2 px-3 py-2 text-[11px] font-medium border-b ${
+          dark ? 'border-zinc-800 text-zinc-500' : 'border-zinc-100 text-zinc-400'
+        }`}>
+          <AtSign size={12} />
+          {mentionLoading ? 'Searching…' : mentionResults.length ? 'Tag a user' : mentionQuery ? 'No users found' : 'Type a username…'}
+        </div>
+        {mentionResults.length > 0 && (
+          <div className="max-h-52 overflow-y-auto">
+            {mentionResults.map((user, idx) => (
+              <button
+                key={user.id}
+                type="button"
+                onMouseDown={(e) => {
+                  e.preventDefault(); // keep textarea focus
+                  applyMention(user, source);
+                }}
+                onMouseEnter={() => setMentionIndex(idx)}
+                className={`w-full flex items-center gap-2.5 px-3 py-2 text-left transition-colors ${
+                  idx === mentionIndex ? (dark ? 'bg-zinc-800' : 'bg-zinc-100') : ''
+                }`}
+              >
+                {getAvatar(user.name, user.avatarUrl, 'w-6 h-6', user.id)}
+                <div className="flex-1 min-w-0">
+                  <p className={`text-[12px] font-semibold truncate ${dark ? 'text-zinc-200' : 'text-zinc-800'}`}>
+                    {user.name}
+                  </p>
+                  {user.username && (
+                    <p className={`text-[10.5px] truncate ${dark ? 'text-zinc-500' : 'text-zinc-400'}`}>
+                      @{user.username}
+                    </p>
+                  )}
+                </div>
+                {idx === mentionIndex && <AtSign size={12} className="text-indigo-500 shrink-0" />}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    );
   };
 
   const getAvatar = (name: string, avatarUrl?: string | null, sizeClass = 'w-7 h-7', authorId?: string) => {
@@ -240,21 +537,56 @@ export default function CommunityCommentSection({
     );
   };
 
-  const renderCommentContent = (content: string) => {
-    if (!content.startsWith('@')) return content;
-    const spaceIndex = content.indexOf(' ');
-    if (spaceIndex === -1) return content;
-    const mention = content.slice(0, spaceIndex);
-    const rest = content.slice(spaceIndex);
-    return (
-      <>
-        <span className="font-semibold text-indigo-600 dark:text-indigo-400 mr-1">
-          {mention}
-        </span>
-        {rest}
-      </>
-    );
+  const renderMentionText = (source: string, onMentionClick: (userId: string) => void) => {
+    const parts: React.ReactNode[] = [];
+    let lastIndex = 0;
+    const re = /@([A-Za-z][A-Za-z0-9_]{2,19})/g;
+    let match: RegExpExecArray | null;
+    while ((match = re.exec(source)) !== null) {
+      const handle = match[1].toLowerCase();
+      const user = mentionMap[handle];
+      if (!user) continue; // plain text, not a known mention
+      parts.push(source.slice(lastIndex, match.index));
+      parts.push(
+        <span
+          key={`${match.index}-${handle}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            onMentionClick(user.id);
+          }}
+          className="font-semibold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
+          title={`View ${user.name}'s profile`}
+        >
+          @{user.username || handle}
+        </span>,
+      );
+      lastIndex = match.index + match[0].length;
+    }
+    parts.push(source.slice(lastIndex));
+    return parts;
   };
+
+  const renderFailedBanner = (commentId: string) =>
+    failedComments.has(commentId) ? (
+      <div className="flex items-center gap-2 mt-1.5 text-[11px] text-rose-500">
+        <span className="flex-1">Couldn&#39;t post — check your connection.</span>
+        <button
+          onClick={() => {
+            const c = comments.find((x) => x.id === commentId);
+            if (c) retryFailedComment(commentId, c.content, c.parentId || null);
+          }}
+          className="font-semibold underline underline-offset-2 hover:no-underline"
+        >
+          Retry
+        </button>
+        <button
+          onClick={() => handleDelete(commentId)}
+          className="font-semibold underline underline-offset-2 hover:no-underline"
+        >
+          Discard
+        </button>
+      </div>
+    ) : null;
 
   const topLevelComments = comments.filter((c) => !c.parentId);
   const replies = comments.filter((c) => c.parentId);
@@ -347,10 +679,17 @@ export default function CommunityCommentSection({
                       </span>
                     </div>
                     {editingCommentId === c.id ? (
-                      <div className="mt-1 flex flex-col gap-2">
+                      <>
+                        <div className="relative mt-1 flex flex-col gap-2">
                         <textarea
+                          ref={editTextareaRef}
                           value={editCommentText}
-                          onChange={(e) => setEditCommentText(e.target.value.slice(0, 300))}
+                          onChange={(e) => {
+                            const v = e.target.value.slice(0, 300);
+                            setEditCommentText(v);
+                            detectMention(v, e.target.selectionStart);
+                          }}
+                          onKeyDown={(e) => handleKey(e, 'edit')}
                           className={`w-full text-[13px] rounded-lg border p-2 resize-none outline-none ${
                             dark ? 'bg-zinc-800 border-zinc-700 text-white' : 'bg-white border-zinc-300 text-zinc-900'
                           }`}
@@ -374,11 +713,14 @@ export default function CommunityCommentSection({
                           </button>
                         </div>
                       </div>
+                      {renderMentionDropdown('edit')}
+                      </>
                     ) : (
                       <>
-                        <p className={`text-[13px] leading-relaxed mt-1 ${dark ? 'text-zinc-300' : 'text-zinc-700'}`}>
-                          {c.content}
+                        <p className={`text-[13px] leading-relaxed mt-1 whitespace-pre-wrap break-words ${dark ? 'text-zinc-300' : 'text-zinc-700'}`}>
+                          {renderMentionText(c.content, handleUserClick)}
                         </p>
+                        {renderFailedBanner(c.id)}
                         <div className="flex items-center gap-3 mt-2">
                           <button
                             onClick={() => {
@@ -461,10 +803,17 @@ export default function CommunityCommentSection({
                             </span>
                           </div>
                           {editingCommentId === reply.id ? (
-                            <div className="mt-1 flex flex-col gap-2">
+                            <>
+                              <div className="relative mt-1 flex flex-col gap-2">
                               <textarea
+                                ref={editTextareaRef}
                                 value={editCommentText}
-                                onChange={(e) => setEditCommentText(e.target.value.slice(0, 300))}
+                                onChange={(e) => {
+                                  const v = e.target.value.slice(0, 300);
+                                  setEditCommentText(v);
+                                  detectMention(v, e.target.selectionStart);
+                                }}
+                                onKeyDown={(e) => handleKey(e, 'edit')}
                                 className={`w-full text-[13px] rounded-lg border p-2 resize-none outline-none ${
                                   dark ? 'bg-zinc-800 border-zinc-700 text-white' : 'bg-white border-zinc-300 text-zinc-900'
                                 }`}
@@ -486,13 +835,15 @@ export default function CommunityCommentSection({
                                   {savingEdit ? <span className="w-3 h-3 border-[1.5px] border-white border-t-transparent rounded-full animate-spin" /> : <Save size={12} />}
                                   Save
                                 </button>
-                              </div>
-                            </div>
+                              </div>                              </div>
+                              {renderMentionDropdown('edit')}
+                              </>
                           ) : (
                             <>
-                              <p className={`text-[13px] leading-relaxed mt-0.5 ${dark ? 'text-zinc-300' : 'text-zinc-700'}`}>
-                                {renderCommentContent(reply.content)}
+                              <p className={`text-[13px] leading-relaxed mt-0.5 whitespace-pre-wrap break-words ${dark ? 'text-zinc-300' : 'text-zinc-700'}`}>
+                                {renderMentionText(reply.content, handleUserClick)}
                               </p>
+                              {renderFailedBanner(reply.id)}
                               <div className="flex items-center gap-3 mt-2">
                                 <button
                                   onClick={() => {
@@ -571,14 +922,15 @@ export default function CommunityCommentSection({
               </button>
             </div>
           )}
+          <div className="relative">
           <form onSubmit={handleSubmit} className="flex gap-2 items-end">
             <textarea
               ref={textareaRef}
               value={text}
-              onChange={(e) => setText(e.target.value.slice(0, 300))}
+              onChange={handleTextChange}
               onKeyDown={handleKey}
               rows={1}
-              placeholder={replyingTo ? "Write a reply…" : "Write a comment… (Enter to send)"}
+              placeholder={replyingTo ? "Write a reply… (@ to mention)" : "Write a comment… (@ to mention, Enter to send)"}
               className={`flex-1 resize-none text-[13px] leading-relaxed rounded-2xl px-3.5 py-2.5 border outline-none transition-all
                 ${replyingTo ? 'rounded-t-none' : ''}
                 ${dark
@@ -598,6 +950,10 @@ export default function CommunityCommentSection({
               }
             </button>
           </form>
+
+          {/* @mention autocomplete dropdown */}
+          {renderMentionDropdown('main')}
+          </div>
         </div>
       )}
 

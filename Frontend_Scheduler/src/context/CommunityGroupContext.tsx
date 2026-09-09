@@ -37,7 +37,6 @@ interface CommunityGroupContextType {
   error: string | null;
   myError: string | null;
   hasFetched: boolean;
-  prefetchCommunityCategories: () => Promise<void>;
   fetchCommunities: (cursor?: string, search?: string, filter?: string, isSilent?: boolean) => Promise<void>;
   fetchMyCommunities: () => Promise<void>;
   invites: CommunityInvite[];
@@ -89,6 +88,10 @@ export const CommunityGroupProvider = ({ children }: { children: React.ReactNode
   const communitiesRequestRef = useRef(0);
   const communitiesAbortRef = useRef<AbortController | null>(null);
   const communityCategoryCacheRef = useRef(new Map<string, CommunityGroup[]>());
+  // Categories revalidated against the server this session. Cached categories
+  // that haven't been validated yet still paint instantly (stale-while-revalidate)
+  // but trigger one silent background refresh.
+  const validatedCategoriesRef = useRef(new Set<string>());
 
   // Selected active community detail state cache
   const [activeCommunity, setActiveCommunity] = useState<CommunityGroup | null>(null);
@@ -104,18 +107,25 @@ export const CommunityGroupProvider = ({ children }: { children: React.ReactNode
     communitiesAbortRef.current?.abort();
     const controller = new AbortController();
     communitiesAbortRef.current = controller;
+    const categoryKey = filter || 'all';
+
     if (!isSilent) {
       setLoading(true);
       setError(null);
     }
-    const categoryKey = filter || 'all';
+
+    // Stale-while-revalidate: paint the cached page immediately, then refresh
+    // from the server. First-page caches make revisit mounts feel instant.
+    let isRevalidation = false;
     if (!cursor && !search && communityCategoryCacheRef.current.has(categoryKey)) {
       setCommunities(communityCategoryCacheRef.current.get(categoryKey) || []);
       setNextCursor(null);
       setHasFetched(true);
       if (!isSilent) setLoading(false);
-      return;
+      if (validatedCategoriesRef.current.has(categoryKey)) return;
+      isRevalidation = true;
     }
+
     try {
       const { data } = await API.get('/groups', {
         params: {
@@ -133,12 +143,16 @@ export const CommunityGroupProvider = ({ children }: { children: React.ReactNode
         });
       } else {
         setCommunities(data.communities);
-        if (!search) communityCategoryCacheRef.current.set(categoryKey, data.communities);
+        if (!search) {
+          communityCategoryCacheRef.current.set(categoryKey, data.communities);
+          validatedCategoriesRef.current.add(categoryKey);
+        }
       }
       setNextCursor(data.nextCursor);
       setHasFetched(true);
     } catch (err: any) {
-      if (requestId === communitiesRequestRef.current && !isSilent && !controller.signal.aborted) {
+      // Don't turn a background revalidation over fresh content into an error state.
+      if (requestId === communitiesRequestRef.current && !isSilent && !isRevalidation && !controller.signal.aborted) {
         setError(err?.response?.data?.error || 'Failed to load communities');
       }
     } finally {
@@ -146,40 +160,6 @@ export const CommunityGroupProvider = ({ children }: { children: React.ReactNode
         setLoading(false);
       }
     }
-  }, []);
-
-  const prefetchCommunityCategories = useCallback(async () => {
-    const allCategory = '';
-    const backgroundCategories = ['joined', 'created'];
-    if (communityCategoryCacheRef.current.has('all')) {
-      setCommunities(communityCategoryCacheRef.current.get('all') || []);
-      setHasFetched(true);
-      return;
-    }
-
-    setLoading(true);
-    setError(null);
-    try {
-      const { data } = await API.get('/groups');
-      communityCategoryCacheRef.current.set(allCategory || 'all', data.communities || []);
-      setCommunities(communityCategoryCacheRef.current.get('all') || []);
-      setNextCursor(null);
-      setHasFetched(true);
-    } catch (err: any) {
-      setError(err?.response?.data?.error || 'Failed to load communities');
-    } finally {
-      setLoading(false);
-    }
-
-    // Populate the other tabs without delaying the first visible list.
-    void Promise.all(
-      backgroundCategories.map(async (filter) => {
-        const { data } = await API.get('/groups', { params: { filter } });
-        communityCategoryCacheRef.current.set(filter, data.communities || []);
-      })
-    ).catch((err: any) => {
-      console.error('Failed to preload community categories:', err);
-    });
   }, []);
 
   const fetchMyCommunities = useCallback(async () => {
@@ -362,7 +342,6 @@ export const CommunityGroupProvider = ({ children }: { children: React.ReactNode
         error,
         myError,
         hasFetched,
-        prefetchCommunityCategories,
         fetchCommunities,
         fetchMyCommunities,
         invites,

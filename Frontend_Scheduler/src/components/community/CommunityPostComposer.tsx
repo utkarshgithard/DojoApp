@@ -477,6 +477,7 @@ export default function CommunityPostComposer({
 
     e.preventDefault();
     const text = e.clipboardData.getData('text/plain');
+    if (!text) return;
 
     const selection = window.getSelection();
     if (!selection || selection.rangeCount === 0) return;
@@ -484,13 +485,27 @@ export default function CommunityPostComposer({
     const range = selection.getRangeAt(0);
     range.deleteContents();
 
-    const textNode = document.createTextNode(text);
-    range.insertNode(textNode);
+    // Insert line breaks as <br> elements so pasted layout is preserved exactly.
+    // (A text node containing \n renders collapsed inside a contentEditable.)
+    const lines = text.replace(/\r\n?/g, '\n').split('\n');
+    const frag = document.createDocumentFragment();
+    lines.forEach((line, i) => {
+      if (i > 0) frag.appendChild(document.createElement('br'));
+      if (line) frag.appendChild(document.createTextNode(line));
+    });
+    const lastInserted = frag.lastChild;
+    range.insertNode(frag);
 
-    range.setStartAfter(textNode);
-    range.collapse(true);
+    // Move the caret to right after the pasted content
     selection.removeAllRanges();
-    selection.addRange(range);
+    const caretRange = document.createRange();
+    if (lastInserted) {
+      caretRange.setStartAfter(lastInserted);
+    } else {
+      caretRange.selectNodeContents(editorRef.current!);
+    }
+    caretRange.collapse(true);
+    selection.addRange(caretRange);
 
     handleEditorChange();
     saveSelection();
@@ -1120,9 +1135,9 @@ export default function CommunityPostComposer({
               }}
               onBlur={saveSelection}
               onPaste={handlePaste}
-              className={`w-full min-h-[110px] outline-none text-[16px] leading-relaxed tracking-[-0.01em] bg-transparent font-normal break-words transition-colors ${dark ? 'text-zinc-100 placeholder-zinc-500' : 'text-zinc-900 placeholder-zinc-400'
+              className={`w-full min-h-[110px] outline-none text-[16px] leading-relaxed tracking-[-0.01em] bg-transparent font-normal break-words whitespace-pre-wrap transition-colors ${dark ? 'text-zinc-100 placeholder-zinc-500' : 'text-zinc-900 placeholder-zinc-400'
                 }`}
-              style={{ wordBreak: 'break-word' }}
+              style={{ wordBreak: 'break-word', whiteSpace: 'pre-wrap' }}
             />
           </div>
 

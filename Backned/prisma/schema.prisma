@@ -249,6 +249,8 @@ model Community {
   invites     CommunityInvite[]
   members     CommunityMember[]
   posts       Post[]
+
+  @@index([memberCount(sort: Desc)])
 }
 
 model CommunityMember {
@@ -260,6 +262,7 @@ model CommunityMember {
   user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@id([communityId, userId])
+  @@index([userId])
 }
 
 model CommunityInvite {
@@ -274,6 +277,7 @@ model CommunityInvite {
   invited     User      @relation("InvitesReceived", fields: [invitedId], references: [id], onDelete: Cascade)
 
   @@unique([communityId, invitedId])
+  @@index([invitedId, accepted])
 }
 
 model Notification {

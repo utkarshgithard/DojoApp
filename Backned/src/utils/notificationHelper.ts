@@ -104,6 +104,22 @@ export async function createNotification(
       pushTitle = 'New Friend! 🤝';
       pushBody = `You and ${notification.sender.name} are now friends!`;
       pushUrl = '/friends';
+    } else if (type === 'mention') {
+      pushTitle = 'You were mentioned! 📢';
+      if (commentId) {
+        const comment = await prisma.postComment.findUnique({
+          where: { id: commentId },
+          select: { content: true },
+        });
+        pushBody = `${notification.sender.name} tagged you: "${
+          comment?.content && comment.content.length > 40
+            ? comment.content.substring(0, 37) + '...'
+            : comment?.content || ''
+        }"`;
+      } else {
+        pushBody = `${notification.sender.name} mentioned you in a comment.`;
+      }
+      if (postId) pushUrl = `/community/post/${postId}`;
     }
 
     await sendPushToUser(userId, {
