@@ -83,7 +83,7 @@ export function ScrollScene() {
               fontSize: 10,
               letterSpacing: "0.22em",
               color: "rgba(130,110,200,0.5)",
-              fontFamily: "'JetBrains Mono', monospace",
+              fontFamily: "var(--font-serif)",
               textTransform: "uppercase",
             }}
           >

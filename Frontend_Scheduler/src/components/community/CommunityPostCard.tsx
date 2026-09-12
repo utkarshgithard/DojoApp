@@ -9,6 +9,7 @@ import CommunityMediaGrid from './CommunityMediaGrid';
 import CommunityCommentSection, { prefetchComments } from './CommunityCommentSection';
 import ShareModal from './ShareModal';
 import { auth } from '@/lib/firebase';
+import SafeAvatar from '@/components/SafeAvatar';
 import { useAuth } from '@/context/authContext';
 import { usePostContext } from '@/context/PostContext';
 import { useNetwork } from '@/context/NetworkContext';
@@ -321,31 +322,9 @@ export default function CommunityPostCard({
     if (author.id === currentUserId) {
       avatarToRender = userDetails?.avatarUrl || author.avatarUrl || auth.currentUser?.photoURL || null;
     }
-    if (avatarToRender) {
-      return (
-        <img
-          src={avatarToRender}
-          alt={author.name}
-          referrerPolicy="no-referrer"
-          className="w-10 h-10 rounded-full object-cover shrink-0"
-        />
-      );
-    }
-    const colors = [
-      'from-indigo-400 to-purple-500',
-      'from-pink-400 to-rose-500',
-      'from-emerald-400 to-teal-500',
-      'from-amber-400 to-orange-500',
-      'from-blue-400 to-cyan-500',
-    ];
-    const safeName = author?.name || 'User';
-    const colorIdx = (safeName.charCodeAt(0) || 0) % colors.length;
+    // SafeAvatar falls back to initials when the URL is missing or broken.
     return (
-      <div
-        className={`w-10 h-10 rounded-full flex items-center justify-center text-[14px] font-bold text-white bg-gradient-to-br ${colors[colorIdx]} shrink-0`}
-      >
-        {safeName.charAt(0).toUpperCase()}
-      </div>
+      <SafeAvatar name={author?.name || 'User'} avatarUrl={avatarToRender} size={40} />
     );
   };
 

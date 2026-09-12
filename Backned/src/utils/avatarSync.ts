@@ -1,10 +1,12 @@
 import admin from '../lib/firebaseAdmin.js';
 import prisma from '../lib/prisma.js';
 import { cacheDel } from '../lib/redis.js';
+import { healBase64Avatar } from './avatarHeal.js';
 
 export async function checkAndSyncAvatar(user: { id: string; name: string; avatarUrl: string | null }): Promise<string | null> {
   // Return the database avatarUrl instantly.
   // We no longer make blocking Firebase Admin SDK network requests on list reads (eliminates N+1 bottleneck).
-  return user.avatarUrl;
+  // Legacy base64 data-URL avatars are healed (migrated to storage) transparently.
+  return healBase64Avatar(user);
 }
 

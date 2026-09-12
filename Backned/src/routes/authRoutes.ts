@@ -5,6 +5,7 @@ import { verifyToken, optionalVerifyToken, AuthenticatedRequest } from '../middl
 import generate6CharCode from '../utils/generateCode.js';
 import { cacheGet, cacheSet, cacheDel } from '../lib/redis.js';
 import { checkAndSyncAvatar } from '../utils/avatarSync.js';
+import { isBase64DataUrl, convertDataUrlAvatar } from '../utils/avatarHeal.js';
 import { calculateDailyPerformanceScore } from '../utils/performanceIndex.js';
 import { createNotification } from '../utils/notificationHelper.js';
 import {
@@ -33,8 +34,13 @@ userRouter.get('/userDetails', verifyToken, async (req: AuthenticatedRequest, re
         // If the cached profile was created before we added the 'role' field,
         // bypass the cache and fetch fresh from the DB.
         if (user && typeof user === 'object' && 'role' in user) {
-          res.json({ user, success: true, message: 'User Found (cached)' });
-          return;
+          // Legacy poisoned cache: never serve base64 data-URL avatars.
+          if (isBase64DataUrl(user?.avatarUrl)) {
+            await cacheDel(cacheKey).catch(() => { });
+          } else {
+            res.json({ user, success: true, message: 'User Found (cached)' });
+            return;
+          }
         }
       } catch {
         // If JSON parsing fails, clear the corrupted cache
@@ -67,8 +73,13 @@ userRouter.get('/userDetails', verifyToken, async (req: AuthenticatedRequest, re
     if (user) {
       const avatarUrl = await checkAndSyncAvatar(user);
       user.avatarUrl = avatarUrl;
-      // Cache the profile details for 24 hours (86400 seconds)
-      await cacheSet(cacheKey, JSON.stringify(user), 86400);
+      // Never cache a legacy base64 data URL — it bloats the cache and client storage.
+      if (isBase64DataUrl(user.avatarUrl)) {
+        await cacheDel(cacheKey).catch(() => {});
+      } else {
+        // Cache the profile details for 24 hours (86400 seconds)
+        await cacheSet(cacheKey, JSON.stringify(user), 86400);
+      }
     }
 
     res.json({ user, success: true, message: 'User Found' });
@@ -178,8 +189,10 @@ userRouter.post('/sync', async (req: Request, res: Response): Promise<void> => {
         );
       }
 
-      // Sync avatar if it is missing or has changed in Firebase
-      if (decodedToken.picture && existing.avatarUrl !== decodedToken.picture) {
+      // Sync avatar ONLY when the user has no avatar stored yet.
+      // Never overwrite a user-uploaded Supabase avatar with the Google/Firebase
+      // photo — that clobbered custom avatars on every login.
+      if (!existing.avatarUrl && decodedToken.picture) {
         await prisma.user.update({
           where: { id: existing.id },
           data: { avatarUrl: decodedToken.picture },
@@ -423,6 +436,23 @@ userRouter.put('/profile', verifyToken, async (req: AuthenticatedRequest, res: R
     const { name, bio, avatarUrl, college, collegeCode, username } = req.body;
     const userId = req.userId!;
 
+    // Reject/convert legacy base64 data URLs — persist a storage URL instead.
+    let avatarUrlUpdate: string | null | undefined = undefined;
+    if (avatarUrl !== undefined) {
+      if (avatarUrl === null || avatarUrl === '') {
+        avatarUrlUpdate = null;
+      } else if (isBase64DataUrl(avatarUrl)) {
+        const converted = await convertDataUrlAvatar(userId, avatarUrl);
+        if (!converted) {
+          res.status(400).json({ error: 'Profile photo is too large. Please pick a smaller image.' });
+          return;
+        }
+        avatarUrlUpdate = converted;
+      } else {
+        avatarUrlUpdate = avatarUrl;
+      }
+    }
+
     // Username update: normalize + validate + ensure uniqueness
     let usernameUpdate: string | undefined = undefined;
     if (username !== undefined) {
@@ -462,7 +492,7 @@ userRouter.put('/profile', verifyToken, async (req: AuthenticatedRequest, res: R
       data: {
         name: name !== undefined ? name : undefined,
         bio: bio !== undefined ? bio : undefined,
-        avatarUrl: avatarUrl !== undefined ? avatarUrl : undefined,
+        avatarUrl: avatarUrlUpdate,
         college: college !== undefined ? college : undefined,
         collegeCode: collegeCode !== undefined ? collegeCode : undefined,
         username: usernameUpdate,

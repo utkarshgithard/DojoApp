@@ -6,6 +6,7 @@ import { Send, Trash2, X, Edit2, Save, MessageCircle, AtSign } from 'lucide-reac
 import { formatDistanceToNowStrict } from 'date-fns';
 import { useRouter } from 'next/navigation';
 import { auth } from '@/lib/firebase';
+import SafeAvatar from '@/components/SafeAvatar';
 import { useAuth } from '@/context/authContext';
 import { toast } from 'sonner';
 import useSWR, { preload } from 'swr';
@@ -514,26 +515,20 @@ export default function CommunityCommentSection({
     );
   };
 
+  // Delegates to SafeAvatar so broken/missing avatar URLs fall back to initials.
   const getAvatar = (name: string, avatarUrl?: string | null, sizeClass = 'w-7 h-7', authorId?: string) => {
     let avatarToRender = avatarUrl;
     if (authorId === currentUserId) {
       avatarToRender = userDetails?.avatarUrl || avatarUrl || auth.currentUser?.photoURL || null;
     }
-    if (avatarToRender) {
-      return (
-        <img
-          src={avatarToRender}
-          alt={name}
-          referrerPolicy="no-referrer"
-          className={`${sizeClass} rounded-full object-cover shrink-0`}
-        />
-      );
-    }
-    const textSz = sizeClass.includes('w-6') ? 'text-[10px]' : 'text-[11px]';
+    const sizeMatch = sizeClass.match(/w-(\d+(?:\.\d+)?)/);
+    const px = sizeMatch ? parseFloat(sizeMatch[1]) * 4 : 28;
     return (
-      <div className={`${sizeClass} rounded-full flex items-center justify-center font-bold shrink-0 ${dark ? 'bg-zinc-700 text-zinc-200' : 'bg-zinc-200 text-zinc-700'} ${textSz}`}>
-        {name.charAt(0).toUpperCase()}
-      </div>
+      <SafeAvatar
+        name={name || 'U'}
+        avatarUrl={avatarToRender}
+        size={px}
+      />
     );
   };
 

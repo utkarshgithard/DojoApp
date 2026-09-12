@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Search, Loader2, Check, Send, Users } from 'lucide-react';
 import API from '@/lib/axios';
+import SafeAvatar from '@/components/SafeAvatar';
 
 interface Friend {
   id: string;
@@ -175,16 +176,11 @@ export default function InviteFriendsModal({
                   >
                     <div className="flex items-center gap-3 min-w-0">
                       {/* Avatar */}
+                      {/* SafeAvatar: initials fallback for friends without a photo or with a broken URL */}
                       <div className={`w-9 h-9 rounded-lg border flex items-center justify-center overflow-hidden shrink-0 ${
                         dark ? 'border-zinc-800 bg-zinc-850' : 'border-zinc-200 bg-zinc-100'
                       }`}>
-                        {friend.avatarUrl ? (
-                          <img src={friend.avatarUrl} alt="" className="w-full h-full object-contain" />
-                        ) : (
-                          <span className={`text-[13px] font-bold ${dark ? 'text-indigo-400' : 'text-indigo-650'}`}>
-                            {friend.name.charAt(0).toUpperCase()}
-                          </span>
-                        )}
+                        <SafeAvatar name={friend.name} avatarUrl={friend.avatarUrl} size={36} fallbackClassName="rounded-none" />
                       </div>
 
                       {/* Info */}

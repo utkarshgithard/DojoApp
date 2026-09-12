@@ -2,6 +2,7 @@
 
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import type { Message } from "@/lib/types";
+import { safeSetItem } from "@/lib/safeStorage";
 
 interface ChatState {
   messages: Message[];
@@ -139,7 +140,8 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         },
       };
       if (typeof window !== "undefined") {
-        localStorage.setItem("friend_chat_activity", JSON.stringify(next));
+        // Never fatal: quota errors here used to crash every page.
+        safeSetItem("friend_chat_activity", JSON.stringify(next));
       }
       return next;
     });

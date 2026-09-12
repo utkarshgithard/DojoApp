@@ -278,7 +278,7 @@ export const Compass = memo(function Compass({
               dominantBaseline="central"
               fontSize={primary ? 16 : 9}
               fontWeight={primary ? "700" : "400"}
-              fontFamily="'Plus Jakarta Sans', sans-serif"
+              fontFamily="var(--font-sans)"
               fill={primary ? cardinalColorPrimary : cardinalColorSecondary}
               letterSpacing={primary ? "0.08em" : "0"}
             >

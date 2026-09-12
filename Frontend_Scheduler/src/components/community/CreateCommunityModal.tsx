@@ -6,6 +6,7 @@ import { useCommunityGroups, CommunityVisibility } from '@/context/CommunityGrou
 import { useRouter } from 'next/navigation';
 import API from '@/lib/axios';
 import { compressCommunityAsset } from '@/lib/compressImage';
+import SafeImage from '@/components/SafeImage';
 
 interface CreateCommunityModalProps {
   dark: boolean;
@@ -191,17 +192,16 @@ export default function CreateCommunityModal({ dark, onClose }: CreateCommunityM
                   dark ? 'bg-gradient-to-br from-indigo-950 via-zinc-900 to-zinc-950' : 'bg-gradient-to-br from-indigo-100 via-indigo-50 to-purple-50'
                 }`}
               >
-                {/* Visual placeholder or real image */}
-                {bannerPreview ? (
-                  <img
-                    src={bannerPreview}
-                    alt=""
-                    className="w-full h-full object-cover"
-                    style={{ objectPosition: `center ${bannerPositionY}%` }}
-                  />
-                ) : (
-                  <div className="absolute inset-0 bg-gradient-to-br from-indigo-600 via-purple-650 to-pink-500 opacity-80" />
-                )}
+                {/* Visual placeholder or real image (fallback gradient on broken URL) */}
+                <SafeImage
+                  src={bannerPreview}
+                  alt=""
+                  className="w-full h-full object-cover"
+                  style={{ objectPosition: `center ${bannerPositionY}%` }}
+                  fallback={
+                    <div className="absolute inset-0 bg-gradient-to-br from-indigo-600 via-purple-650 to-pink-500 opacity-80" />
+                  }
+                />
 
                 {/* Change banner hover overlay */}
                 <div
@@ -222,13 +222,16 @@ export default function CreateCommunityModal({ dark, onClose }: CreateCommunityM
                 }`}
                 onClick={(e) => { e.stopPropagation(); avatarInputRef.current?.click(); }}
               >
-                {avatarPreview ? (
-                  <img src={avatarPreview} alt="" className="w-full h-full object-contain bg-black/5 dark:bg-white/5" />
-                ) : (
-                  <span className={`text-[15px] font-bold ${dark ? 'text-indigo-400' : 'text-indigo-650'}`}>
-                    {name ? name.charAt(0).toUpperCase() : '?'}
-                  </span>
-                )}
+                <SafeImage
+                  src={avatarPreview}
+                  alt=""
+                  className="w-full h-full object-contain bg-black/5 dark:bg-white/5"
+                  fallback={
+                    <span className={`text-[15px] font-bold ${dark ? 'text-indigo-400' : 'text-indigo-650'}`}>
+                      {name ? name.charAt(0).toUpperCase() : '?'}
+                    </span>
+                  }
+                />
 
                 <div className="absolute inset-0 bg-black/0 hover:bg-black/50 flex items-center justify-center transition-all duration-200">
                   <Camera size={12} className="text-white opacity-0 hover:opacity-100 transition-opacity duration-200" />

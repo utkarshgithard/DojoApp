@@ -32,7 +32,7 @@ export function Hero() {
         <span
           className="text-sm font-bold tracking-wide hidden sm:inline-block"
           style={{
-            fontFamily: "'Plus Jakarta Sans', sans-serif",
+            fontFamily: "var(--font-sans)",
             color: "var(--neo-text-primary)",
           }}
         >

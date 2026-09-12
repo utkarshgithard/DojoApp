@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 
 const COLORS = {
   ink: "#15131F",
@@ -39,7 +39,13 @@ interface ChatAvatarProps {
 
 export default function ChatAvatar({ name, avatarUrl, size = 44, online = false, ring = false }: ChatAvatarProps) {
   const [c1, c2] = AVATAR_PALETTE[hashName(name || "User") % AVATAR_PALETTE.length];
-  
+  // Broken avatar URLs (403 from storage, deleted object, etc.) must never
+  // render as a blank circle — fall back to the initials avatar instead.
+  const [imgFailed, setImgFailed] = useState(false);
+  React.useEffect(() => {
+    setImgFailed(false);
+  }, [avatarUrl]);
+
   const initials = (name || "User")
     .split(" ")
     .map((w) => w[0])
@@ -64,7 +70,7 @@ export default function ChatAvatar({ name, avatarUrl, size = 44, online = false,
         />
       )}
       
-      {avatarUrl ? (
+      {avatarUrl && !imgFailed ? (
         <div
           style={{
             position: "absolute",
@@ -74,7 +80,7 @@ export default function ChatAvatar({ name, avatarUrl, size = 44, online = false,
             background: COLORS.paper
           }}
         >
-          <img src={avatarUrl} alt={name} className="w-full h-full object-cover" />
+          <img src={avatarUrl} alt={name} onError={() => setImgFailed(true)} className="w-full h-full object-cover" />
         </div>
       ) : (
         <div

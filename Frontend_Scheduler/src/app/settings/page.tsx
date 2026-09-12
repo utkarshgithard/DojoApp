@@ -35,7 +35,23 @@ const getCroppedImg = async (imageSrc: string, pixelCrop: Area): Promise<string>
 
   return canvas.toDataURL('image/jpeg', 0.9);
 };
+
+/** Convert a base64 data URL into a File so the avatar is uploaded as a real file, never stored as base64. */
+const dataUrlToFile = (dataUrl: string, fileName: string): File | null => {
+  try {
+    const [meta, base64] = dataUrl.split(',');
+    if (!meta || !base64) return null;
+    const mimeMatch = meta.match(/^data:(.+?);base64$/);
+    if (!mimeMatch) return null;
+    const arr = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+    return new File([arr], fileName, { type: mimeMatch[1] });
+  } catch {
+    return null;
+  }
+};
 import { toast } from 'sonner';
+import { compressAvatar } from '@/lib/compressImage';
+import { safeSetItem } from '@/lib/safeStorage';
 import { auth } from '@/lib/firebase';
 import {
   isPushSupported,
@@ -58,6 +74,9 @@ export default function SettingsPage() {
 
   const [cropModalOpen, setCropModalOpen] = useState(false);
   const [imageToCrop, setImageToCrop] = useState<string | null>(null);
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
   const [croppedAreaPixels, setCroppedAreaPixels] = useState<Area | null>(null);
@@ -196,7 +215,12 @@ export default function SettingsPage() {
     if (!imageToCrop || !croppedAreaPixels) return;
     try {
       const croppedImage = await getCroppedImg(imageToCrop, croppedAreaPixels);
-      setUserData(prev => ({ ...prev, avatarUrl: croppedImage }));
+      const croppedFile = dataUrlToFile(croppedImage, 'avatar.jpg');
+      if (croppedFile) {
+        setAvatarFile(croppedFile);
+        // Preview from a short-lived object URL — never keep base64 in state/localStorage.
+        setAvatarPreview(URL.createObjectURL(croppedFile));
+      }
       setCropModalOpen(false);
       setImageToCrop(null);
     } catch (e) {
@@ -207,27 +231,75 @@ export default function SettingsPage() {
 
   const handleSave = async () => {
     setSaving(true);
+    setUploadingAvatar(true);
     try {
+      // Upload the new avatar file to storage first — persist a URL, never base64.
+      // (Base64 data URLs previously filled localStorage quota and crashed the app.)
+      let finalAvatarUrl: string = userData.avatarUrl;
+      if (avatarFile) {
+        const compressed = await compressAvatar(avatarFile);
+        const uploaded = await uploadAvatarFile(compressed);
+        if (!uploaded) {
+          toast.error('Could not upload profile photo. Please try again.');
+          return;
+        }
+        finalAvatarUrl = uploaded;
+      }
+
       const res = await API.put('/auth/profile', {
         name: userData.name,
         bio: userData.bio,
-        avatarUrl: userData.avatarUrl,
+        avatarUrl: finalAvatarUrl,
         username: userData.username.trim().toLowerCase().replace(/^@+/, ''),
         college: selectedCollege ? selectedCollege.name : (details.college || null),
         collegeCode: selectedCollege ? (selectedCollege.code || null) : (details.collegeCode || null),
       });
       setDetails(res.data.user);
       setUserDetails(res.data.user);
-      localStorage.setItem('userDetails', JSON.stringify(res.data.user));
+      // Quota-safe: storage errors here used to crash the page.
+      safeSetItem('userDetails', JSON.stringify(res.data.user));
       if (res.data.user?.name) {
         setUserName(res.data.user.name);
       }
+      // Release the object-URL preview and clear the pending upload.
+      if (avatarPreview) URL.revokeObjectURL(avatarPreview);
+      setAvatarFile(null);
+      setAvatarPreview(null);
       toast.success('Profile settings updated successfully!');
     } catch (error) {
       console.error(error);
       toast.error('Failed to update profile settings.');
     } finally {
       setSaving(false);
+      setUploadingAvatar(false);
+    }
+  };
+
+  /** Sign + PUT an avatar file to Supabase storage via the backend, returning its public URL. */
+  const uploadAvatarFile = async (file: File): Promise<string | null> => {
+    try {
+      const { data } = await API.post('/community/media/sign', {
+        fileName: file.name,
+        mimeType: file.type || 'image/jpeg',
+        purpose: 'avatar',
+      });
+      const { uploadUrl, publicUrl } = data as { uploadUrl: string; publicUrl: string };
+
+      await new Promise<void>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) resolve();
+          else reject(new Error(`Upload failed: ${xhr.status}`));
+        };
+        xhr.onerror = () => reject(new Error('Network error'));
+        xhr.open('PUT', uploadUrl);
+        xhr.setRequestHeader('Content-Type', file.type || 'image/jpeg');
+        xhr.send(file);
+      });
+      return publicUrl;
+    } catch (err) {
+      console.error('Avatar upload failed:', err);
+      return null;
     }
   };
 
@@ -361,9 +433,9 @@ export default function SettingsPage() {
                         className="group relative w-16 h-16 rounded-full overflow-hidden border border-gray-200 dark:border-gray-800 text-[20px] font-semibold flex items-center justify-center bg-gray-50 dark:bg-gray-900 shrink-0 cursor-pointer select-none shadow-sm transition-transform active:scale-95"
                         title="Upload profile photo"
                       >
-                        {userData.avatarUrl ? (
+                        {(avatarPreview || userData.avatarUrl) ? (
                           <img
-                            src={userData.avatarUrl}
+                            src={avatarPreview || userData.avatarUrl}
                             alt={userData.name}
                             className="w-full h-full object-cover animate-in fade-in duration-300"
                           />
@@ -573,6 +645,7 @@ export default function SettingsPage() {
                         type="button"
                         onClick={handleSave}
                         disabled={saving || usernameStatus.available === false || (
+                          !avatarFile &&
                           userData.name === (details.name || '') &&
                           userData.bio === (details.bio || '') &&
                           userData.avatarUrl === (details.avatarUrl || auth.currentUser?.photoURL || '') &&
@@ -582,7 +655,7 @@ export default function SettingsPage() {
                         )}
                         className={primaryBtn}
                       >
-                        {saving ? 'Saving changes...' : 'Save Settings'}
+                        {saving ? (uploadingAvatar ? 'Uploading photo…' : 'Saving changes...') : 'Save Settings'}
                       </button>
                     </div>
                   </div>

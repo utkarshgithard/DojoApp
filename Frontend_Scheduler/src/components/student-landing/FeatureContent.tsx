@@ -36,7 +36,7 @@ function DirectionBadge({ feature, accent, badgeBg, badgeShadow }: { feature: ty
       <span
         className="rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.22em]"
         style={{
-          fontFamily: "'JetBrains Mono', monospace",
+          fontFamily: "var(--font-serif)",
           color: accent,
           background: badgeBg,
           boxShadow: badgeShadow,
@@ -87,7 +87,7 @@ export function FeatureContent({ activeIndex, total }: Props) {
               <h2
                 className="mb-3 text-3xl font-bold leading-tight tracking-tight transition-colors md:text-4xl"
                 style={{
-                  fontFamily: "'Plus Jakarta Sans', sans-serif",
+                  fontFamily: "var(--font-sans)",
                   color: textPrimary,
                 }}
               >
@@ -97,7 +97,7 @@ export function FeatureContent({ activeIndex, total }: Props) {
               <p
                 className="text-sm leading-relaxed transition-colors md:text-[15px]"
                 style={{
-                  fontFamily: "Inter, sans-serif",
+                  fontFamily: "var(--font-sans)",
                   fontWeight: 400,
                   color: textSecondary,
                 }}
@@ -143,7 +143,7 @@ export function ProgressIndicator({
       <div
         className="flex items-center gap-1"
         style={{
-          fontFamily: "'JetBrains Mono', monospace",
+          fontFamily: "var(--font-serif)",
           fontSize: 12,
           color: "rgba(140,120,200,0.6)",
           letterSpacing: "0.1em",

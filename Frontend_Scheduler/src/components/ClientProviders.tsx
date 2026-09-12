@@ -20,6 +20,7 @@ import Sidebar from "./Sidebar";
 import Navbar from "./Navbar";
 import InternetStatus from "./InternetStatus";
 import OnboardingTour from "./OnboardingTour";
+import { purgePoisonedEntries } from "@/lib/safeStorage";
 import { Toaster } from "@/components/ui/sonner";
 import AuthPromptModal from "./community/AuthPromptModal";
 import AiChatbot from "./AiChatbot";
@@ -61,6 +62,8 @@ function ClientProvidersInner({ children }: { children: React.ReactNode }) {
     setMounted(true);
     const saved = localStorage.getItem('sidebarCollapsed');
     if (saved === 'true') setSidebarCollapsed(true);
+    // One-time cleanup: remove caches poisoned by the legacy base64 avatar bug.
+    purgePoisonedEntries();
   }, []);
 
   const toggleSidebar = () => {
@@ -88,7 +91,8 @@ function ClientProvidersInner({ children }: { children: React.ReactNode }) {
       )}
       <Toaster />
       <AuthPromptModal />
-      {!pathname.startsWith('/chat') && <AiChatbot />}
+      {/* AI chatbot hidden for now */}
+      {/* {!pathname.startsWith('/chat') && <AiChatbot />} */}
     </>
   );
 }

@@ -5,6 +5,8 @@ import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/context/authContext';
 import { useDarkMode } from '@/context/DarkModeContext';
 import { useCommunityGroups, CommunityGroup } from '@/context/CommunityGroupContext';
+import SafeImage from '@/components/SafeImage';
+import SafeAvatar from '@/components/SafeAvatar';
 import API from '@/lib/axios';
 import { compressCommunityAsset } from '@/lib/compressImage';
 import {
@@ -350,16 +352,15 @@ export default function CommunitySettingsPage() {
               </label>
               
               <div className="relative h-32 w-full rounded-xl overflow-hidden bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 flex items-center justify-center group">
-                {bannerPreview ? (
-                  <img
-                    src={bannerPreview}
-                    alt="Community banner"
-                    className="absolute inset-0 w-full h-full object-cover"
-                    style={{ objectPosition: `center ${bannerPositionY}%` }}
-                  />
-                ) : (
-                  <span className={`text-[12px] font-semibold ${dark ? 'text-zinc-650' : 'text-zinc-400'}`}>Add cover banner</span>
-                )}
+                <SafeImage
+                  src={bannerPreview}
+                  alt="Community banner"
+                  className="absolute inset-0 w-full h-full object-cover"
+                  style={{ objectPosition: `center ${bannerPositionY}%` }}
+                  fallback={
+                    <span className={`text-[12px] font-semibold ${dark ? 'text-zinc-650' : 'text-zinc-400'}`}>Add cover banner</span>
+                  }
+                />
                 <div
                   className="absolute inset-0 bg-black/10 group-hover:bg-black/35 transition-all cursor-pointer flex items-center justify-center"
                   onClick={() => bannerInputRef.current?.click()}
@@ -373,13 +374,16 @@ export default function CommunitySettingsPage() {
                   onClick={(e) => { e.stopPropagation(); avatarInputRef.current?.click(); }}
                   style={{ borderColor: dark ? '#09090b' : '#ffffff', backgroundColor: dark ? '#18181b' : '#f4f4f5' }}
                 >
-                  {avatarPreview ? (
-                    <img src={avatarPreview} alt="Community avatar" className="w-full h-full object-contain bg-black/5 dark:bg-white/5" />
-                  ) : (
-                    <span className={`text-xl font-bold ${dark ? 'text-zinc-450' : 'text-zinc-400'}`}>
-                      {name ? name.charAt(0).toUpperCase() : '?'}
-                    </span>
-                  )}
+                  <SafeImage
+                    src={avatarPreview}
+                    alt="Community avatar"
+                    className="w-full h-full object-contain bg-black/5 dark:bg-white/5"
+                    fallback={
+                      <span className={`text-xl font-bold ${dark ? 'text-zinc-450' : 'text-zinc-400'}`}>
+                        {name ? name.charAt(0).toUpperCase() : '?'}
+                      </span>
+                    }
+                  />
                   <div className="absolute inset-0 bg-black/0 group-hover/avatar:bg-black/40 flex items-center justify-center transition-all">
                     <Camera size={16} className="text-white opacity-0 group-hover/avatar:opacity-100 transition-all" />
                   </div>
@@ -501,13 +505,8 @@ export default function CommunitySettingsPage() {
                   <div key={member.userId} className="flex items-center justify-between py-3.5 gap-4">
                     <div className="flex items-center gap-3">
                       {/* Avatar */}
-                      <div className="w-10 h-10 rounded-full overflow-hidden bg-zinc-200 dark:bg-zinc-800 shrink-0 flex items-center justify-center font-bold">
-                        {member.user.avatarUrl ? (
-                          <img src={member.user.avatarUrl} alt="" className="w-full h-full object-cover" />
-                        ) : (
-                          member.user.name.charAt(0).toUpperCase()
-                        )}
-                      </div>
+                      {/* SafeAvatar: initials fallback for members without a photo or with a broken URL */}
+                      <SafeAvatar name={member.user.name} avatarUrl={member.user.avatarUrl} size={40} />
                       <div>
                         <div className="flex items-center gap-1.5">
                           <span className="text-[14px] font-semibold">{member.user.name}</span>

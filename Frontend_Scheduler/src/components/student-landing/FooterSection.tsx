@@ -45,7 +45,7 @@ export function FooterSection() {
           <h2
             className="text-3xl font-bold tracking-tight text-[var(--neo-text-primary)] md:text-4xl mb-4"
             style={{
-              fontFamily: "'Plus Jakarta Sans', sans-serif",
+              fontFamily: "var(--font-sans)",
               color: textPrimary,
             }}
           >
@@ -54,7 +54,7 @@ export function FooterSection() {
           <p
             className="text-sm max-w-lg mx-auto mb-8 leading-relaxed"
             style={{
-              fontFamily: "Inter, sans-serif",
+              fontFamily: "var(--font-sans)",
               color: textSecondary,
             }}
           >
@@ -66,7 +66,7 @@ export function FooterSection() {
               href="/register"
               className="neo-button flex items-center gap-2 rounded-full px-8 py-3.5 text-sm font-semibold transition-all duration-200 hover:scale-[1.03] text-white"
               style={{
-                fontFamily: "Inter, sans-serif",
+                fontFamily: "var(--font-sans)",
                 background: `linear-gradient(135deg, ${accent}, ${darkMode ? "#34d399" : "#34d399"})`,
               }}
             >
@@ -76,7 +76,7 @@ export function FooterSection() {
               href="/login"
               className="rounded-full px-6 py-3.5 text-sm font-semibold transition-all duration-200 hover:scale-[1.03] flex items-center justify-center"
               style={{
-                fontFamily: "Inter, sans-serif",
+                fontFamily: "var(--font-sans)",
                 color: textPrimary,
                 boxShadow: insetShadow,
               }}
@@ -96,7 +96,7 @@ export function FooterSection() {
             <span
               className="text-lg font-bold tracking-wide"
               style={{
-                fontFamily: "'Plus Jakarta Sans', sans-serif",
+                fontFamily: "var(--font-sans)",
                 color: textPrimary,
               }}
             >
@@ -117,7 +117,7 @@ export function FooterSection() {
                 href={link.path}
                 className="rounded-full px-4.5 py-2 text-xs font-semibold transition-all duration-200 hover:scale-[1.03] flex items-center justify-center"
                 style={{
-                  fontFamily: "Inter, sans-serif",
+                  fontFamily: "var(--font-sans)",
                   color: textSecondary,
                   boxShadow: navLinkShadow,
                   background: bgStyle,
@@ -132,7 +132,7 @@ export function FooterSection() {
           <span
             className="text-[10px]"
             style={{
-              fontFamily: "'JetBrains Mono', monospace",
+              fontFamily: "var(--font-serif)",
               color: textSecondary,
             }}
           >

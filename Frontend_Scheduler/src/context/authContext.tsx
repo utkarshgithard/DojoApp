@@ -3,6 +3,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import { auth } from '@/lib/firebase';
 import { onIdTokenChanged, signOut } from 'firebase/auth';
 import API from '@/lib/axios';
+import { safeSetItem, hasGiantDataUrl } from '@/lib/safeStorage';
 
 import { AuthContextType, User } from '@/lib/types';
 
@@ -26,7 +27,15 @@ const AuthProvider = (props: { children: React.ReactNode }) => {
   const [userDetails, setUserDetails] = useState<User | null>(() => {
     try {
       const cached = localStorage.getItem('userDetails');
-      return cached ? (JSON.parse(cached) as User) : null;
+      if (!cached) return null;
+      const parsed = JSON.parse(cached) as User;
+      // Purge any legacy cache entry containing a huge base64 data-URL avatar —
+      // it bloats storage quota and broke pages app-wide.
+      if (parsed?.avatarUrl?.startsWith('data:')) {
+        localStorage.removeItem('userDetails');
+        return null;
+      }
+      return parsed;
     } catch {
       return null;
     }
@@ -100,9 +109,15 @@ const AuthProvider = (props: { children: React.ReactNode }) => {
           if (res.data.user.name) {
             setUserName(res.data.user.name);
           }
-          // ✅ Persist fresh data so next load is instant
+          // ✅ Persist fresh data so next load is instant.
+          // Never persist a base64 data-URL avatar — it can blow the storage quota.
           try {
-            localStorage.setItem('userDetails', JSON.stringify(res.data.user));
+            const serialized = JSON.stringify(res.data.user);
+            if (hasGiantDataUrl(serialized)) {
+              localStorage.removeItem('userDetails');
+            } else {
+              safeSetItem('userDetails', serialized);
+            }
           } catch { /* storage quota exceeded — not critical */ }
         }
       })

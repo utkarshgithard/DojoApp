@@ -75,7 +75,7 @@ function Eyebrow({ direction, label, isActive }: { direction: string; label: str
           background: darkMode ? "#2b2f38" : "#e4e9f2",
           boxShadow: badgeShadow,
           color: isActive ? accent : textSecondary,
-          fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+          fontFamily: "var(--font-sans)",
           transition: "color 0.4s"
         }}
       >
@@ -107,7 +107,7 @@ function CardHeadline({ children, isActive }: { children: React.ReactNode; isAct
   const textPrimary = darkMode ? "#e7ebf2" : "#2e3a4f";
   const textSecondary = darkMode ? "#8b94a7" : "#6b7588";
   return (
-    <h4 className="text-[15px] xl:text-[20px] font-bold leading-snug tracking-tight" style={{ color: isActive ? textPrimary : textSecondary, fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif", transition: "color 0.4s" }}>
+    <h4 className="text-[15px] xl:text-[20px] font-bold leading-snug tracking-tight" style={{ color: isActive ? textPrimary : textSecondary, fontFamily: "var(--font-sans)", transition: "color 0.4s" }}>
       {children}
     </h4>
   );
@@ -118,7 +118,7 @@ function QuoteLine({ children, isActive }: { children: React.ReactNode; isActive
   const accent = darkMode ? "#5fd99a" : "#4caf82";
   const textSecondary = darkMode ? "#8b94a7" : "#6b7588";
   return (
-    <div className="pl-2 xl:pl-3 border-l-2 text-[12px] xl:text-[15px] leading-relaxed" style={{ borderColor: isActive ? accent : "rgba(100,100,120,0.15)", color: isActive ? (darkMode ? "#e7ebf2" : "#2e3a4f") : textSecondary, fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif", transition: "border-color 0.4s, color 0.4s" }}>
+    <div className="pl-2 xl:pl-3 border-l-2 text-[12px] xl:text-[15px] leading-relaxed" style={{ borderColor: isActive ? accent : "rgba(100,100,120,0.15)", color: isActive ? (darkMode ? "#e7ebf2" : "#2e3a4f") : textSecondary, fontFamily: "var(--font-sans)", transition: "border-color 0.4s, color 0.4s" }}>
       {children}
     </div>
   );
@@ -132,10 +132,10 @@ function StatsRow({ stats, isActive }: { stats: { value: string | number; label:
     <div className="flex items-start gap-3 xl:gap-4">
       {stats.map((s, i) => (
         <div key={i} className="flex flex-col">
-          <span className="text-[14px] xl:text-[18px] font-bold leading-none tracking-tight" style={{ color: isActive ? textPrimary : textSecondary, fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif", transition: "color 0.4s" }}>
+          <span className="text-[14px] xl:text-[18px] font-bold leading-none tracking-tight" style={{ color: isActive ? textPrimary : textSecondary, fontFamily: "var(--font-sans)", transition: "color 0.4s" }}>
             {s.isCounter ? <AnimatedCounter target={s.target ?? 0} isActive={isActive} suffix={s.suffix ?? ""} /> : s.value}
           </span>
-          <span className="text-[8px] xl:text-[9px] mt-0.5 leading-tight" style={{ color: textSecondary, fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif", transition: "color 0.4s" }}>
+          <span className="text-[8px] xl:text-[9px] mt-0.5 leading-tight" style={{ color: textSecondary, fontFamily: "var(--font-sans)", transition: "color 0.4s" }}>
             {s.label}
           </span>
         </div>
@@ -162,7 +162,7 @@ function CardCTA({ label, isActive, onClick }: { label: string; isActive: boolea
         boxShadow: buttonShadow,
         border: "none",
         color: isActive ? accent : textSecondary,
-        fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+        fontFamily: "var(--font-sans)",
         transition: "background 0.4s, color 0.4s"
       }}>
       <span>{label}</span>
@@ -277,7 +277,7 @@ export function AttendanceCard({ isActive, index = 0, isLeftSide = false }: Card
             borderTop: darkMode ? "1px solid rgba(255, 255, 255, 0.05)" : "1px solid #ffffff",
             boxShadow: darkMode ? "0 -1px 0 rgba(0, 0, 0, 0.5)" : "0 -1px 0 #c7cedb",
             color: textSecondary,
-            fontFamily: "'Plus Jakarta Sans', sans-serif"
+            fontFamily: "var(--font-sans)"
           }}
         >
           <span>updated automatically</span>
@@ -303,7 +303,7 @@ export function AnalyticsCard({ isActive, index = 1, isLeftSide = false }: CardP
             <div className="w-full rounded-sm relative overflow-hidden h-6 xl:h-8" style={{ background: "rgba(60,45,100,0.35)", border: "1px solid rgba(80,60,140,0.2)" }}>
               <motion.div className="absolute bottom-0 w-full rounded-sm" style={{ background: i === 3 ? "linear-gradient(to top, #a855f7, #c084fc)" : "linear-gradient(to top, #7c3aed, #a855f7)" }} initial={{ height: 0 }} animate={{ height: isActive ? `${bar.h}%` : "0%" }} transition={{ duration: 0.7, delay: 0.2 + i * 0.08, ease: [0.22, 1, 0.36, 1] }} />
             </div>
-            <span className="text-[7px] xl:text-[8px] font-medium" style={{ color: isActive ? "rgba(160,140,220,0.6)" : "rgba(90,70,140,0.3)", fontFamily: "'Plus Jakarta Sans', sans-serif", transition: "color 0.4s" }}>{bar.label}</span>
+            <span className="text-[7px] xl:text-[8px] font-medium" style={{ color: isActive ? "rgba(160,140,220,0.6)" : "rgba(90,70,140,0.3)", fontFamily: "var(--font-sans)", transition: "color 0.4s" }}>{bar.label}</span>
           </div>
         ))}
       </div>
@@ -332,11 +332,11 @@ export function SessionRoomsCard({ isActive, index = 2, isLeftSide = false }: Ca
           ))}
           <AnimatePresence>
             {isActive && (
-              <motion.div initial={{ scale: 0, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0, opacity: 0 }} transition={{ delay: 0.4, type: "spring", stiffness: 400, damping: 22 }} className="relative w-5.5 h-5.5 xl:w-7 xl:h-7 rounded-full border xl:border-2 flex items-center justify-center text-[7.5px] xl:text-[9px] font-bold ml-[-6px] xl:ml-[-8px]" style={{ background: "rgba(100,70,200,0.3)", borderColor: "#12101e", color: "rgba(180,150,255,0.85)", fontFamily: "'Plus Jakarta Sans', sans-serif" }}>+12</motion.div>
+              <motion.div initial={{ scale: 0, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0, opacity: 0 }} transition={{ delay: 0.4, type: "spring", stiffness: 400, damping: 22 }} className="relative w-5.5 h-5.5 xl:w-7 xl:h-7 rounded-full border xl:border-2 flex items-center justify-center text-[7.5px] xl:text-[9px] font-bold ml-[-6px] xl:ml-[-8px]" style={{ background: "rgba(100,70,200,0.3)", borderColor: "#12101e", color: "rgba(180,150,255,0.85)", fontFamily: "var(--font-sans)" }}>+12</motion.div>
             )}
           </AnimatePresence>
         </div>
-        <motion.span animate={{ opacity: isActive ? 1 : 0 }} transition={{ delay: 0.5, duration: 0.4 }} className="text-[8px] xl:text-[10px]" style={{ color: "rgba(140,120,220,0.7)", fontFamily: "'Plus Jakarta Sans', sans-serif" }}>active now</motion.span>
+        <motion.span animate={{ opacity: isActive ? 1 : 0 }} transition={{ delay: 0.5, duration: 0.4 }} className="text-[8px] xl:text-[10px]" style={{ color: "rgba(140,120,220,0.7)", fontFamily: "var(--font-sans)" }}>active now</motion.span>
       </div>
       <CardCTA label="Join a Session" isActive={isActive} />
     </NeumorphicCard>
@@ -359,12 +359,12 @@ export function CommunityCard({ isActive, index = 3, isLeftSide = false }: CardP
       <StatsRow isActive={isActive} stats={[{ value: "3", label: "New posts" }, { value: "120+", label: "Active members" }]} />
       <div className="flex flex-wrap gap-1.5">
         {tags.map((tag, i) => (
-          <motion.span key={i} initial={{ opacity: 0, scale: 0.85 }} animate={isActive ? { opacity: 1, scale: 1 } : { opacity: 0.25, scale: 0.9 }} transition={{ delay: 0.15 + i * 0.07, duration: 0.35, ease: [0.22, 1, 0.36, 1] }} className="flex items-center gap-1 px-1.5 py-0.5 xl:px-2 rounded-full text-[8px] xl:text-[9.5px] font-semibold" style={{ background: darkMode ? "rgba(60,45,100,0.5)" : "rgba(130,100,220,0.15)", border: darkMode ? "1px solid rgba(100,80,180,0.25)" : "1px solid rgba(130,100,200,0.3)", color: tag.color, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+          <motion.span key={i} initial={{ opacity: 0, scale: 0.85 }} animate={isActive ? { opacity: 1, scale: 1 } : { opacity: 0.25, scale: 0.9 }} transition={{ delay: 0.15 + i * 0.07, duration: 0.35, ease: [0.22, 1, 0.36, 1] }} className="flex items-center gap-1 px-1.5 py-0.5 xl:px-2 rounded-full text-[8px] xl:text-[9.5px] font-semibold" style={{ background: darkMode ? "rgba(60,45,100,0.5)" : "rgba(130,100,220,0.15)", border: darkMode ? "1px solid rgba(100,80,180,0.25)" : "1px solid rgba(130,100,200,0.3)", color: tag.color, fontFamily: "var(--font-sans)" }}>
             <span className="w-1 h-1 xl:w-1.5 xl:h-1.5 rounded-full shrink-0" style={{ background: tag.color }} />
             {tag.label}
           </motion.span>
         ))}
-        <div className="relative flex items-center gap-1 px-1.5 py-0.5 xl:px-2 rounded-full text-[8px] xl:text-[9.5px] font-semibold" style={{ background: darkMode ? "rgba(60,45,100,0.5)" : "rgba(130,100,220,0.15)", border: darkMode ? "1px solid rgba(100,80,180,0.25)" : "1px solid rgba(130,100,200,0.3)", color: darkMode ? "rgba(200,170,255,0.9)" : "rgba(107,33,168,0.9)", fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+        <div className="relative flex items-center gap-1 px-1.5 py-0.5 xl:px-2 rounded-full text-[8px] xl:text-[9.5px] font-semibold" style={{ background: darkMode ? "rgba(60,45,100,0.5)" : "rgba(130,100,220,0.15)", border: darkMode ? "1px solid rgba(100,80,180,0.25)" : "1px solid rgba(130,100,200,0.3)", color: darkMode ? "rgba(200,170,255,0.9)" : "rgba(107,33,168,0.9)", fontFamily: "var(--font-sans)" }}>
           <span className="relative w-1 h-1 xl:w-1.5 xl:h-1.5 rounded-full bg-purple-500 shrink-0" />
           3 New
         </div>
@@ -388,7 +388,7 @@ export function ManagementCard({ isActive, index = 4, isLeftSide = false }: Card
         {tasks.map((task, i) => (
           <motion.div key={i} initial={{ opacity: 0, y: 5 }} animate={isActive ? { opacity: 1, y: 0 } : { opacity: 0.3, y: 4 }} transition={{ delay: 0.2 + i * 0.1, duration: 0.45, ease: [0.22, 1, 0.36, 1] }} className="flex flex-col gap-1.5 px-2 py-1.5 xl:px-2.5 xl:py-2 rounded-lg" style={{ background: darkMode ? "rgba(50,38,90,0.4)" : "rgba(130,100,220,0.12)", border: darkMode ? "1px solid rgba(90,70,160,0.2)" : "1px solid rgba(130,100,220,0.25)" }}>
             <div className="flex items-center justify-between">
-              <span className="text-[8px] xl:text-[10px] font-semibold" style={{ color: darkMode ? "rgba(200,185,255,0.75)" : "rgba(70,50,110,0.85)", fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{task.label}</span>
+              <span className="text-[8px] xl:text-[10px] font-semibold" style={{ color: darkMode ? "rgba(200,185,255,0.75)" : "rgba(70,50,110,0.85)", fontFamily: "var(--font-sans)" }}>{task.label}</span>
               <motion.div className="w-5.5 h-3 xl:w-7 xl:h-3.5 rounded-full flex items-center px-[2px] xl:px-[3px]" animate={{ background: isActive && task.on ? (darkMode ? "rgba(120,70,220,0.7)" : "rgba(100,50,200,0.6)") : (darkMode ? "rgba(60,50,100,0.5)" : "rgba(180,170,220,0.4)"), justifyContent: isActive && task.on ? "flex-end" : "flex-start" }} transition={{ duration: 0.4 }}>
                 <motion.div className="w-2 h-2 xl:w-2.5 xl:h-2.5 rounded-full shadow-sm" style={{ background: "rgba(255,255,255,0.95)" }} layout transition={{ type: "spring", stiffness: 500, damping: 30 }} />
               </motion.div>
@@ -414,7 +414,7 @@ export function JourneyCard({ isActive, index = 5, isLeftSide = false }: CardPro
       <QuoteLine isActive={isActive}>Your first step is free, forever.</QuoteLine>
       <StatsRow isActive={isActive} stats={[{ value: "< 5 min", label: "Setup time" }, { value: "Forever", label: "Free tier" }, { value: "48K+", label: "Students" }]} />
       <motion.button onClick={() => router.push("/register")} whileHover={{ scale: isActive ? 1.04 : 1 }} whileTap={{ scale: isActive ? 0.97 : 1 }} className="w-full flex items-center justify-between px-3 py-2.5 xl:px-4 xl:py-3 rounded-xl text-[10px] xl:text-[13px] font-bold overflow-hidden relative shadow-md hover:shadow-lg"
-        style={{ background: isActive ? "linear-gradient(135deg, #7c3aed, #a855f7)" : "rgba(40,30,80,0.15)", border: `1px solid ${isActive ? "rgba(168,85,247,0.4)" : "rgba(60,50,120,0.15)"}`, color: isActive ? "#ffffff" : "rgba(120,100,180,0.4)", fontFamily: "'Plus Jakarta Sans', sans-serif", transition: "background 0.4s, border-color 0.4s, color 0.4s", boxShadow: isActive ? "0 4px 20px rgba(124,58,237,0.35)" : "none" }}>
+        style={{ background: isActive ? "linear-gradient(135deg, #7c3aed, #a855f7)" : "rgba(40,30,80,0.15)", border: `1px solid ${isActive ? "rgba(168,85,247,0.4)" : "rgba(60,50,120,0.15)"}`, color: isActive ? "#ffffff" : "rgba(120,100,180,0.4)", fontFamily: "var(--font-sans)", transition: "background 0.4s, border-color 0.4s, color 0.4s", boxShadow: isActive ? "0 4px 20px rgba(124,58,237,0.35)" : "none" }}>
         <AnimatePresence>
           {isActive && (
             <motion.div initial={{ x: "-100%", opacity: 0 }} animate={{ x: "200%", opacity: [0, 0.35, 0] }} transition={{ duration: 2.2, delay: 0.5, repeat: Infinity, repeatDelay: 3.5, ease: "easeInOut" }} className="absolute inset-0 bg-gradient-to-r from-transparent via-white/15 to-transparent pointer-events-none" />

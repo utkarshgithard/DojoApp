@@ -59,7 +59,7 @@ export function HowItWorksSection() {
           <span
             className="text-[11px] font-semibold uppercase tracking-[0.25em]"
             style={{
-              fontFamily: "'JetBrains Mono', monospace",
+              fontFamily: "var(--font-serif)",
               color: accent,
             }}
           >
@@ -68,7 +68,7 @@ export function HowItWorksSection() {
           <h2
             className="mt-3 text-3xl font-bold tracking-tight md:text-4xl"
             style={{
-              fontFamily: "'Plus Jakarta Sans', sans-serif",
+              fontFamily: "var(--font-sans)",
               color: textPrimary,
             }}
           >
@@ -125,7 +125,7 @@ export function HowItWorksSection() {
                   style={{
                     boxShadow: insetShadow,
                     color: accent,
-                    fontFamily: "'JetBrains Mono', monospace",
+                    fontFamily: "var(--font-serif)",
                   }}
                 >
                   {num}
@@ -145,7 +145,7 @@ export function HowItWorksSection() {
                 <h3
                   className="mb-3 text-lg font-bold"
                   style={{
-                    fontFamily: "'Plus Jakarta Sans', sans-serif",
+                    fontFamily: "var(--font-sans)",
                     color: textPrimary,
                   }}
                 >
@@ -155,7 +155,7 @@ export function HowItWorksSection() {
                 <p
                   className="text-xs leading-relaxed"
                   style={{
-                    fontFamily: "Inter, sans-serif",
+                    fontFamily: "var(--font-sans)",
                     color: textSecondary,
                   }}
                 >

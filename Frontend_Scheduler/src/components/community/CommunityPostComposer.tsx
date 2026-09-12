@@ -10,6 +10,7 @@ import {
 import { auth } from '@/lib/firebase';
 import { toast } from 'sonner';
 import { compressPostImage } from '@/lib/compressImage';
+import SafeAvatar from '@/components/SafeAvatar';
 
 const EmojiPicker = dynamic(() => import('emoji-picker-react'), {
   ssr: false,
@@ -798,16 +799,14 @@ export default function CommunityPostComposer({
 
   const getAvatar = () => {
     const avatarToRender = currentUser.avatarUrl || auth.currentUser?.photoURL;
-    if (avatarToRender) {
-      return (
-        <img src={avatarToRender} alt={currentUser.name} referrerPolicy="no-referrer"
-          className="w-9 h-9 sm:w-10 sm:h-10 rounded-full object-cover shrink-0 ring-2 ring-indigo-500/20" />
-      );
-    }
+    // SafeAvatar falls back to initials when the URL is missing or broken.
     return (
-      <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center text-[14px] font-bold shrink-0 shadow-inner ${dark ? 'bg-zinc-800 text-zinc-200' : 'bg-zinc-200 text-zinc-700'}`}>
-        {(currentUser?.name || 'U').charAt(0).toUpperCase()}
-      </div>
+      <SafeAvatar
+        name={currentUser?.name || 'U'}
+        avatarUrl={avatarToRender}
+        size={40}
+        className="ring-2 ring-indigo-500/20"
+      />
     );
   };
 
@@ -1167,13 +1166,8 @@ export default function CommunityPostComposer({
                       : dark ? 'hover:bg-zinc-900 text-zinc-200' : 'hover:bg-zinc-50 text-zinc-800'
                       }`}
                   >
-                    <div className="w-7 h-7 rounded-full bg-indigo-500/20 text-indigo-500 flex items-center justify-center font-bold text-[12px] shrink-0">
-                      {friend.avatarUrl ? (
-                        <img src={friend.avatarUrl} alt="" className="w-full h-full rounded-full object-cover" />
-                      ) : (
-                        friend.name.charAt(0).toUpperCase()
-                      )}
-                    </div>
+                    {/* SafeAvatar: initials fallback when the friend has no photo or it fails to load */}
+                    <SafeAvatar name={friend.name} avatarUrl={friend.avatarUrl} size={28} fallbackClassName="text-[12px] bg-indigo-500/20" />
                     <div className="min-w-0 flex-1">
                       <div className="text-[13px] leading-tight font-medium truncate">{friend.name}</div>
                       {friend.username && (

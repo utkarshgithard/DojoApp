@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useState, useCallback } from 'react';
 import API from '@/lib/axios';
+import { safeSetItem, hasGiantDataUrl } from '@/lib/safeStorage';
 
 export interface PostAuthor {
   id: string;
@@ -123,6 +124,11 @@ export const CommunityProvider = ({ children }: { children: React.ReactNode }) =
     if (typeof window !== 'undefined') {
       const cached = localStorage.getItem(POST_CACHE_KEY);
       if (cached) {
+        // Legacy poisoned caches contain multi-MB base64 avatars — drop them.
+        if (hasGiantDataUrl(cached)) {
+          localStorage.removeItem(POST_CACHE_KEY);
+          return;
+        }
         try {
           const parsed = JSON.parse(cached) as { savedAt?: number; posts?: unknown[] } | unknown[];
           const cachedPosts = Array.isArray(parsed) ? parsed : parsed.posts;
@@ -144,7 +150,8 @@ export const CommunityProvider = ({ children }: { children: React.ReactNode }) =
   React.useEffect(() => {
     postsRef.current = posts;
     if (typeof window !== 'undefined' && posts.length > 0) {
-      localStorage.setItem(POST_CACHE_KEY, JSON.stringify({
+      // Never fatal: quota errors here used to crash every page.
+      safeSetItem(POST_CACHE_KEY, JSON.stringify({
         savedAt: Date.now(),
         posts: posts.slice(0, 20),
       }));

@@ -9,6 +9,7 @@ import CommunityGroupCard from '@/components/community/CommunityGroupCard';
 import CommunityGroupCardSkeleton from '@/components/community/CommunityGroupCardSkeleton';
 import CreateCommunityModal from '@/components/community/CreateCommunityModal';
 import { Users2, Search, Plus, ArrowLeft, Compass, MailOpen, Check, Trash2, X, Loader2 } from 'lucide-react';
+import SafeImage from '@/components/SafeImage';
 
 export default function DiscoverCommunitiesPage() {
   const router = useRouter();
@@ -242,13 +243,16 @@ export default function DiscoverCommunitiesPage() {
                     <div className={`w-10 h-10 rounded-lg border flex items-center justify-center overflow-hidden shrink-0 ${
                       dark ? 'border-zinc-800 bg-zinc-850' : 'border-zinc-200 bg-zinc-100'
                     }`}>
-                      {inv.community.avatarUrl ? (
-                        <img src={inv.community.avatarUrl} alt="" className="w-full h-full object-contain bg-black/5 dark:bg-white/5" />
-                      ) : (
-                        <span className={`text-[14px] font-bold ${dark ? 'text-indigo-400' : 'text-indigo-650'}`}>
-                          {inv.community.name.charAt(0).toUpperCase()}
-                        </span>
-                      )}
+                      <SafeImage
+                        src={inv.community.avatarUrl}
+                        alt=""
+                        className="w-full h-full object-contain bg-black/5 dark:bg-white/5"
+                        fallback={
+                          <span className={`text-[14px] font-bold ${dark ? 'text-indigo-400' : 'text-indigo-650'}`}>
+                            {inv.community.name.charAt(0).toUpperCase()}
+                          </span>
+                        }
+                      />
                     </div>
                     <div className="min-w-0">
                       <h4 className={`text-[13px] font-bold truncate leading-tight ${dark ? 'text-white' : 'text-zinc-900'}`}>

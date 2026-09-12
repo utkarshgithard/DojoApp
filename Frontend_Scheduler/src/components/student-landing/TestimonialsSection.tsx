@@ -65,7 +65,7 @@ export function TestimonialsSection() {
           <span
             className="text-[11px] font-semibold uppercase tracking-[0.25em]"
             style={{
-              fontFamily: "'JetBrains Mono', monospace",
+              fontFamily: "var(--font-serif)",
               color: accent,
             }}
           >
@@ -74,7 +74,7 @@ export function TestimonialsSection() {
           <h2
             className="mt-3 text-3xl font-bold tracking-tight md:text-4xl"
             style={{
-              fontFamily: "'Plus Jakarta Sans', sans-serif",
+              fontFamily: "var(--font-sans)",
               color: textPrimary,
             }}
           >
@@ -99,7 +99,7 @@ export function TestimonialsSection() {
               <p
                 className="mb-6 text-sm italic leading-relaxed"
                 style={{
-                  fontFamily: "Inter, sans-serif",
+                  fontFamily: "var(--font-sans)",
                   color: textSecondary,
                 }}
               >
@@ -114,7 +114,7 @@ export function TestimonialsSection() {
                   <span
                     className="text-xs font-bold"
                     style={{
-                      fontFamily: "'Plus Jakarta Sans', sans-serif",
+                      fontFamily: "var(--font-sans)",
                       color: textPrimary,
                     }}
                   >
@@ -123,7 +123,7 @@ export function TestimonialsSection() {
                   <span
                     className="text-[10px]"
                     style={{
-                      fontFamily: "Inter, sans-serif",
+                      fontFamily: "var(--font-sans)",
                       color: textSecondary,
                     }}
                   >
@@ -152,7 +152,7 @@ export function TestimonialsSection() {
             <p
               className="mb-5 text-xs italic leading-relaxed"
               style={{
-                fontFamily: "Inter, sans-serif",
+                fontFamily: "var(--font-sans)",
                 color: textSecondary,
               }}
             >
@@ -167,7 +167,7 @@ export function TestimonialsSection() {
                 <span
                   className="text-xs font-bold"
                   style={{
-                    fontFamily: "'Plus Jakarta Sans', sans-serif",
+                    fontFamily: "var(--font-sans)",
                     color: textPrimary,
                   }}
                 >
@@ -176,7 +176,7 @@ export function TestimonialsSection() {
                 <span
                   className="text-[9px]"
                   style={{
-                    fontFamily: "Inter, sans-serif",
+                    fontFamily: "var(--font-sans)",
                     color: textSecondary,
                   }}
                 >

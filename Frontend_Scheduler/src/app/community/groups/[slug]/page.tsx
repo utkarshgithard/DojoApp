@@ -5,12 +5,14 @@ import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/context/authContext';
 import { useDarkMode } from '@/context/DarkModeContext';
 import { useCommunityGroups, CommunityGroup } from '@/context/CommunityGroupContext';
+import SafeImage from '@/components/SafeImage';
 import { auth } from '@/lib/firebase';
 import API from '@/lib/axios';
 import CommunityPostCard from '@/components/community/CommunityPostCard';
 import CommunityPostComposer from '@/components/community/CommunityPostComposer';
 import InviteFriendsModal from '@/components/community/InviteFriendsModal';
 import CommunityShareModal from '@/components/community/CommunityShareModal';
+import CommunityGroupDetailSkeleton from '@/components/community/CommunityGroupDetailSkeleton';
 import {
   ArrowLeft, Users, Lock, Eye, Mail, Crown, Shield, Share2,
   Settings, RefreshCw, Loader2, Plus, X
@@ -111,12 +113,9 @@ export default function CommunityHomePage() {
     handleCommunityPostDeleted(postId);
   };
 
+  // Layout-mirroring skeleton while the community data loads.
   if (authLoading || communityLoading) {
-    return (
-      <div className={`min-h-screen pt-[50px] md:pt-0 ${dark ? 'bg-[#0a0a0a]' : 'bg-[#f5f5f5]'} flex items-center justify-center`}>
-        <Loader2 size={28} className="animate-spin text-indigo-500" />
-      </div>
-    );
+    return <CommunityGroupDetailSkeleton dark={dark} />;
   }
 
   if (communityError) {
@@ -142,14 +141,13 @@ export default function CommunityHomePage() {
 
       {/* Banner */}
       <div className={`relative h-40 sm:h-56 overflow-hidden ${dark ? 'bg-gradient-to-br from-indigo-950 via-zinc-900 to-zinc-950' : 'bg-gradient-to-br from-indigo-200 via-indigo-100 to-violet-100'}`}>
-        {community.bannerUrl && (
-          <img
-            src={community.bannerUrl}
-            alt=""
-            className="w-full h-full object-cover transition-transform duration-700 hover:scale-105"
-            style={{ objectPosition: `center ${getBannerPositionY(community.bannerUrl)}%` }}
-          />
-        )}
+        {/* SafeImage: broken/missing banner URLs show the gradient instead */}
+        <SafeImage
+          src={community.bannerUrl}
+          alt=""
+          className="w-full h-full object-cover transition-transform duration-700 hover:scale-105"
+          style={{ objectPosition: `center ${getBannerPositionY(community.bannerUrl)}%` }}
+        />
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-black/30" />
         
         {/* Top Floating Actions */}
@@ -183,13 +181,16 @@ export default function CommunityHomePage() {
             <div className={`relative w-20 h-20 sm:w-24 sm:h-24 rounded-2xl border-4 overflow-hidden shrink-0 flex items-center justify-center shadow-lg transition-transform duration-300 hover:scale-105 ${
               dark ? 'border-zinc-950 bg-indigo-950 ring-2 ring-indigo-500/30' : 'border-white bg-indigo-100 ring-2 ring-indigo-300'
             }`}>
-              {community.avatarUrl ? (
-                <img src={community.avatarUrl} alt={community.name} className="w-full h-full object-contain bg-black/5 dark:bg-white/5" />
-              ) : (
-                <span className={`text-3xl font-extrabold ${dark ? 'text-indigo-300' : 'text-indigo-600'}`}>
-                  {community.name.charAt(0).toUpperCase()}
-                </span>
-              )}
+              <SafeImage
+                src={community.avatarUrl}
+                alt={community.name}
+                className="w-full h-full object-contain bg-black/5 dark:bg-white/5"
+                fallback={
+                  <span className={`text-3xl font-extrabold ${dark ? 'text-indigo-300' : 'text-indigo-600'}`}>
+                    {community.name.charAt(0).toUpperCase()}
+                  </span>
+                }
+              />
             </div>
 
             {/* Info Metadata */}
@@ -520,7 +521,7 @@ export default function CommunityHomePage() {
       {canPost && (
         <button
           onClick={() => setIsComposeOpen(true)}
-          className="fixed bottom-6 right-6 z-40 w-14 h-14 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white rounded-full flex items-center justify-center shadow-xl shadow-indigo-600/30 active:scale-90 transition-all duration-300 xl:hidden"
+          className="fixed bottom-24 right-6 z-[110] w-14 h-14 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white rounded-full flex items-center justify-center shadow-xl shadow-indigo-600/30 active:scale-90 transition-all duration-300 xl:hidden"
         >
           <Plus size={26} />
         </button>

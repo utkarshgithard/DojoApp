@@ -21,6 +21,7 @@ import calendarRouter from './routes/calendarRoutes.js';
 import examPrepRouter from './routes/examPrepRoutes.js';
 import adminRouter from './routes/adminRoutes.js';
 import prisma from './lib/prisma.js';
+import { ensurePublicBuckets } from './utils/ensureBuckets.js';
 import { setupSocketHandlers, setDbReady } from './socket.js';
 import { calculateHotScore } from './controllers/communityController.js';
 
@@ -118,6 +119,11 @@ async function connectWithRetry(attempt = 1): Promise<void> {
     setDbReady(true);
     console.log('✅ Successfully connected to the database and verified query capability!');
     startHotScoreCronJob();
+    // One-time check: all media buckets must exist and be public,
+    // otherwise avatar/media URLs return 403 and images break client-side.
+    ensurePublicBuckets().catch((err) =>
+      console.warn('[storage] ensurePublicBuckets failed:', err?.message || err)
+    );
   } catch (err: any) {
     const isNetworkError =
       err?.message?.includes("Can't reach database") ||

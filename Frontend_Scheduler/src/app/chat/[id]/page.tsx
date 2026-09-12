@@ -12,6 +12,7 @@ import { useSocket } from "@/context/SocketContext";
 import { useChat } from "@/context/ChatContext";
 import { useE2EE } from "@/context/E2EEContext";
 import type { Message } from "@/lib/types";
+import { safeSetItem } from "@/lib/safeStorage";
 
 function formatMessageDate(dateStr: string | Date) {
   const date = typeof dateStr === 'string' ? new Date(dateStr) : dateStr;
@@ -381,7 +382,8 @@ export default function FriendChatPage() {
   // One-way sync from context messages to localStorage to avoid loops
   useEffect(() => {
     if (typeof window !== "undefined" && storageKey && messages.length > 0) {
-      localStorage.setItem(storageKey, JSON.stringify(messages));
+      // Never fatal: quota errors here used to crash the chat page.
+      safeSetItem(storageKey, JSON.stringify(messages));
     }
   }, [messages, storageKey]);
 

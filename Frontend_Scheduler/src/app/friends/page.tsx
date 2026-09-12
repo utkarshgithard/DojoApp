@@ -37,13 +37,20 @@ function Avatar({
   const idx = (name || '?').charCodeAt(0) % GRADIENTS.length;
   const px = `${size}px`;
   const fontSize = size <= 28 ? '10px' : size <= 36 ? '12px' : size <= 44 ? '14px' : '16px';
+  // Broken avatar URLs (403 from storage, deleted object, etc.) must fall back
+  // to initials instead of rendering a blank/broken image.
+  const [failed, setFailed] = useState(false);
+  React.useEffect(() => {
+    setFailed(false);
+  }, [avatarUrl]);
 
-  if (avatarUrl) {
+  if (avatarUrl && !failed) {
     return (
       <img
         src={avatarUrl}
         alt={name}
         referrerPolicy="no-referrer"
+        onError={() => setFailed(true)}
         style={{ width: px, height: px }}
         className={`rounded-full object-cover shrink-0 ${className}`}
       />
@@ -105,11 +112,11 @@ function SuggestionStripCard({
   return (
     <div
       className={`
-        relative w-[170px] sm:w-[185px] shrink-0 p-3.5 sm:p-4 rounded-2xl border flex flex-col items-center text-center justify-between gap-2.5
-        transition-all duration-200 group hover:shadow-xl hover:-translate-y-0.5
+        relative w-[136px] sm:w-[185px] shrink-0 rounded-2xl flex flex-col items-center text-center justify-between gap-2.5
+        sm:p-4 sm:border sm:transition-all sm:duration-200 group sm:hover:shadow-xl sm:hover:-translate-y-0.5
         ${dark
-          ? 'bg-zinc-950 hover:bg-zinc-900/90 border-zinc-800/80 hover:border-zinc-700'
-          : 'bg-white hover:bg-zinc-50/50 border-zinc-200/90 hover:border-zinc-300 shadow-sm'}
+          ? 'sm:bg-zinc-950 sm:hover:bg-zinc-900/90 sm:border-zinc-800/80 sm:hover:border-zinc-700'
+          : 'sm:bg-white sm:hover:bg-zinc-50/50 sm:border-zinc-200/90 sm:hover:border-zinc-300 sm:shadow-sm'}
       `}
     >
       {/* Dismiss (X) button */}
@@ -117,7 +124,7 @@ function SuggestionStripCard({
         onClick={() => onDismiss(user.id)}
         aria-label="Dismiss suggestion"
         className={`
-          absolute top-2 right-2 p-1 rounded-full opacity-60 sm:opacity-0 group-hover:opacity-100
+          absolute top-1.5 right-1.5 p-1.5 rounded-full opacity-60 sm:opacity-0 group-hover:opacity-100
           transition-all duration-150 z-10
           ${dark ? 'text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800' : 'text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100'}
         `}
@@ -134,20 +141,20 @@ function SuggestionStripCard({
           <Avatar
             name={user.name}
             avatarUrl={user.avatarUrl}
-            size={54}
+            size={64}
             className="ring-2 ring-white dark:ring-zinc-950"
           />
         </div>
 
-        <div className="w-full px-1 min-w-0">
-          <p className={`text-[13.5px] font-bold leading-tight truncate hover:underline ${dark ? 'text-white' : 'text-zinc-900'}`}>
+        <div className="w-full px-0.5 min-w-0">
+          <p className={`text-[12.5px] sm:text-[13.5px] font-bold leading-tight truncate hover:underline ${dark ? 'text-white' : 'text-zinc-900'}`}>
             {user.name}
           </p>
         </div>
       </button>
 
       {/* Instagram Subtitle Reason & Mutual Avatars */}
-      <div className="flex flex-col items-center gap-1.5 w-full min-h-[38px] justify-center px-1">
+      <div className="flex flex-col items-center gap-1.5 w-full min-h-[38px] justify-center px-0.5">
         {isFollowsYou ? (
           <span className="text-[11px] font-bold text-indigo-500 dark:text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded-full">
             Follows you
@@ -159,7 +166,7 @@ function SuggestionStripCard({
         )}
 
         {previews.length > 0 && !isFollowsYou && (
-          <div className="flex items-center justify-center gap-1">
+          <div className="hidden sm:flex items-center justify-center gap-1">
             <div className="flex -space-x-1.5">
               {previews.slice(0, 3).map((p) => (
                 <Avatar
@@ -179,10 +186,11 @@ function SuggestionStripCard({
       <button
         onClick={() => onAdd(user.id, user.name)}
         disabled={isAdding}
-        className="w-full flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl text-[12px] font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm shadow-indigo-600/20 active:scale-[0.98] transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
+        className="w-full flex items-center justify-center gap-1.5 py-1.5 sm:py-2 px-3 rounded-xl text-[12px] font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm shadow-indigo-600/20 active:scale-[0.98] transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
       >
         {isAdding ? <Loader2 size={13} className="animate-spin" /> : <UserPlus size={13} />}
-        <span>{isAdding ? 'Adding…' : 'Add Friend'}</span>
+        <span className="sm:hidden">Add</span>
+        <span className="hidden sm:inline">Add Friend</span>
       </button>
     </div>
   );
@@ -234,20 +242,10 @@ function SuggestedFriendsStrip({
   }
 
   return (
-    <div className={`p-4 sm:p-5 rounded-2xl border transition-all ${dark ? 'bg-zinc-950/60 border-zinc-800/80' : 'bg-white border-zinc-200/90 shadow-sm'}`}>
+    <div className={`rounded-2xl transition-all p-3 sm:p-5 sm:border ${dark ? 'sm:bg-zinc-950/60 sm:border-zinc-800/80' : 'sm:bg-white sm:border-zinc-200/90 sm:shadow-sm'}`}>
       {/* Header */}
       <div className="flex items-center justify-between mb-3 px-0.5">
-        <div className="flex items-center gap-2.5">
-          <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${dark ? 'bg-indigo-500/15 text-indigo-400' : 'bg-indigo-50 text-indigo-600'}`}>
-            <Sparkles size={16} />
-          </div>
-          <div>
-            <h3 className="text-[14.5px] font-bold tracking-tight">People You May Know</h3>
-            <p className={`text-[11.5px] ${dark ? 'text-zinc-400' : 'text-zinc-500'}`}>
-              Suggestions based on mutual peers &amp; shared communities
-            </p>
-          </div>
-        </div>
+        
 
         <div className="flex items-center gap-1.5">
           {/* Scroll buttons for desktop */}
@@ -268,17 +266,7 @@ function SuggestedFriendsStrip({
             </button>
           </div>
 
-          <button
-            onClick={onRefresh}
-            disabled={suggestionsLoading}
-            className={`p-1.5 sm:px-2.5 sm:py-1.5 rounded-lg border text-[11.5px] font-medium flex items-center gap-1.5 transition-all
-              ${dark ? 'border-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-800' : 'border-zinc-200 text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100'}
-              disabled:opacity-40`}
-            title="Refresh suggestions"
-          >
-            <RefreshCw size={13} className={suggestionsLoading ? 'animate-spin text-indigo-500' : ''} />
-            <span className="hidden sm:inline">Refresh</span>
-          </button>
+          
         </div>
       </div>
 
@@ -288,7 +276,7 @@ function SuggestedFriendsStrip({
           {[1, 2, 3, 4].map((i) => (
             <div
               key={i}
-              className={`w-[180px] h-[190px] rounded-2xl border animate-pulse shrink-0 ${dark ? 'bg-zinc-900/40 border-zinc-800' : 'bg-zinc-100 border-zinc-200'}`}
+              className={`w-[136px] h-[178px] sm:w-[180px] sm:h-[190px] rounded-2xl border animate-pulse shrink-0 ${dark ? 'bg-zinc-900/40 border-zinc-800' : 'bg-zinc-100 border-zinc-200'}`}
             />
           ))}
         </div>
@@ -311,6 +299,75 @@ function SuggestedFriendsStrip({
           {loadingMore && <div className="w-[70px] shrink-0 flex items-center justify-center"><Loader2 size={18} className="animate-spin text-indigo-500" /></div>}
         </div>
       )}
+    </div>
+  );
+}
+
+// ── Skeleton row that mirrors a friend list row ─────────────────────────────
+function FriendRowSkeleton() {
+  return (
+    <div className="flex items-center gap-3 px-3.5 sm:px-5 py-3 sm:py-3.5 animate-pulse" aria-hidden="true">
+      <div className="w-[46px] h-[46px] rounded-full bg-zinc-200 dark:bg-zinc-800 shrink-0" />
+      <div className="flex-1 min-w-0 space-y-2">
+        <div className="h-3.5 w-32 rounded-md bg-zinc-200 dark:bg-zinc-800" />
+        <div className="h-2.5 w-44 rounded-md bg-zinc-100 dark:bg-zinc-900" />
+      </div>
+      <div className="w-9 h-9 rounded-xl bg-zinc-200 dark:bg-zinc-800 shrink-0 sm:w-[76px] sm:h-8" />
+    </div>
+  );
+}
+
+// ── Full-page skeleton mirroring the Friends page layout ────────────────────
+function FriendsPageSkeleton() {
+  return (
+    <div className="min-h-screen pt-[50px] md:pt-[24px] pb-32 bg-zinc-50/50 text-zinc-900" aria-hidden="true" role="status" aria-label="Loading friends">
+      <div className="max-w-[860px] w-full mx-auto px-4 space-y-6">
+        {/* Header bar */}
+        <div className="sticky top-0 z-20 -mx-4 px-4 py-3.5 backdrop-blur-md border-b border-zinc-200/80 bg-white/85 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-zinc-200 animate-pulse" />
+            <div className="space-y-1.5">
+              <div className="h-4 w-20 rounded-md bg-zinc-200 animate-pulse" />
+              <div className="h-2.5 w-44 rounded-md bg-zinc-100 animate-pulse" />
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-9 h-9 rounded-xl bg-zinc-200 animate-pulse" />
+            <div className="w-24 h-9 rounded-xl bg-zinc-200 animate-pulse" />
+          </div>
+        </div>
+
+        {/* Suggestions strip */}
+        <div className="flex gap-3.5 overflow-hidden py-1">
+          {[1, 2, 3, 4].map((i) => (
+            <div
+              key={i}
+              className="w-[136px] h-[178px] sm:w-[180px] sm:h-[190px] rounded-2xl border border-zinc-200 animate-pulse bg-zinc-100 shrink-0 flex flex-col items-center justify-center gap-3 px-4"
+            >
+              <div className="w-16 h-16 rounded-full bg-zinc-200" />
+              <div className="h-3 w-20 rounded-md bg-zinc-200" />
+              <div className="h-2.5 w-24 rounded-md bg-zinc-100" />
+              <div className="h-7 w-full rounded-xl bg-zinc-200 mt-1" />
+            </div>
+          ))}
+        </div>
+
+        {/* All Friends header + search */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-1">
+          <div className="flex items-center gap-2">
+            <div className="w-5 h-5 rounded bg-zinc-200 animate-pulse" />
+            <div className="h-4 w-24 rounded-md bg-zinc-200 animate-pulse" />
+          </div>
+          <div className="h-[38px] w-full sm:w-[260px] rounded-full border border-zinc-200 bg-white shadow-sm animate-pulse" />
+        </div>
+
+        {/* Friends list rows */}
+        <div className="rounded-2xl border border-zinc-200/90 bg-white shadow-sm overflow-hidden divide-y divide-zinc-100">
+          {[1, 2, 3, 4, 5, 6].map((i) => (
+            <FriendRowSkeleton key={i} />
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
@@ -426,12 +483,9 @@ export default function FriendsPage() {
   const suggestedUsers = network.suggestedUsers || [];
   const muted = dark ? 'text-zinc-400' : 'text-zinc-500';
 
+  // Layout-mirroring skeleton while auth resolves.
   if (loading) {
-    return (
-      <div className={`min-h-screen flex justify-center items-center ${dark ? 'bg-black' : 'bg-zinc-50'}`}>
-        <Loader2 size={24} className="animate-spin text-indigo-500" />
-      </div>
-    );
+    return <FriendsPageSkeleton />;
   }
 
   return (
@@ -470,10 +524,12 @@ export default function FriendsPage() {
               {userDetails?.friendCode && (
                 <button
                   onClick={handleShareInviteLink}
-                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-[12.5px] font-semibold bg-indigo-600 hover:bg-indigo-700 text-white transition-all shadow-sm shadow-indigo-600/20 active:scale-95"
+                  title={copiedLink ? 'Link Copied!' : 'Share Invite Link'}
+                  className="flex items-center gap-1.5 px-2.5 sm:px-3.5 py-2 rounded-xl text-[12.5px] font-semibold bg-indigo-600 hover:bg-indigo-700 text-white transition-all shadow-sm shadow-indigo-600/20 active:scale-95"
                 >
                   {copiedLink ? <Check size={14} className="text-emerald-300" /> : <Share2 size={14} />}
-                  <span>{copiedLink ? 'Link Copied!' : 'Share Invite Link'}</span>
+                  <span className="hidden sm:inline">Share Invite Link</span>
+                  <span className="sm:hidden">Invite</span>
                 </button>
               )}
             </div>
@@ -481,7 +537,7 @@ export default function FriendsPage() {
         </div>
 
         {/* ── Suggestions above the friends list on every screen size ── */}
-        <div className="pt-2">
+        <div className="pt-0.5">
           <SuggestedFriendsStrip
             suggestedUsers={suggestedUsers}
             suggestionsLoading={suggestionsLoading}
@@ -513,7 +569,7 @@ export default function FriendsPage() {
             </div>
 
             {/* Search */}
-            <div className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border w-full sm:w-[260px] transition-all ${dark ? 'bg-zinc-950 border-zinc-800 focus-within:border-zinc-700' : 'bg-white border-zinc-200 focus-within:border-zinc-300'}`}>
+            <div className={`flex items-center gap-2 px-3.5 py-2 rounded-full border w-full sm:w-[260px] transition-all ${dark ? 'bg-zinc-950 border-zinc-800 focus-within:border-zinc-700' : 'bg-white border-zinc-200 focus-within:border-zinc-300 shadow-sm'}`}>
               <Search size={14} className={dark ? 'text-zinc-500' : 'text-zinc-400'} />
               <input
                 type="text"
@@ -536,9 +592,11 @@ export default function FriendsPage() {
           {/* Friends List Container */}
           <div className={`rounded-2xl border overflow-hidden ${dark ? 'bg-zinc-950/60 border-zinc-800/80' : 'bg-white border-zinc-200/90 shadow-sm'}`}>
             {networkLoading ? (
-              <div className="flex flex-col justify-center items-center py-20 gap-3">
-                <Loader2 size={24} className="animate-spin text-indigo-500" />
-                <p className={`text-[13px] ${muted}`}>Loading friends…</p>
+              // Skeleton rows mirror the friend list layout while it loads.
+              <div className={`divide-y ${dark ? 'divide-zinc-900' : 'divide-zinc-100'}`}>
+                {[1, 2, 3, 4, 5, 6].map((i) => (
+                  <FriendRowSkeleton key={i} />
+                ))}
               </div>
             ) : filteredFriends.length === 0 ? (
               <div className="py-20 text-center px-6">
@@ -568,7 +626,7 @@ export default function FriendsPage() {
                 {filteredFriends.map((friend) => (
                   <div
                     key={friend.id}
-                    className={`flex items-center gap-3.5 px-4 sm:px-5 py-3.5 transition-colors ${dark ? 'hover:bg-zinc-900/30' : 'hover:bg-zinc-50/70'}`}
+                    className={`flex items-center gap-3 px-3.5 sm:px-5 py-3 sm:py-3.5 transition-colors ${dark ? 'hover:bg-zinc-900/30' : 'hover:bg-zinc-50/70'}`}
                   >
                     {/* Avatar */}
                     <button
@@ -623,18 +681,19 @@ export default function FriendsPage() {
                         onClick={() => {
                           router.push(`/chat/${friend.id}`);
                         }}
-                        className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-[12.5px] font-semibold border transition-all ${dark
+                        title="Chat"
+                        className={`flex items-center justify-center gap-1.5 w-9 h-9 sm:w-auto sm:h-auto sm:px-3.5 sm:py-1.5 rounded-xl text-[12.5px] font-semibold border transition-all ${dark
                           ? 'border-indigo-500/30 text-indigo-400 bg-indigo-500/10 hover:bg-indigo-500/20'
                           : 'border-indigo-200 text-indigo-700 bg-indigo-50 hover:bg-indigo-100'
                           }`}
                       >
-                        <MessageCircle size={13} />
-                        <span>Chat</span>
+                        <MessageCircle size={15} />
+                        <span className="hidden sm:inline">Chat</span>
                       </button>
 
                       <button
                         onClick={() => router.push(`/user/${friend.id}`)}
-                        className={`p-2 rounded-xl border transition-colors ${dark ? 'border-zinc-800 text-zinc-500 hover:bg-zinc-900 hover:text-white' : 'border-zinc-200 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700'}`}
+                        className={`hidden sm:block p-2 rounded-xl border transition-colors ${dark ? 'border-zinc-800 text-zinc-500 hover:bg-zinc-900 hover:text-white' : 'border-zinc-200 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700'}`}
                         title="View Profile"
                       >
                         <ChevronRight size={14} />

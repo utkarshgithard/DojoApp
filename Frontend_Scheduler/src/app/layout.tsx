@@ -1,21 +1,11 @@
 import type { Metadata } from "next";
 import Script from "next/script";
-import { Inter, Geist, Playfair_Display } from "next/font/google";
 import "./globals.css";
 import ClientProviders from "@/components/ClientProviders";
 import { cn } from "@/lib/utils";
 import JsonLd from "@/components/JsonLd";
 import ServiceWorkerRegistrar from "@/components/ServiceWorkerRegistrar";
 import InstallAppPrompt from "@/components/InstallAppPrompt";
-
-const geist = Geist({ subsets: ["latin"], variable: "--font-sans" });
-const playfair = Playfair_Display({
-  subsets: ["latin"],
-  variable: "--font-serif",
-  weight: ["400", "500", "600", "700", "800"],
-});
-
-const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://dojoclass.space"),
@@ -92,11 +82,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={cn("font-sans", geist.variable, playfair.variable)}>
+    <html lang="en" className="font-sans">
       <head>
         <meta name="google-site-verification" content="MH-qCpIalYR4S1flnD1CRaPx_tUMSziNE9Y6cLpgdnI" />
+        {/* App-wide fonts: Raleway (sans) + Roboto Slab (serif headings) */}
+        <style>{`@import url('https://fonts.googleapis.com/css2?family=Raleway:ital,wght@0,100..900;1,100..900&family=Roboto+Slab:wght@100..900&display=swap');`}</style>
       </head>
-      <body className={inter.className}>
+      <body>
         <Script
           src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-4754795190999007"
           strategy="afterInteractive"

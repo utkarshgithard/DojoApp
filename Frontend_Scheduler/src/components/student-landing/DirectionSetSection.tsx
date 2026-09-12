@@ -48,7 +48,7 @@ export function DirectionSetSection() {
           <div
             className="inline-flex items-center gap-2 rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em]"
             style={{
-              fontFamily: "'JetBrains Mono', monospace",
+              fontFamily: "var(--font-serif)",
               color: accent,
               background: accentBg,
               boxShadow: insetShadow,
@@ -61,7 +61,7 @@ export function DirectionSetSection() {
           <h2
             className="text-4xl font-bold leading-tight tracking-tight text-[var(--neo-text-primary)] md:text-5xl"
             style={{
-              fontFamily: "'Plus Jakarta Sans', sans-serif",
+              fontFamily: "var(--font-sans)",
               color: textPrimary,
             }}
           >
@@ -72,7 +72,7 @@ export function DirectionSetSection() {
           <p
             className="text-base leading-relaxed"
             style={{
-              fontFamily: "Inter, sans-serif",
+              fontFamily: "var(--font-sans)",
               color: textSecondary,
             }}
           >
@@ -84,7 +84,7 @@ export function DirectionSetSection() {
               href="/register"
               className="neo-button flex items-center gap-2 rounded-full px-8 py-3.5 text-sm font-semibold transition-all duration-200 hover:scale-[1.03] text-white"
               style={{
-                fontFamily: "Inter, sans-serif",
+                fontFamily: "var(--font-sans)",
                 background: `linear-gradient(135deg, ${accent}, ${darkMode ? "#34d399" : "#34d399"})`,
               }}
             >
@@ -97,7 +97,7 @@ export function DirectionSetSection() {
               }}
               className="rounded-full px-6 py-3.5 text-sm font-semibold transition-all duration-200 hover:scale-[1.03]"
               style={{
-                fontFamily: "Inter, sans-serif",
+                fontFamily: "var(--font-sans)",
                 color: textPrimary,
                 boxShadow: cardShadow,
               }}
@@ -186,7 +186,7 @@ export function DirectionSetSection() {
                     fill={textSecondary}
                     fontSize="8.5"
                     fontWeight="600"
-                    style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+                    style={{ fontFamily: "var(--font-sans)" }}
                     initial={{ opacity: 0, y: -20 }}
                     animate={isInView ? { opacity: 1, y: -28 } : { opacity: 0, y: -20 }}
                     transition={{ delay: 0.6 + idx * 0.25 }}

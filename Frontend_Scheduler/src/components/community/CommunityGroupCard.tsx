@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Users, Lock, Eye, Mail, Shield, Crown } from 'lucide-react';
 import { CommunityGroup } from '@/context/CommunityGroupContext';
+import SafeImage from '@/components/SafeImage';
 
 interface CommunityGroupCardProps {
   community: CommunityGroup;
@@ -81,27 +82,29 @@ export default function CommunityGroupCard({
           className={`h-20 overflow-hidden ${dark ? 'bg-gradient-to-br from-indigo-950 to-zinc-900' : 'bg-gradient-to-br from-indigo-100 to-indigo-50'
             }`}
         >
-          {community.bannerUrl && (
-            <img
-              src={community.bannerUrl}
-              alt=""
-              className="w-full h-full object-cover"
-              style={{ objectPosition: `center ${getBannerPositionY(community.bannerUrl)}%` }}
-            />
-          )}
+          {/* SafeImage: broken/missing banner URLs show the gradient instead */}
+          <SafeImage
+            src={community.bannerUrl}
+            alt=""
+            className="w-full h-full object-cover"
+            style={{ objectPosition: `center ${getBannerPositionY(community.bannerUrl)}%` }}
+          />
         </div>
         {/* Avatar */}
         <div
           className={`absolute -bottom-5 left-4 w-10 h-10 rounded-xl border-2 flex items-center justify-center overflow-hidden shrink-0 z-10 ${dark ? 'border-zinc-900 bg-indigo-900' : 'border-white bg-indigo-100'
             }`}
         >
-          {community.avatarUrl ? (
-            <img src={community.avatarUrl} alt={community.name} className="w-full h-full object-contain bg-black/5 dark:bg-white/5" />
-          ) : (
-            <span className={`text-[13px] font-bold ${dark ? 'text-indigo-300' : 'text-indigo-600'}`}>
-              {community.name.charAt(0).toUpperCase()}
-            </span>
-          )}
+          <SafeImage
+            src={community.avatarUrl}
+            alt={community.name}
+            className="w-full h-full object-contain bg-black/5 dark:bg-white/5"
+            fallback={
+              <span className={`text-[13px] font-bold ${dark ? 'text-indigo-300' : 'text-indigo-600'}`}>
+                {community.name.charAt(0).toUpperCase()}
+              </span>
+            }
+          />
         </div>
       </div>
 

@@ -87,7 +87,7 @@ export function StatsSection() {
                 style={{
                   boxShadow: insetShadow,
                   color: accent,
-                  fontFamily: "'JetBrains Mono', monospace",
+                  fontFamily: "var(--font-serif)",
                 }}
               >
                 <StatCounter target={stat.target} suffix={stat.suffix} isActive={isInView} />
@@ -96,7 +96,7 @@ export function StatsSection() {
               <span
                 className="text-center text-[8.5px] sm:text-xs font-semibold uppercase tracking-wider"
                 style={{
-                  fontFamily: "'Plus Jakarta Sans', sans-serif",
+                  fontFamily: "var(--font-sans)",
                   color: textSecondary,
                 }}
               >
